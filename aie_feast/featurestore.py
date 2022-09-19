@@ -3,7 +3,7 @@ import pandas as pd
 import os
 from dataset.dataset import Dataset
 from common.utils import get_connection, get_forecast_cfg, get_entity_cfg
-from views import FeatureViews, LabelViews, Service
+from .views import FeatureViews, LabelViews, Service
 
 
 class FeatureStore:
