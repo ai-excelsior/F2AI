@@ -1,4 +1,4 @@
-from datacfg import ForecastConfig, EntityConfig
+from confg import ForecastConfig, EntityConfig
 
 
 def _read_yml(url: str):
