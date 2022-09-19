@@ -4,7 +4,6 @@
 *.pdf
 *.h5
 *.dump
-*.txt
 *.ipynb
 .env
 **.yaml
