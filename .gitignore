@@ -1,0 +1,16 @@
+*.log
+*.pyc
+*.bk
+*.pdf
+*.h5
+*.dump
+*.txt
+*.ipynb
+.env
+**.yaml
+**/*.pyc
+**/**/*.pyc
+.vscode
+.DS_Store
+*.pid
+**/*log.*
