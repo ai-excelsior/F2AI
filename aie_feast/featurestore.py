@@ -1,20 +1,46 @@
 from typing import Dict, Any, List, Union
 import pandas as pd
+import os
 from dataset.dataset import Dataset
-from utils import get_connection
+from common.utils import get_connection, get_forecast_cfg, get_entity_cfg
+from views import FeatureViews, LabelViews, Service
 
 
 class FeatureStore:
     def __init__(self, project_folder=None, url=None, token=None, projectID=None):
         if project_folder:
-            file_path = project_folder + r"/feature_store.yml"
+            connect_cfg = project_folder + r"/feature_store.yml"
+            get_connection(connect_cfg)
         elif url and token and projectID:
-            pass
+            pass  # TODO: realize in future
         else:
             raise ValueError("one of config file or meta server project should be provided")
-        # TODO: init
+        # init each object using .yml in corresponding folders
+        self.service = Service(
+            features=[
+                FeatureViews(cfg)
+                for _, _, cfg in os.walk(project_folder + r"/feature_views")
+                if cfg.endswith(".yml")
+            ],
+            labels=[
+                LabelViews(cfg)
+                for _, _, cfg in os.walk(project_folder + r"/label_views")
+                if cfg.endswith(".yml")
+            ],
+        )
 
-    def get_features(self, feature_views: List, entity_df: pd.DataFrame, features: List = None):
+        self.forecast_cfg = {
+            cfg: get_forecast_cfg(cfg)
+            for _, _, cfg in os.walk(project_folder + r"/forecasting_service")
+            if cfg.endswith(".yml")
+        }
+        self.entity = {
+            cfg: get_forecast_cfg(cfg)
+            for _, _, cfg in os.walk(project_folder + r"/entity")
+            if cfg.endswith(".yml")
+        }
+
+    def get_features(self, feature_views, entity_df: pd.DataFrame, features: List = None):
         """non-series prediction use: get `features` of `entity_df` from `feature_views`
 
         Args:
@@ -26,7 +52,7 @@ class FeatureStore:
 
     def get_period_features(
         self,
-        feature_views: List,
+        feature_views,
         entity_df: pd.DataFrame,
         period: str,
         features: List = None,
@@ -45,7 +71,7 @@ class FeatureStore:
 
     def get_labels(
         self,
-        label_views: List,
+        label_views,
         entity_df: pd.DataFrame,
         include: bool = False,
     ):
@@ -62,7 +88,7 @@ class FeatureStore:
 
     def get_period_labels(
         self,
-        label_views: List,
+        label_views,
         entity_df: pd.DataFrame,
         period: str,
         include: bool = False,
@@ -79,8 +105,8 @@ class FeatureStore:
 
     def stats(
         self,
-        views: List,
-        entity_df: pd.DataFrame,
+        views,
+        entity_df: pd.DataFrame = None,
         group: bool = True,
         fn: str = "mean",
         start: str = None,
@@ -91,6 +117,7 @@ class FeatureStore:
 
         Args:
             views (List): _description_
+            entity_df (pd.DataFrame,optional), if given, ignore `start` and `end`. Defaults to None.
             group (bool, optional): whether to group according to `entity_df`. Defaults to True.
             fn (str, optional): statistical method, min, max, std, avg, mode,median. Defaults to "mean".
             start (str, optional): start_time. Defaults to None.
@@ -99,7 +126,7 @@ class FeatureStore:
         """
         pass
 
-    def get_latest_entities(self, views: List):
+    def get_latest_entities(self, views):
         """get latest entity and its timestamp
 
         Args:
@@ -115,9 +142,7 @@ class FeatureStore:
         """
         pass
 
-    def get_dataset(
-        self, views: List, start: str = None, end: str = None, sampler: callable = None
-    ) -> Dataset:
+    def get_dataset(self, views, start: str = None, end: str = None, sampler: callable = None) -> Dataset:
         """get from `start` to `end` length data for training from `views`
 
         Args:
@@ -128,7 +153,7 @@ class FeatureStore:
         """
         pass
 
-    def materialize(self, views: List):
+    def materialize(self, views):
         """incrementally join `views` to generate tables
 
         Args:
