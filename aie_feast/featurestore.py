@@ -47,8 +47,6 @@ class FeatureStore:
         self,
         label_views: List,
         entity_df: pd.DataFrame,
-        start: str = None,
-        end: str = None,
         include: bool = False,
     ):
         """non-time series prediction use: get from `start` to `end` length labels of `entity_df` from `label_views`
