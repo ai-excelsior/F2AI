@@ -1,3 +1,6 @@
+from datacfg import ForecastConfig, EntityConfig
+
+
 def _read_yml(url: str):
     """read .yml file for following execute
 
@@ -22,6 +25,7 @@ def get_forecast_cfg(url: str):
         url (str): url of .yml
     """
     cfg = _read_yml(url)
+    forecast_cfg = ForecastConfig(cfg)
 
 
 def get_entity_cfg(url: str):
@@ -31,3 +35,4 @@ def get_entity_cfg(url: str):
         url (str): url of .yml
     """
     cfg = _read_yml(url)
+    entity_cfg = EntityConfig(cfg)
