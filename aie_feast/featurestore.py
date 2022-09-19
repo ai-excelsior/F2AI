@@ -1,6 +1,7 @@
 from typing import Dict, Any, List, Union
 import pandas as pd
 from dataset.dataset import Dataset
+import os
 
 
 class FeatureStore:
@@ -12,6 +13,10 @@ class FeatureStore:
         else:
             raise ValueError("one of config file or meta server project should be provided")
         # TODO: init
+
+    def __get_connection(self):
+        """connect to pgsql using configs in .env"""
+        pass
 
     def get_features(self, feature_views: List, entity_df: pd.DataFrame, features: List = None):
         """non-series prediction use: get `features` of `entity_df` from `feature_views`
