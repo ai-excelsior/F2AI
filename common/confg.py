@@ -1,6 +1,12 @@
+from typing import Dict, Any, List, Union
+
+
 class ForecastConfig:
-    pass
+    context_period: str
+    predict_period: str
+    features: List[str]
+    labels: List[str]
 
 
 class EntityConfig:
-    pass
+    join_keys: str
