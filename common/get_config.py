@@ -6,7 +6,7 @@ from .source import SourceConfig
 from .read_file import read_yml
 
 
-def get_connection(url: str):
+def get_conn_cfg(url: str):
     """connect to pgsql using configs in feature_store.yml
 
     Args:
