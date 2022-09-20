@@ -3,7 +3,7 @@ from aie_feast.service import ForecastService, Service
 from aie_feast.views import FeatureViews, LabelViews
 from .connect import ConnectConfig
 from .source import SourceConfig
-from .utils import read_yml
+from .read_file import read_yml
 
 
 def get_connection(url: str):

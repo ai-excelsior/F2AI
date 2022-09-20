@@ -6,10 +6,7 @@ import stat
 import tempfile
 import zipfile
 from ignite.handlers import DiskSaver
-
-
-def _remove_prefix(text: str, prefix: str):
-    return text[text.startswith(prefix) and len(prefix) :]
+from .utils import remove_prefix
 
 
 @functools.lru_cache(maxsize=64)
@@ -25,7 +22,7 @@ def parse_oss_url(url: str) -> Tuple[str, str, str]:
     """
     url format:  oss://{bucket}/{key}
     """
-    url = _remove_prefix(url, "oss://")
+    url = remove_prefix(url, "oss://")
     components = url.split("/")
     return components[0], "/".join(components[1:])
 
