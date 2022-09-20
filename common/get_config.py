@@ -14,7 +14,7 @@ def get_conn_cfg(url: str):
     """
     cfg = read_yml(url)
     if cfg["offline_store"]["type"] == "file":
-        conn = ConnectConfig(cfg)
+        conn = ConnectConfig(type=cfg["offline_store"]["type"])
     elif cfg["offline_store"]["type"] == "influxdb":
         conn = ConnectConfig(cfg)
     elif cfg["offline_store"]["type"] == "pgsql":

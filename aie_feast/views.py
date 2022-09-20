@@ -1,5 +1,6 @@
 from typing import List
 from dataclasses import dataclass, field
+from ..common.utils import get_default_value
 
 
 @dataclass
@@ -9,9 +10,9 @@ class FeatureViews:
     entity: List[str]
     features: List[str]
     batch_source: str
-    ttl: str = field(default_factory=str)
-    exogenous: bool = field(default_factory=bool)
-    request_source: str = field(default_factory=str)
+    ttl: str = field(default_factory=get_default_value)
+    exogenous: bool = field(default_factory=get_default_value)
+    request_source: str = field(default_factory=get_default_value)
 
 
 @dataclass
@@ -21,5 +22,5 @@ class LabelViews:
     entity: List[str]
     labels: List[str]
     batch_source: str
-    ttl: str = field(default_factory=str)
-    request_source: str = field(default_factory=str)
+    ttl: str = field(default_factory=get_default_value)
+    request_source: str = field(default_factory=get_default_value)
