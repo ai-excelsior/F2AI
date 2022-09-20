@@ -11,4 +11,4 @@ class SourceConfig:
     type: str = field(default_factory=get_default_value)
     file_format: int = field(default_factory=get_default_value)
     file_path: str = field(default_factory=get_default_value)
-    request_features: Dict = field(default_factory=get_default_values)
+    request_features: Dict = field(default_factory=get_default_value)
