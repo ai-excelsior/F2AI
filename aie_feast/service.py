@@ -1,6 +1,5 @@
-from typing import Dict, Any, List, Union
-from .views import LabelViews, FeatureViews
-from dataclasses import dataclass, field
+from typing import Dict
+from dataclasses import dataclass
 
 
 @dataclass

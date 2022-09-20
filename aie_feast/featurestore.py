@@ -1,9 +1,9 @@
-from typing import Dict, Any, List, Union
+from typing import List
 import pandas as pd
 import os
 from dataset.dataset import Dataset
 from common.get_config import (
-    get_connection,
+    get_conn_cfg,
     get_service_cfg,
     get_entity_cfg,
     get_label_views,
@@ -16,7 +16,7 @@ class FeatureStore:
     def __init__(self, project_folder=None, url=None, token=None, projectID=None):
         if project_folder:
             connect_cfg = project_folder + r"/feature_store.yml"
-            self.connection = get_connection(connect_cfg)
+            self.connection = get_conn_cfg(connect_cfg)
         elif url and token and projectID:
             pass  # TODO: realize in future
         else:
