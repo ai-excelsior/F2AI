@@ -13,3 +13,4 @@
 .DS_Store
 *.pid
 **/*log.*
+*.test.py
