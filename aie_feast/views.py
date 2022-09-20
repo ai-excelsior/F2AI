@@ -1,6 +1,6 @@
 from typing import List
 from dataclasses import dataclass, field
-from ..common.utils import get_default_value
+from common.utils import get_default_value
 
 
 @dataclass

@@ -146,7 +146,9 @@ class FeatureStore:
         """
         pass
 
-    def get_dataset(self, views, start: str = None, end: str = None, sampler: callable = None) -> Dataset:
+    def get_dataset(
+        self, views, start: str = None, end: str = None, sampler: callable = None, stride: int = 1
+    ) -> Dataset:
         """get from `start` to `end` length data for training from `views`
 
         Args:
@@ -154,6 +156,7 @@ class FeatureStore:
             start (str, optional): _description_. Defaults to None.
             end (str, optional): _description_. Defaults to None.
             sampler (callable, optional): _description_. Defaults to None.
+            stride (int, optional): stride to sample, Defaults to 1
         """
         pass
 
