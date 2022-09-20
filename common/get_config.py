@@ -4,6 +4,8 @@ from aie_feast.views import FeatureViews, LabelViews
 from .connect import ConnectConfig
 from .source import SourceConfig
 from .read_file import read_yml
+from .utils import remove_prefix, schema_to_dict
+import os
 
 
 def get_conn_cfg(url: str):
@@ -55,9 +57,19 @@ def get_feature_views(url: str):
     Args:
         url (str): rl of .yml
     """
-    cfg = read_yml(url)
-    feature_cfg = FeatureViews(cfg)
-    return {cfg["name"]: feature_cfg}
+    feature_views = {}
+    for cfg in os.listdir(remove_prefix(url, "file://")):
+        cfg = read_yml(os.path.join(url, cfg))
+        feature_cfg = FeatureViews(
+            entity=cfg["entities"],
+            features=schema_to_dict(cfg["schema"]),
+            batch_source=cfg["batch_source"],
+            ttl=cfg.get("ttl", None),
+            exogenous=cfg.get("exogenous", None),
+            request_source=cfg.get("request_source", None),
+        )
+        feature_views.update({cfg["name"]: feature_cfg})
+    return feature_views
 
 
 def get_label_views(url: str):
@@ -66,9 +78,18 @@ def get_label_views(url: str):
     Args:
         url (str): rl of .yml
     """
-    cfg = read_yml(url)
-    label_cfg = LabelViews(cfg)
-    return {cfg["name"]: label_cfg}
+    label_views = {}
+    for cfg in os.listdir(remove_prefix(url, "file://")):
+        cfg = read_yml(os.path.join(url, cfg))
+        label_cfg = LabelViews(
+            entity=cfg["entities"],
+            labels=schema_to_dict(cfg["schema"]),
+            batch_source=cfg["batch_source"],
+            ttl=cfg.get("ttl", None),
+            request_source=cfg.get("request_source", None),
+        )
+        label_views.update({cfg["name"]: label_cfg})
+    return label_views
 
 
 def get_source_cfg(url: str):

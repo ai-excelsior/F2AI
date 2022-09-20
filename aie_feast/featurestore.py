@@ -15,8 +15,7 @@ from common.get_config import (
 class FeatureStore:
     def __init__(self, project_folder=None, url=None, token=None, projectID=None):
         if project_folder:
-            connect_cfg = project_folder + r"/feature_store.yml"
-            self.connection = get_conn_cfg(connect_cfg)
+            self.connection = get_conn_cfg(os.path.join(project_folder, "feature_store.yml"))
         elif url and token and projectID:
             pass  # TODO: realize in future
         else:
@@ -28,21 +27,10 @@ class FeatureStore:
         self.entity = {
             get_entity_cfg(cfg) for _, _, cfg in os.walk(project_folder + r"/entity") if cfg.endswith(".yml")
         }
-        self.features = {
-            get_feature_views[cfg]
-            for _, _, cfg in os.walk(project_folder + r"/label_views")
-            if cfg.endswith(".yml")
-        }
-        self.labels = {
-            get_label_views[cfg]
-            for _, _, cfg in os.walk(project_folder + r"/label_views")
-            if cfg.endswith(".yml")
-        }
-        self.service = {
-            get_service_cfg[cfg]
-            for _, _, cfg in os.walk(project_folder + r"/services")
-            if cfg.endswith(".yml")
-        }
+        self.features = get_feature_views(os.path.join(project_folder, "feature_views"))
+
+        self.labels = get_label_views(os.path.join(project_folder, "label_views"))
+        self.service = get_label_views(os.path.join(project_folder, "services"))
 
     def get_features(self, feature_views, entity_df: pd.DataFrame, features: List = None):
         """non-series prediction use: get `features` of `entity_df` from `feature_views`
