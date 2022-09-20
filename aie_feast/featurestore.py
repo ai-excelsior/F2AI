@@ -10,6 +10,7 @@ from common.get_config import (
     get_feature_views,
     get_source_cfg,
 )
+from common.utils import remove_prefix
 
 
 class FeatureStore:
@@ -25,7 +26,8 @@ class FeatureStore:
             get_source_cfg[cfg] for _, _, cfg in os.walk(project_folder + r"/sources") if cfg.endswith(".yml")
         }
         self.entity = {
-            get_entity_cfg(cfg) for _, _, cfg in os.walk(project_folder + r"/entity") if cfg.endswith(".yml")
+            get_entity_cfg(project_folder + r"/entities" + "/" + cfg)
+            for cfg in os.listdir(remove_prefix(project_folder, "file://") + r"/entities")
         }
         self.features = get_feature_views(os.path.join(project_folder, "feature_views"))
 
