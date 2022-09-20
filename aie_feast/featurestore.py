@@ -33,13 +33,11 @@ class FeatureStore:
             for _, _, cfg in os.walk(project_folder + r"/label_views")
             if cfg.endswith(".yml")
         }
-
         self.labels = {
             get_label_views[cfg]
             for _, _, cfg in os.walk(project_folder + r"/label_views")
             if cfg.endswith(".yml")
         }
-
         self.service = {
             get_service_cfg[cfg]
             for _, _, cfg in os.walk(project_folder + r"/services")
