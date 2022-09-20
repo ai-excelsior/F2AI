@@ -14,7 +14,14 @@ class LabelViews:
 
 
 class Service:
-    """compose of FeatureViews and LabelViews"""
+    """compose of FeatureViews and LabelViews used in service"""
+
+    def __init__(self, features: List[FeatureViews], labels: List[LabelViews]):
+        pass
+
+
+class ForcastService(Service):
+    """compose of FeatureViews and LabelViews used in forecast_service"""
 
     def __init__(self, features: List[FeatureViews], labels: List[LabelViews]):
         pass

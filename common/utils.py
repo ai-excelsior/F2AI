@@ -11,14 +11,6 @@ def _read_yml(url: str):
     """
     file = _read_file(url)
     cfg = yaml.load(file, Loader=yaml.FullLoader)
-    if cfg["offline_store"]["type"] == "file":
-        pass
-    elif cfg["offline_store"]["type"] == "influxdb":
-        pass
-    elif cfg["offline_store"]["type"] == "pgsql":
-        pass
-    else:
-        raise TypeError("offline_store must be one of [file, influxdb, pgsql]")
     return cfg
 
 
@@ -42,6 +34,14 @@ def get_connection(url: str):
         url (str): url of .yml
     """
     cfg = _read_yml(url)
+    if cfg["offline_store"]["type"] == "file":
+        pass
+    elif cfg["offline_store"]["type"] == "influxdb":
+        pass
+    elif cfg["offline_store"]["type"] == "pgsql":
+        pass
+    else:
+        raise TypeError("offline_store must be one of [file, influxdb, pgsql]")
 
 
 def get_forecast_cfg(url: str):

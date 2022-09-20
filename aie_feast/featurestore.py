@@ -16,22 +16,21 @@ class FeatureStore:
         else:
             raise ValueError("one of config file or meta server project should be provided")
         # init each object using .yml in corresponding folders
-        self.service = Service(
-            features=[
-                FeatureViews(cfg)
-                for _, _, cfg in os.walk(project_folder + r"/feature_views")
-                if cfg.endswith(".yml")
-            ],
-            labels=[
-                LabelViews(cfg)
-                for _, _, cfg in os.walk(project_folder + r"/label_views")
-                if cfg.endswith(".yml")
-            ],
-        )
+        self.features = {
+            cfg: FeatureViews(cfg)
+            for _, _, cfg in os.walk(project_folder + r"/feature_views")
+            if cfg.endswith(".yml")
+        }
+
+        self.labels = {
+            cfg: LabelViews(cfg)
+            for _, _, cfg in os.walk(project_folder + r"/label_views")
+            if cfg.endswith(".yml")
+        }
 
         self.forecast_cfg = {
             cfg: get_forecast_cfg(cfg)
-            for _, _, cfg in os.walk(project_folder + r"/forecasting_service")
+            for _, _, cfg in os.walk(project_folder + r"/services")
             if cfg.endswith(".yml")
         }
         self.entity = {
