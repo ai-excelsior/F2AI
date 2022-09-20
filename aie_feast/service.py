@@ -1,16 +1,21 @@
 from typing import Dict, Any, List, Union
 from .views import LabelViews, FeatureViews
+from dataclasses import dataclass, field
 
 
+@dataclass
 class Service:
-    """compose of FeatureViews and LabelViews used in service"""
+    """compose of FeatureViews and LabelViews used in service for non-time-series task"""
 
-    def __init__(self, features: List[FeatureViews], labels: List[LabelViews]):
-        pass
+    features: Dict
+    labels: Dict
 
 
-class ForecastService(Service):
-    """compose of FeatureViews and LabelViews used in forecast_service"""
+@dataclass
+class ForecastService:
+    """compose of FeatureViews and LabelViews used in service for time-series task"""
 
-    def __init__(self, features: List[FeatureViews], labels: List[LabelViews]):
-        pass
+    features: Dict
+    labels: Dict
+    look_back: int
+    look_forward: int
