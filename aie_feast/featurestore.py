@@ -96,6 +96,7 @@ class FeatureStore:
         self,
         views,
         entity_df: pd.DataFrame = None,
+        features: List[str] = None,
         group: bool = True,
         fn: str = "mean",
         start: str = None,
