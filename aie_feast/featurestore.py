@@ -25,10 +25,7 @@ class FeatureStore:
         self.sources = dict(
             get_source_cfg(os.path.join(path, filename)) for path, _, cfg in os.walk(project_folder + r"/sources") for filename in cfg if filename.endswith(".yml")
         )
-        self.entity = {
-            get_entity_cfg(project_folder + r"/entities" + "/" + cfg)
-            for cfg in os.listdir(remove_prefix(project_folder, "file://") + r"/entities")
-        }
+        self.entity = get_entity_cfg(os.path.join(project_folder, "entities"))
         self.features = get_feature_views(os.path.join(project_folder, "feature_views"))
 
         self.labels = get_label_views(os.path.join(project_folder, "label_views"))
