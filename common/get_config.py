@@ -46,9 +46,17 @@ def get_entity_cfg(url: str):
     Args:
         url (str): url of .yml
     """
-    cfg = read_yml(url)
-    entity_cfg = Entity(cfg)
-    return {cfg["name"]: entity_cfg}
+    entities = {}
+    for cfg in os.listdir(remove_prefix(url, "file://")):
+        cfg = read_yml(os.path.join(url, cfg))
+        if cfg.get("name") is not None:
+            join_keys = cfg.get("join_keys", cfg["name"])
+            entity_cfg = Entity()
+            entity_cfg.entity = join_keys[0]
+            entities.update({cfg["name"]: entity_cfg})
+        else:
+            raise KeyError("name must be contained in cfg!")
+    return entities
 
 
 def get_feature_views(url: str):
