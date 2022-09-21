@@ -1,9 +1,10 @@
 # from .oss_utils import get_bucket_from_oss_url
+from typing import Dict
 from .utils import remove_prefix
 import yaml
 
 
-def read_yml(url: str):
+def read_yml(url: str) -> Dict:
     """read .yml file for following execute
 
     Args:

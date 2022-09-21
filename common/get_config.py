@@ -110,6 +110,14 @@ def get_source_cfg(url: str):
     Args:
         url (str): rl of .yml
     """
-    cfg = read_yml(url)
-    source_cfg = SourceConfig(**cfg)
-    return cfg["name"], source_cfg
+    source_dict = {}
+    for filename in os.listdir(remove_prefix(url, "file://")):
+        if filename.endswith(".yml"):
+            cfg = read_yml(os.path.join(url, filename))
+            cfg["file_path"] = cfg.pop("path", None)
+            cfg["event_time"] = cfg.pop("timestamp_field", None)
+            cfg["create_time"] = cfg.pop("created_timestamp_column", None)
+            cfg["request_features"] = cfg.pop("schema", None)
+            source_cfg = SourceConfig(**cfg)
+            source_dict.update({cfg["name"]: source_cfg})
+    return source_dict
