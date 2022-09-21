@@ -49,13 +49,13 @@ def get_entity_cfg(url: str):
     entities = {}
     for cfg in os.listdir(remove_prefix(url, "file://")):
         cfg = read_yml(os.path.join(url, cfg))
-        if cfg.get("name") is not None:
-            join_keys = cfg.get("join_keys", cfg["name"])
-            entity_cfg = Entity()
-            entity_cfg.entity = join_keys[0]
-            entities.update({cfg["name"]: entity_cfg})
+        if cfg.get("join_keys") is not None:
+            join_keys = cfg["join_keys"][0]
         else:
-            raise KeyError("name must be contained in cfg!")
+            join_keys = cfg["name"]
+        entity_cfg = Entity()
+        entity_cfg.entity = join_keys
+        entities.update({cfg["name"]: entity_cfg})
     return entities
 
 
