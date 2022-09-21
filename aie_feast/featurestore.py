@@ -25,9 +25,9 @@ class FeatureStore:
         self.sources = get_source_cfg(os.path.join(project_folder, "sources"))
         self.entity = get_entity_cfg(os.path.join(project_folder, "entities"))
         self.features = get_feature_views(os.path.join(project_folder, "feature_views"))
-
         self.labels = get_label_views(os.path.join(project_folder, "label_views"))
         self.service = get_service_cfg(os.path.join(project_folder, "services"))
+        aa
 
     def get_features(self, feature_views, entity_df: pd.DataFrame, features: List = None):
         """non-series prediction use: get `features` of `entity_df` from `feature_views`
@@ -133,7 +133,13 @@ class FeatureStore:
         pass
 
     def get_dataset(
-        self, views, start: str = None, end: str = None, sampler: callable = None, stride: int = 1
+        self,
+        views,
+        start: str = None,
+        end: str = None,
+        sampler: callable = None,
+        stride: int = 1,
+        include: str = "both",
     ) -> Dataset:
         """get from `start` to `end` length data for training from `views`
 
@@ -143,6 +149,7 @@ class FeatureStore:
             end (str, optional): _description_. Defaults to None.
             sampler (callable, optional): _description_. Defaults to None.
             stride (int, optional): stride to sample, Defaults to 1
+            include(str,optional): whether to include `start` or `end` timestamp
         """
         pass
 
