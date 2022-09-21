@@ -53,12 +53,7 @@ def get_entity_cfg(url: str):
     entities = {}
     for cfg in os.listdir(remove_prefix(url, "file://")):
         cfg = read_yml(os.path.join(url, cfg))
-        if cfg.get("join_keys") is not None:
-            join_keys = cfg["join_keys"][0]
-        else:
-            join_keys = cfg["name"]
-        entity_cfg = Entity()
-        entity_cfg.entity = join_keys
+        entity_cfg = Entity(entity=cfg.get("join_keys", [cfg["name"]])[0])
         entities.update({cfg["name"]: entity_cfg})
     return entities
 

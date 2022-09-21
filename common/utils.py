@@ -10,6 +10,7 @@ def schema_to_dict(schema):
     return {item["name"]: item.get("dtype", "string") for item in schema}
 
 
-# def service_to_dict(schema):
-#     item_dict={}
-#     for item in schema:
+def service_to_dict(schema):
+    return
+    # item_dict={}
+    # for item in schema:
