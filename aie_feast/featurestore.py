@@ -29,7 +29,7 @@ class FeatureStore:
         self.features = get_feature_views(os.path.join(project_folder, "feature_views"))
 
         self.labels = get_label_views(os.path.join(project_folder, "label_views"))
-        self.service = get_label_views(os.path.join(project_folder, "services"))
+        self.service = get_service_cfg(os.path.join(project_folder, "services"))
 
     def get_features(self, feature_views, entity_df: pd.DataFrame, features: List = None):
         """non-series prediction use: get `features` of `entity_df` from `feature_views`

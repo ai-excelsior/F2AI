@@ -1,10 +1,10 @@
 from aie_feast.entity import Entity
-from aie_feast.service import ForecastService, Service
+from aie_feast.service import Service
 from aie_feast.views import FeatureViews, LabelViews
 from .connect import ConnectConfig
 from .source import SourceConfig
 from .read_file import read_yml
-from .utils import remove_prefix, schema_to_dict
+from .utils import remove_prefix, schema_to_dict, service_to_dict
 import os
 
 
@@ -33,11 +33,15 @@ def get_service_cfg(url: str):
     Args:
         url (str): url of .yml
     """
-    cfg = read_yml(url)
-    service_cfg = Service(cfg)
-    # if cfg xxxxxx else
-    service_cfg = ForecastService(cfg)
-    return {cfg["name"]: service_cfg}
+    service_cfg = {}
+    for cfg in os.listdir(remove_prefix(url, "file://")):
+        cfg = read_yml(os.path.join(url, cfg))
+        service = Service(
+            features=service_to_dict(cfg["features"]),
+            labels=service_to_dict(cfg["labels"]),
+        )
+        service_cfg.update({cfg["name"]: service})
+    return service_cfg
 
 
 def get_entity_cfg(url: str):
