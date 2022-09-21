@@ -23,13 +23,17 @@ class FeatureStore:
             raise ValueError("one of config file or meta server project should be provided")
         # init each object using .yml in corresponding folders
         self.sources = dict(
-            get_source_cfg(os.path.join(path, filename)) for path, _, cfg in os.walk(project_folder + r"/sources") for filename in cfg if filename.endswith(".yml")
+            get_source_cfg(os.path.join(path, filename))
+            for path, _, cfg in os.walk(project_folder + r"/sources")
+            for filename in cfg
+            if filename.endswith(".yml")
         )
         self.entity = get_entity_cfg(os.path.join(project_folder, "entities"))
         self.features = get_feature_views(os.path.join(project_folder, "feature_views"))
 
         self.labels = get_label_views(os.path.join(project_folder, "label_views"))
         self.service = get_service_cfg(os.path.join(project_folder, "services"))
+        self.service
 
     def get_features(self, feature_views, entity_df: pd.DataFrame, features: List = None):
         """non-series prediction use: get `features` of `entity_df` from `feature_views`

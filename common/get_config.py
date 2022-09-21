@@ -1,3 +1,4 @@
+from typing import Type
 from aie_feast.entity import Entity
 from aie_feast.service import Service
 from aie_feast.views import FeatureViews, LabelViews
@@ -35,12 +36,13 @@ def get_service_cfg(url: str):
     """
     service_cfg = {}
     for cfg in os.listdir(remove_prefix(url, "file://")):
-        cfg = read_yml(os.path.join(url, cfg))
-        service = Service(
-            features=service_to_dict(cfg["features"]),
-            labels=service_to_dict(cfg["labels"]),
-        )
-        service_cfg.update({cfg["name"]: service})
+        if cfg.endswith(".yml"):
+            cfg = read_yml(os.path.join(url, cfg))
+            service = Service(
+                features=service_to_dict(cfg["features"]),
+                labels=service_to_dict(cfg["labels"]),
+            )
+            service_cfg.update({cfg["name"]: service})
     return service_cfg
 
 
@@ -52,9 +54,10 @@ def get_entity_cfg(url: str):
     """
     entities = {}
     for cfg in os.listdir(remove_prefix(url, "file://")):
-        cfg = read_yml(os.path.join(url, cfg))
-        entity_cfg = Entity(entity=cfg.get("join_keys", [cfg["name"]])[0])
-        entities.update({cfg["name"]: entity_cfg})
+        if cfg.endswith(".yml"):
+            cfg = read_yml(os.path.join(url, cfg))
+            entity_cfg = Entity(entity=cfg.get("join_keys", [cfg["name"]])[0])
+            entities.update({cfg["name"]: entity_cfg})
     return entities
 
 
@@ -66,16 +69,17 @@ def get_feature_views(url: str):
     """
     feature_views = {}
     for cfg in os.listdir(remove_prefix(url, "file://")):
-        cfg = read_yml(os.path.join(url, cfg))
-        feature_cfg = FeatureViews(
-            entity=cfg["entities"],
-            features=schema_to_dict(cfg["schema"]),
-            batch_source=cfg["batch_source"],
-            ttl=cfg.get("ttl", None),
-            exogenous=cfg.get("exogenous", None),
-            request_source=cfg.get("request_source", None),
-        )
-        feature_views.update({cfg["name"]: feature_cfg})
+        if cfg.endswith(".yml"):
+            cfg = read_yml(os.path.join(url, cfg))
+            feature_cfg = FeatureViews(
+                entity=cfg["entities"],
+                features=schema_to_dict(cfg["schema"]),
+                batch_source=cfg["batch_source"],
+                ttl=cfg.get("ttl", None),
+                exogenous=cfg.get("exogenous", None),
+                request_source=cfg.get("request_source", None),
+            )
+            feature_views.update({cfg["name"]: feature_cfg})
     return feature_views
 
 
@@ -87,15 +91,16 @@ def get_label_views(url: str):
     """
     label_views = {}
     for cfg in os.listdir(remove_prefix(url, "file://")):
-        cfg = read_yml(os.path.join(url, cfg))
-        label_cfg = LabelViews(
-            entity=cfg["entities"],
-            labels=schema_to_dict(cfg["schema"]),
-            batch_source=cfg["batch_source"],
-            ttl=cfg.get("ttl", None),
-            request_source=cfg.get("request_source", None),
-        )
-        label_views.update({cfg["name"]: label_cfg})
+        if cfg.endswith(".yml"):
+            cfg = read_yml(os.path.join(url, cfg))
+            label_cfg = LabelViews(
+                entity=cfg["entities"],
+                labels=schema_to_dict(cfg["schema"]),
+                batch_source=cfg["batch_source"],
+                ttl=cfg.get("ttl", None),
+                request_source=cfg.get("request_source", None),
+            )
+            label_views.update({cfg["name"]: label_cfg})
     return label_views
 
 
