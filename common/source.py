@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Dict
+from typing import Dict, List
 from .utils import get_default_value
 
 
@@ -10,5 +10,7 @@ class SourceConfig:
     name: str
     type: str = field(default_factory=get_default_value)
     file_format: int = field(default_factory=get_default_value)
-    file_path: str = field(default_factory=get_default_value)
+    path: str = field(default_factory=get_default_value)
     request_features: Dict = field(default_factory=get_default_value)
+    description: str = ''
+    schema: List[Dict[str, str]] = field(default_factory=list)

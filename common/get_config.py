@@ -107,5 +107,5 @@ def get_source_cfg(url: str):
         url (str): rl of .yml
     """
     cfg = read_yml(url)
-    source_cfg = SourceConfig(cfg)
-    return {cfg["name"]: source_cfg}
+    source_cfg = SourceConfig(**cfg)
+    return cfg["name"], source_cfg
