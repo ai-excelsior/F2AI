@@ -73,11 +73,11 @@ class FeatureStore:
         """time_series prediction use: get past `period` length `features` of `entity_df` from `feature_views`
 
         Args:
-            feature_views (List): _description_
-            entity_df (pd.DataFrame): _description_
+            feature_views:
+            entity_df (pd.DataFrame): condition
             period (str): length of look_back
-            features (List, optional): _description_. Defaults to None.
-            include (bool, optional): _description_. Defaults to True, means include timestamp defined in `entity_df`
+            features (List, optional): features to return. Defaults to None means all features.
+            include (bool, optional): include timestamp defined in `entity_df` or not. Defaults to True.
         """
         self.__check_format(entity_df)
         pass
@@ -110,10 +110,10 @@ class FeatureStore:
         """time series prediction use: get from `start` to `end` length labels of `entity_df` from `label_views`
 
         Args:
-            label_views (List): _description_
-            entity_df (pd.DataFrame): _description_
+            label_views:
+            entity_df (pd.DataFrame): condition
             period (str): length of look_forward
-            include (bool, optional): _description_. Defaults to False, means not include timestamp defined in `entity_df`
+            include (bool, optional): include timestamp defined in `entity_df` or not. Defaults to False.
         """
         self.__check_format(entity_df)
         pass
