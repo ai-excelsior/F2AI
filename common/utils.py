@@ -2,6 +2,8 @@ from dataclasses import replace
 import pandas as pd
 from pandas.tseries.frequencies import to_offset
 
+FSKEY = "__FS__"
+
 
 def remove_prefix(text: str, prefix: str):
     return text[text.startswith(prefix) and len(prefix) :]
@@ -51,8 +53,8 @@ def read_file(path, type, time_col=None):
     return df
 
 
-def transform_freq(ttl):
-    value, freq = ttl.split(" ")
+def transform_freq(dt):
+    value, freq = dt.split(" ")
     if freq == "quarters":
         freq = "months"
         value = int(value) * 3
@@ -60,11 +62,8 @@ def transform_freq(ttl):
     return {freq: int(value)}
 
 
-def parse_ttl(ttl):
-    if not ttl:
-        return
-    else:
-        return {**transform_freq(ttl)}
+def parse_date(dt):
+    return {**transform_freq(dt)} if dt else None
 
 
 def get_grouped_record(df, time_col, entity_id):
@@ -76,3 +75,7 @@ def get_latest_record(df, time_col):
     df.drop(columns=time_col + "_x", inplace=True)  # drop action timestamp
     df.rename(columns={time_col + "_y": time_col}, inplace=True)  # rename
     return df
+
+
+def get_consistent_format(views):
+    return views if isinstance(views, dict) else {FSKEY: views}

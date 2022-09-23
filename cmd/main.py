@@ -28,4 +28,5 @@ if __name__ == "__main__":
             ],
         }
     )
+    print(fs.get_labels(fs.labels, entity_dobssn))
     print(fs.get_features(fs.features, entity_dobssn, None))
