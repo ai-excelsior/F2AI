@@ -164,6 +164,7 @@ class FeatureStore:
         start: str = None,
         end: str = None,
         sampler: callable = None,
+        bucket: int = None,
         stride: int = 1,
         include: str = "both",
     ) -> Dataset:
@@ -174,7 +175,8 @@ class FeatureStore:
             start (str, optional): _description_. Defaults to None.
             end (str, optional): _description_. Defaults to None.
             sampler (callable, optional): _description_. Defaults to None.
-            stride (int, optional): stride to sample, Defaults to 1
+            bucket (int, optional): time_bucket, Defaults to None means all in one bucket
+            stride (int, optional): stride to sample, Defaults to 1 means no stride
             include(str,optional): whether to include `start` or `end` timestamp
         """
         pass
