@@ -40,11 +40,12 @@ class FeatureStore:
         """non-series prediction use: get `features` of `entity_df` from `feature_views`
 
         Args:
-            feature_views (List, optional): FeatureViews to lookup. Defaults to [].
-            entity_df (pd.DataFrame, optional): condition. Defaults to None.
-            features (List, optional): features to return. Defaults to None.
-            include (bool, optional): _description_. Defaults to True, include timestamp defined in `entity_df` or not
+            feature_views : FeatureViews to lookup. Defaults to [].
+            entity_df (pd.DataFrame): condition. Defaults to None.
+            features (List, optional): features to return. Defaults to None means all features.
+            include (bool, optional):  include timestamp defined in `entity_df` or not. Defaults to True.
         """
+        feature_views = get_consistent_format(feature_views)
         if self.connection.type == "file":
             return (
                 self._get_point_record(feature_views, entity_df, include, is_label=False)
@@ -79,71 +80,16 @@ class FeatureStore:
         entity_df: pd.DataFrame,
         include: bool = False,
     ):
-        """non-time series prediction use: get from `start` to `end` length labels of `entity_df` from `label_views`
+        """non-time series prediction use: get labels of `entity_df` from `label_views`
 
         Args:
-            label_views (List): _description_
-            entity_df (pd.DataFrame): _description_
-            include (bool, optional): _description_. Defaults to False, include timestamp defined in `entity_df` or not
+            label_views:
+            entity_df (pd.DataFrame): condition
+            include (bool, optional): include timestamp defined in `entity_df` or not. Defaults to False.
         """
+        label_views = get_consistent_format(label_views)
         if self.connection.type == "file":
             return self._get_point_record(label_views, entity_df, include, is_label=True)
-
-    def _get_point_record(self, views, entity_df, include, is_label: bool = False):
-        views = get_consistent_format(views)
-        entity_name = entity_df.columns[0]  # entity column name in table
-        dfs = []
-        for _, cfg in views.items():
-            if entity_name in cfg.entity:
-                # time column name in table
-                df = read_file(
-                    os.path.join(self.project_folder, self.sources[cfg.batch_source].file_path),
-                    self.sources[cfg.batch_source].file_format,
-                    self.sources[cfg.batch_source].event_time,
-                )
-                # ensure the time col of result df
-                df.rename(
-                    columns={
-                        self.sources[cfg.batch_source].event_time: TIME_COL,
-                        self.entity[entity_df.columns[0]].entity: entity_name,
-                    },
-                    inplace=True,
-                )
-                # filter feature/label columns
-                if is_label:
-                    df = df[[col for col in list(entity_df.columns) + list(cfg.labels.keys())]]
-                else:
-                    df = df[[col for col in list(entity_df.columns) + list(cfg.features.keys())]]
-                # merge according to `entity`
-                df = df.merge(entity_df, on=entity_name, how="inner")
-                # filter time condition
-                if include:
-                    fil = (
-                        df[  # latest time
-                            (df[TIME_COL + "_y"] >= df[TIME_COL + "_x"])
-                            & (  # earliest time
-                                df[TIME_COL + "_x"]
-                                > df[TIME_COL + "_y"].map(lambda x: x - relativedelta(**parse_date(cfg.ttl)))
-                            )
-                        ]
-                        if cfg.ttl
-                        else df[df[TIME_COL + "_y"] >= df[TIME_COL + "_x"]]  # latest time
-                    )
-                else:
-                    fil = (
-                        df[  # latest time
-                            (df[TIME_COL + "_y"] > df[TIME_COL + "_x"])
-                            & (  # earliest time
-                                df[TIME_COL + "_x"]
-                                >= df[TIME_COL + "_y"].map(lambda x: x - relativedelta(**parse_date(cfg.ttl)))
-                            )
-                        ]
-                        if cfg.ttl
-                        else df[df[TIME_COL + "_y"] > df[TIME_COL + "_x"]]  # latest time
-                    )
-                    # newest record
-                dfs.append(get_grouped_record(fil, TIME_COL, entity_name))
-        return reduce(lambda l, r: pd.merge(l, r, on=[TIME_COL, entity_name], how="inner"), dfs)
 
     def get_period_labels(
         self,
@@ -229,3 +175,66 @@ class FeatureStore:
         Args:
             views (List): _description_
         """
+
+    def _get_point_record(self, views, entity_df: pd.DataFrame, include: bool = True, is_label: bool = False):
+        """non-series prediction use
+
+        Args:
+            views (List, optional): FeatureViews/LabelViews to lookup.
+            entity_df (pd.DataFrame): condition. Defaults to None.
+            include (bool, optional): include timestamp defined in `entity_df` or not. Defaults to True.
+            is_label (bool, optional): LabelViews of not. Defaults to False.
+        """
+        entity_name = entity_df.columns[0]  # entity column name in table
+        dfs = []
+        for _, cfg in views.items():
+            if entity_name in cfg.entity:
+                # time column name in table
+                df = read_file(
+                    os.path.join(self.project_folder, self.sources[cfg.batch_source].file_path),
+                    self.sources[cfg.batch_source].file_format,
+                    self.sources[cfg.batch_source].event_time,
+                )
+                # ensure the time col of result df
+                df.rename(
+                    columns={
+                        self.sources[cfg.batch_source].event_time: TIME_COL,
+                        self.entity[entity_df.columns[0]].entity: entity_name,
+                    },
+                    inplace=True,
+                )
+                # filter feature/label columns
+                if is_label:
+                    df = df[[col for col in list(entity_df.columns) + list(cfg.labels.keys())]]
+                else:
+                    df = df[[col for col in list(entity_df.columns) + list(cfg.features.keys())]]
+                # merge according to `entity`
+                df = df.merge(entity_df, on=entity_name, how="inner")
+                # filter time condition
+                if include:
+                    fil = (
+                        df[  # latest time
+                            (df[TIME_COL + "_y"] >= df[TIME_COL + "_x"])
+                            & (  # earliest time
+                                df[TIME_COL + "_x"]
+                                > df[TIME_COL + "_y"].map(lambda x: x - relativedelta(**parse_date(cfg.ttl)))
+                            )
+                        ]
+                        if cfg.ttl
+                        else df[df[TIME_COL + "_y"] >= df[TIME_COL + "_x"]]  # latest time
+                    )
+                else:
+                    fil = (
+                        df[  # latest time
+                            (df[TIME_COL + "_y"] > df[TIME_COL + "_x"])
+                            & (  # earliest time
+                                df[TIME_COL + "_x"]
+                                >= df[TIME_COL + "_y"].map(lambda x: x - relativedelta(**parse_date(cfg.ttl)))
+                            )
+                        ]
+                        if cfg.ttl
+                        else df[df[TIME_COL + "_y"] > df[TIME_COL + "_x"]]  # latest time
+                    )
+                    # newest record
+                dfs.append(get_grouped_record(fil, TIME_COL, entity_name))
+        return reduce(lambda l, r: pd.merge(l, r, on=[TIME_COL, entity_name], how="inner"), dfs)
