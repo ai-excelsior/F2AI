@@ -34,6 +34,12 @@ class FeatureStore:
         self.labels = get_label_views(os.path.join(project_folder, "label_views"))
         self.service = get_service_cfg(os.path.join(project_folder, "services"))
 
+    def __check_format(self, entity_df):
+        if len(entity_df.columns) != 2 or entity_df.columns[1] != TIME_COL:
+            raise ValueError(
+                "Check entity_df make sure it has 2 columns and event_timestamp at the second column"
+            )
+
     def get_features(
         self, feature_views, entity_df: pd.DataFrame, features: List = None, include: bool = True
     ):
@@ -45,6 +51,7 @@ class FeatureStore:
             features (List, optional): features to return. Defaults to None means all features.
             include (bool, optional):  include timestamp defined in `entity_df` or not. Defaults to True.
         """
+        self.__check_format(entity_df)
         feature_views = get_consistent_format(feature_views)
         if self.connection.type == "file":
             return (
@@ -72,6 +79,7 @@ class FeatureStore:
             features (List, optional): _description_. Defaults to None.
             include (bool, optional): _description_. Defaults to True, means include timestamp defined in `entity_df`
         """
+        self.__check_format(entity_df)
         pass
 
     def get_labels(
@@ -87,6 +95,7 @@ class FeatureStore:
             entity_df (pd.DataFrame): condition
             include (bool, optional): include timestamp defined in `entity_df` or not. Defaults to False.
         """
+        self.__check_format(entity_df)
         label_views = get_consistent_format(label_views)
         if self.connection.type == "file":
             return self._get_point_record(label_views, entity_df, include, is_label=True)
@@ -106,6 +115,7 @@ class FeatureStore:
             period (str): length of look_forward
             include (bool, optional): _description_. Defaults to False, means not include timestamp defined in `entity_df`
         """
+        self.__check_format(entity_df)
         pass
 
     def stats(
