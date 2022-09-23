@@ -10,7 +10,9 @@ from common.get_config import (
     get_feature_views,
     get_source_cfg,
 )
-from common.utils import remove_prefix
+from common.utils import read_file, parse_ttl, get_grouped_record
+from dateutil.relativedelta import relativedelta
+from functools import reduce
 
 
 class FeatureStore:
@@ -22,12 +24,12 @@ class FeatureStore:
         else:
             raise ValueError("one of config file or meta server project should be provided")
         # init each object using .yml in corresponding folders
+        self.project_folder = project_folder
         self.sources = get_source_cfg(os.path.join(project_folder, "sources"))
         self.entity = get_entity_cfg(os.path.join(project_folder, "entities"))
         self.features = get_feature_views(os.path.join(project_folder, "feature_views"))
         self.labels = get_label_views(os.path.join(project_folder, "label_views"))
         self.service = get_service_cfg(os.path.join(project_folder, "services"))
-        aa
 
     def get_features(self, feature_views, entity_df: pd.DataFrame, features: List = None):
         """non-series prediction use: get `features` of `entity_df` from `feature_views`
@@ -37,7 +39,40 @@ class FeatureStore:
             entity_df (pd.DataFrame, optional): _description_. Defaults to None.
             features (List, optional): _description_. Defaults to None.
         """
-        pass
+        entity_id = self.entity[entity_df.columns[0]].entity  # entity column name in table
+        if self.connection.type == "file":
+            df = []
+            for _, cfg in feature_views.items():
+                if entity_df.columns[0] in cfg.entity:
+                    time_col = self.sources[cfg.batch_source].event_time  # time column name in table
+                    # force column names to be the same
+                    entity_df.columns = [entity_id, time_col]
+                    fe_df = read_file(
+                        os.path.join(self.project_folder, self.sources[cfg.batch_source].file_path),
+                        self.sources[cfg.batch_source].file_format,
+                        time_col,
+                    )
+                    # filter feature columns
+                    fe_df = fe_df[[col for col in list(entity_df.columns) + list(cfg.features.keys())]]
+                    # merge according to `entity`
+                    fe_df = fe_df.merge(entity_df, on=entity_id, how="inner")
+                    # filter time condition
+                    features = (
+                        fe_df[  # latest time
+                            (fe_df[time_col + "_y"] >= fe_df[time_col + "_x"])
+                            & (  # earliest time
+                                fe_df[time_col + "_x"]
+                                > fe_df[time_col + "_y"].map(
+                                    lambda x: x - relativedelta(**parse_ttl(cfg.ttl))
+                                )
+                            )
+                        ]
+                        if cfg.ttl
+                        else fe_df[fe_df[time_col + "_y"] >= fe_df[time_col + "_x"]]  # latest time
+                    )
+                    # newest record
+                    df.append(get_grouped_record(features, time_col, entity_id))
+            return reduce(lambda l, r: pd.merge(l, r, on=[time_col, entity_id], how="outer"), df)
 
     def get_period_features(
         self,

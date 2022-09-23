@@ -1,3 +1,8 @@
+from dataclasses import replace
+import pandas as pd
+from pandas.tseries.frequencies import to_offset
+
+
 def remove_prefix(text: str, prefix: str):
     return text[text.startswith(prefix) and len(prefix) :]
 
@@ -30,3 +35,44 @@ def service_to_dict(schema):
                 )
 
     return item_dict
+
+
+def read_file(path, type, time_col=None):
+    path = remove_prefix(path, "file://")
+    if type.startswith("parq"):
+        df = pd.read_parquet(path)
+    elif type.startswith("tsv"):
+        df = pd.read_csv(path, sep="\t", parse_dates=[time_col])
+    elif type.startswith("txt"):
+        df = pd.read_csv(path, sep=" ", parse_dates=[time_col])
+    else:
+        df = pd.read_csv(path, parse_dates=[time_col])
+    df[time_col] = pd.to_datetime(df[time_col], utc=True)
+    return df
+
+
+def transform_freq(ttl):
+    value, freq = ttl.split(" ")
+    if freq == "quarters":
+        freq = "months"
+        value = int(value) * 3
+
+    return {freq: int(value)}
+
+
+def parse_ttl(ttl):
+    if not ttl:
+        return
+    else:
+        return {**transform_freq(ttl)}
+
+
+def get_grouped_record(df, time_col, entity_id):
+    return df.groupby(entity_id).apply(get_latest_record, time_col).reset_index(drop=True)
+
+
+def get_latest_record(df, time_col):
+    df = df[df[time_col + "_x"] == df[time_col + "_x"].max()]
+    df.drop(columns=time_col + "_x", inplace=True)  # drop action timestamp
+    df.rename(columns={time_col + "_y": time_col}, inplace=True)  # rename
+    return df
