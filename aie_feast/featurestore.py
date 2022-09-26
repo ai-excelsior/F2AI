@@ -2,6 +2,8 @@ from typing import List
 import pandas as pd
 import os
 from functools import reduce
+
+from sqlalchemy import column
 from dataset.dataset import Dataset
 from common.get_config import (
     get_conn_cfg,
@@ -153,12 +155,42 @@ class FeatureStore:
         pass
 
     def get_latest_entities(self, views):
-        """get latest entity and its timestamp
+        """get latest entity and its timestamp from `views`
 
         Args:
             views (List): _description_
         """
-        pass
+        result = {}
+        views = get_consistent_format(views)
+        for name, entity in self.entity.items():
+            if self.connection.type == "file":
+                dfs = []
+                for view in views.values():
+                    if name in view.entity:
+                        df = read_file(
+                            os.path.join(self.project_folder, self.sources[view.batch_source].file_path),
+                            self.sources[view.batch_source].file_format,
+                            self.sources[view.batch_source].event_time,
+                        )[[entity.entity, self.sources[view.batch_source].event_time]]
+                        # sort by event_time, decending
+                        df.sort_values(
+                            by=self.sources[view.batch_source].event_time,
+                            ascending=False,
+                            inplace=True,
+                            ignore_index=True,
+                        )
+                        # due to `ascending=False`, keep the `first` record means the latest one
+                        en = df.drop_duplicates(subset=entity.entity, keep="first")
+                        en.columns = [name, TIME_COL]
+                        dfs.append(en)
+                if dfs:  # views have this entity
+                    dfs = reduce(lambda l, r: pd.merge(l, r, on=name, how="outer"), dfs)
+                    # .astype() to avoid nan caused by outer-merge
+                    dfs[TIME_COL] = dfs[[col for col in dfs.columns if col != name]].apply(
+                        lambda row: row.astype(en[TIME_COL].dtype).max(), axis=1
+                    )
+                    result.update({name: dfs[[name, TIME_COL]]})
+        return result
 
     def query(self, query: str = None):
         """customized query
