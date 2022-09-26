@@ -80,7 +80,15 @@ class FeatureStore:
             include (bool, optional): include timestamp defined in `entity_df` or not. Defaults to True.
         """
         self.__check_format(entity_df)
-        pass
+        feature_views = get_consistent_format(feature_views)
+        if self.connection.type == "file":
+            return (
+                self._get_period_record(feature_views, entity_df, period, include, is_label=False)
+                if not features
+                else self._get_period_record(feature_views, entity_df, period, include, is_label=False)[
+                    [TIME_COL, entity_df.columns[0]] + features
+                ]
+            )
 
     def get_labels(
         self,
@@ -116,7 +124,9 @@ class FeatureStore:
             include (bool, optional): include timestamp defined in `entity_df` or not. Defaults to False.
         """
         self.__check_format(entity_df)
-        pass
+        label_views = get_consistent_format(label_views)
+        if self.connection.type == "file":
+            return self._get_period_record(label_views, entity_df, period, include, is_label=True)
 
     def stats(
         self,
@@ -250,3 +260,71 @@ class FeatureStore:
                     # newest record
                 dfs.append(get_grouped_record(fil, TIME_COL, entity_name))
         return reduce(lambda l, r: pd.merge(l, r, on=[TIME_COL, entity_name], how="inner"), dfs)
+
+    def _get_period_record(
+        self, views, entity_df: pd.DataFrame, period: str, include: bool = True, is_label: bool = False
+    ):
+        pass
+
+    #     """series prediction use
+
+    #     Args:
+    #         views (List, optional): FeatureViews/LabelViews to lookup.
+    #         entity_df (pd.DataFrame): condition. Defaults to None.
+    #         period: period.
+    #         include (bool, optional): include timestamp defined in `entity_df` or not. Defaults to True.
+    #         is_label (bool, optional): LabelViews of not. Defaults to False.
+    #     """
+    #     entity_name = entity_df.columns[0]  # entity column name in table
+    #     dfs = []
+    #     for _, cfg in views.items():
+    #         if entity_name in cfg.entity:
+    #             # time column name in table
+    #             df = read_file(
+    #                 os.path.join(self.project_folder, self.sources[cfg.batch_source].file_path),
+    #                 self.sources[cfg.batch_source].file_format,
+    #                 self.sources[cfg.batch_source].event_time,
+    #             )
+    #             # ensure the time col of result df
+    #             df.rename(
+    #                 columns={
+    #                     self.sources[cfg.batch_source].event_time: TIME_COL,
+    #                     self.entity[entity_df.columns[0]].entity: entity_name,
+    #                 },
+    #                 inplace=True,
+    #             )
+    #             # filter feature/label columns
+    #             if is_label:
+    #                 df = df[[col for col in list(entity_df.columns) + list(cfg.labels.keys())]]
+    #             else:
+    #                 df = df[[col for col in list(entity_df.columns) + list(cfg.features.keys())]]
+    #             # merge according to `entity`
+    #             df = df.merge(entity_df, on=entity_name, how="inner")
+    #             # filter time condition
+    #             if include:
+    #                 fil = (
+    #                     df[  # latest time
+    #                         (df[TIME_COL + "_y"] >= df[TIME_COL + "_x"])
+    #                         & (  # earliest time
+    #                             df[TIME_COL + "_x"]
+    #                             > df[TIME_COL + "_y"].map(lambda x: x - relativedelta(**parse_date(cfg.ttl)))
+    #                         )
+    #                     ]
+    #                     if cfg.ttl
+    #                     else df[df[TIME_COL + "_y"] >= df[TIME_COL + "_x"]]  # latest time
+    #                 )
+    #             else:
+    #                 fil = (
+    #                     df[  # latest time
+    #                         (df[TIME_COL + "_y"] > df[TIME_COL + "_x"])
+    #                         & (  # earliest time
+    #                             df[TIME_COL + "_x"]
+    #                             >= df[TIME_COL + "_y"].map(lambda x: x - relativedelta(**parse_date(cfg.ttl)))
+    #                         )
+    #                     ]
+    #                     if cfg.ttl
+    #                     else df[df[TIME_COL + "_y"] > df[TIME_COL + "_x"]]  # latest time
+    #                 )
+    #                 # newest record
+    #             dfs.append(get_grouped_record(fil, TIME_COL, entity_name))
+    #     return reduce(lambda l, r: pd.merge(l, r, on=[TIME_COL, entity_name], how="inner"), dfs)

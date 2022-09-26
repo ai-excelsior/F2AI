@@ -13,6 +13,7 @@ if __name__ == "__main__":
     get_f2ai_parser(parser)
     kwargs = vars(parser.parse_args())
     fs = FeatureStore(kwargs.pop("url"))
+    period = "25 days"
     entity_loan = pd.DataFrame.from_dict(
         {
             "loan": [38633],
@@ -32,3 +33,6 @@ if __name__ == "__main__":
     )
     print(fs.get_labels(fs.labels, entity_dobssn))
     print(fs.get_features(fs.features, entity_dobssn, None))
+
+    # print(fs.get_period_labels(fs.labels, entity_dobssn, period, include=False))
+    # print(fs.get_period_features(fs.labels, entity_dobssn, period, features=None, include=False))
