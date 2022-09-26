@@ -370,7 +370,7 @@ class FeatureStore:
                     entity_name, TIME_COL, df_for_period, newest_record, period, is_label
                 )
 
-                # TODO 多个view返回的场景要确认一下
+                # TODO 多个view返回的场景要修改一下
         return df.sort_values(by=["query_timestamp", TIME_COL])
 
     def get_period_record(self, entity_name, TIME_COL, df_for_period, newest_record, period, is_label):
