@@ -14,7 +14,8 @@ class SourceConfig:
     file_format: int = field(default_factory=get_default_value)
     file_path: str = field(default_factory=get_default_value)
     request_features: List[Dict[str, str]] = field(default_factory=list)
-    description: str = ''
+    description: str = ""
+    tags: List[dict] = field(default_factory=get_default_value)
 
     def __post_init__(self):
         self.validate()

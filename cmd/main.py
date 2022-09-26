@@ -23,10 +23,10 @@ if __name__ == "__main__":
     )
     entity_dobssn = pd.DataFrame.from_dict(
         {
-            "dob_ssn": ["19621030_8837", "19831011_2467"],
+            "dob_ssn": ["A", "A", "A", "A", "B", "B", "B", "B"],
             TIME_COL: [
-                datetime(2021, 8, 23, 10, 59, 42, tzinfo=timezone.utc),
-                datetime(2021, 8, 17, 10, 59, 42, tzinfo=timezone.utc),
+                datetime(2022, 4, 2, tzinfo=timezone.utc),
+                datetime(2021, 4, 17, 10, 59, 42, tzinfo=timezone.utc),
             ],
         }
     )

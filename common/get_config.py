@@ -22,6 +22,8 @@ def get_conn_cfg(url: str):
         conn = ConnectConfig(cfg)
     elif cfg["offline_store"]["type"] == "pgsql":
         conn = ConnectConfig(cfg)
+    elif cfg["offline_store"]["type"] == "spark":
+        conn = ConnectConfig(type=cfg["offline_store"]["type"])  # TODO:will be implemented in future
     else:
         raise TypeError("offline_store must be one of [file, influxdb, pgsql]")
     # TODO:assert
@@ -76,7 +78,7 @@ def get_feature_views(url: str):
                 features=schema_to_dict(cfg["schema"]),
                 batch_source=cfg["batch_source"],
                 ttl=cfg.get("ttl", None),
-                exogenous=cfg.get("exogenous", None),
+                exogenous=cfg.get("tags", {}).get("exogenous", None),
                 request_source=cfg.get("request_source", None),
             )
             feature_views.update({cfg["name"]: feature_cfg})
@@ -118,6 +120,7 @@ def get_source_cfg(url: str):
             cfg["event_time"] = cfg.pop("timestamp_field", None)
             cfg["create_time"] = cfg.pop("created_timestamp_column", None)
             cfg["request_features"] = cfg.pop("schema", None)
+            cfg["tags"] = cfg.pop("tags", None)
             source_cfg = SourceConfig(**cfg)
             source_dict.update({cfg["name"]: source_cfg})
     return source_dict
