@@ -57,7 +57,7 @@ if __name__ == "__main__":
     # get_period_data(period="25 days")  # period = "2 days"
 
     def get_latest_entity():
-        fs.get_latest_entities(fs.features, "loan")
+        fs.get_latest_entities(fs.features, ["loan"])
 
     get_latest_entity()
 
