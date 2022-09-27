@@ -438,20 +438,26 @@ class FeatureStore:
                     self.sources[cfg.batch_source].event_time,
                     list(all_entity_col.keys()),
                 )
+                df.rename({self.sources[cfg.batch_source].event_time: TIME_COL}, inplace=True)
                 # ensure the time col of result df
-                df.rename(
-                    columns={
-                        self.sources[cfg.batch_source].event_time: TIME_COL,
-                        self.entity[entity_df.columns[0]].entity: entity_name,
-                    },
-                    inplace=True,
-                )
                 # filter feature/label columns
                 if is_label:
-                    df = df[[col for col in list(entity_df.columns) + list(cfg.labels.keys())]]
+                    df = df[
+                        [
+                            col
+                            for col in list(all_entity_col.keys()) + list(cfg.labels.keys()) + [TIME_COL]
+                            if col in df.columns
+                        ]
+                    ]
                 else:
-                    df = df[[col for col in list(entity_df.columns) + list(cfg.features.keys())]]
-
+                    df = df[
+                        [
+                            col
+                            for col in list(all_entity_col.keys()) + list(cfg.features.keys()) + [TIME_COL]
+                            if col in df.columns
+                        ]
+                    ]
+                df.rename(columns=all_entity_col, inplace=True)
                 df_for_period = df
                 # merge according to `entity`
                 df = df.merge(entity_df, on=entity_name, how="inner")
