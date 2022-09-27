@@ -89,7 +89,18 @@ if __name__ == "__main__":
                 ],
             }
         )
-        fs.get_features(fs.features, entity_loan)
+        entity_dobssn_period = pd.DataFrame.from_dict(
+            {
+                "dob_ssn": ["19530219_5179", "19520816_8737", "19860413_2537"],
+                TIME_COL: [
+                    # datetime(2020, 8, 26, tzinfo=timezone.utc), 这种时间格式大小比较有bug
+                    datetime(2021, 8, 26, 10, 59, 42, tzinfo=timezone.utc),
+                    datetime(2021, 8, 26, 10, 59, 42, tzinfo=timezone.utc),
+                    datetime(2021, 8, 26, 10, 59, 42, tzinfo=timezone.utc),
+                ],
+            }
+        )
+        fs.get_features(fs.features, entity_dobssn_period)
 
     get_features()
 
