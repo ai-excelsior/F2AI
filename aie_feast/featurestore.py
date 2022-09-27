@@ -305,7 +305,7 @@ class FeatureStore:
 
     def get_dataset(
         self,
-        views,
+        service,
         start: str = None,
         end: str = None,
         sampler: callable = None,
@@ -316,7 +316,7 @@ class FeatureStore:
         """get from `start` to `end` length data for training from `views`
 
         Args:
-            views (List): `SERVICE` to use
+            service (List): `SERVICE` to use
             start (str, optional): _description_. Defaults to None.
             end (str, optional): _description_. Defaults to None.
             sampler (callable, optional): _description_. Defaults to None.

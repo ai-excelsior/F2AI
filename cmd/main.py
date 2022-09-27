@@ -52,5 +52,4 @@ if __name__ == "__main__":
             fs.get_period_features(fs.features, entity_dobssn_period, period, features=None, include=True)
         )  # TODO include设置再确定一下
 
-    get_period_data(period="25 days")
-    # period = "2 days"
+    get_period_data(period="25 days")  # period = "2 days"
