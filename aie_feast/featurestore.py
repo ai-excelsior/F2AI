@@ -161,7 +161,7 @@ class FeatureStore:
         end: str = None,
         include: str = "both",
     ):
-        """get from `start` to `end` statistical `fn` results of `entity_df` from `views`
+        """get from `start` to `end` statistical `fn` results of `entity_df` from `views`, only work for features varied with time
 
         Args:
             views (List): _description_
@@ -200,7 +200,7 @@ class FeatureStore:
             for entity_name in entities:
                 dfs = []
                 for _, cfg in views.items():
-                    if entity_name in cfg.entity:
+                    if entity_name in cfg.entity and self.sources[cfg.batch_source].event_time:
                         df = read_file(
                             os.path.join(self.project_folder, self.sources[cfg.batch_source].file_path),
                             self.sources[cfg.batch_source].file_format,

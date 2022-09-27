@@ -13,7 +13,7 @@ if __name__ == "__main__":
     get_f2ai_parser(parser)
     kwargs = vars(parser.parse_args())
     fs = FeatureStore(kwargs.pop("url"))
-    fs.get_latest_entities(fs.features)
+    # fs.get_latest_entities(fs.features)
 
     def get_period_data(period):
         entity_loan = pd.DataFrame.from_dict(
@@ -57,3 +57,29 @@ if __name__ == "__main__":
 
     def get_latest_entity():
         fs.get_latest_entities(fs.features)
+
+    def stats():
+        entity_link = pd.DataFrame.from_dict(
+            {
+                "link": ["3377906280028510514", "4377906282959500514"],
+                TIME_COL: [
+                    datetime(2016, 6, 1, 0, 0, 0, tzinfo=timezone.utc),
+                    datetime(2016, 7, 1, 0, 0, 0, tzinfo=timezone.utc),
+                ],
+            }
+        )
+        fs.stats(fs.features, entity_link, fn="mean")
+
+    def get_features():
+        entity_link = pd.DataFrame.from_dict(
+            {
+                "link": ["3377906280028510514", "4377906282959500514"],
+                TIME_COL: [
+                    datetime(2016, 6, 1, 0, 0, 0, tzinfo=timezone.utc),
+                    datetime(2016, 7, 1, 0, 0, 0, tzinfo=timezone.utc),
+                ],
+            }
+        )
+        fs.get_features(fs.features, entity_link)
+
+    get_features()
