@@ -39,7 +39,7 @@ def service_to_dict(schema):
     return item_dict
 
 
-def read_file(path, type, time_col=None):
+def read_file(path, type, time_col=None, entity_cols=None):
     path = remove_prefix(path, "file://")
     if type.startswith("parq"):
         df = pd.read_parquet(path)
@@ -51,6 +51,8 @@ def read_file(path, type, time_col=None):
         df = pd.read_csv(path, parse_dates=[time_col] if time_col else [])
     if time_col:
         df[time_col] = pd.to_datetime(df[time_col], utc=True)
+    if entity_cols:
+        df[entity_cols] = df[entity_cols].astype("str")
     return df
 
 

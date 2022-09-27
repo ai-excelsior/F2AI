@@ -100,7 +100,7 @@ if __name__ == "__main__":
                 ],
             }
         )
-        fs.get_features(fs.features, entity_dobssn_period)
+        fs.get_features(fs.features, entity_link)
 
     get_features()
 

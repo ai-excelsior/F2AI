@@ -201,30 +201,29 @@ class FeatureStore:
                 dfs = []
                 for _, cfg in views.items():
                     if entity_name in cfg.entity and self.sources[cfg.batch_source].event_time:
+                        all_entity_col = {self.entity[en].entity: en for en in cfg.entity}
                         df = read_file(
                             os.path.join(self.project_folder, self.sources[cfg.batch_source].file_path),
                             self.sources[cfg.batch_source].file_format,
                             self.sources[cfg.batch_source].event_time,
+                            list(all_entity_col.keys()),
                         )
+                        df.rename(columns={self.sources[cfg.batch_source].event_time: TIME_COL}, inplace=True)
                         # filter columns
                         df = df[
                             [
-                                fea
-                                for fea, type in cfg.features.items()
-                                if fea in features and type != "string"
-                            ]
-                            + [
-                                self.sources[cfg.batch_source].event_time,
-                                self.entity[entity_name].entity,
+                                col
+                                for col in [
+                                    fea
+                                    for fea, type in cfg.features.items()
+                                    if fea in features and type != "string"
+                                ]
+                                + list(all_entity_col.keys())
+                                + [TIME_COL]
+                                if col in df.columns
                             ]
                         ]
-                        df.rename(
-                            columns={
-                                self.sources[cfg.batch_source].event_time: TIME_COL,
-                                self.entity[entity_name].entity: entity_name,
-                            },
-                            inplace=True,
-                        )
+                        df.rename(columns=all_entity_col, inplace=True)
                         if entity_df is not None:
                             df = df.merge(entity_df, how="right", on=entity_name)
                         else:
@@ -269,10 +268,12 @@ class FeatureStore:
                 dfs = []
                 for view in views.values():
                     if name in view.entity and self.sources[view.batch_source].event_time:
+                        all_entity_col = {self.entity[en].entity: en for en in view.entity}
                         df = read_file(
                             os.path.join(self.project_folder, self.sources[view.batch_source].file_path),
                             self.sources[view.batch_source].file_format,
                             self.sources[view.batch_source].event_time,
+                            list(all_entity_col.keys()),
                         )
                         df = df[[entity.entity, self.sources[view.batch_source].event_time]]
                         # sort by event_time, decending
@@ -347,14 +348,16 @@ class FeatureStore:
         for _, cfg in views.items():
             if entity_name in cfg.entity:
                 # time column name in table
+                all_entity_col = {self.entity[en].entity: en for en in cfg.entity}
                 df = read_file(
                     os.path.join(self.project_folder, self.sources[cfg.batch_source].file_path),
                     self.sources[cfg.batch_source].file_format,
                     self.sources[cfg.batch_source].event_time,
+                    list(all_entity_col.keys()),
                 )
                 # ensure the time col of result df
                 df.rename(columns={self.sources[cfg.batch_source].event_time: TIME_COL}, inplace=True)
-                all_entity_col = {self.entity[en].entity: en for en in cfg.entity}
+
                 # filter feature/label columns
                 if is_label:
                     df = df[
@@ -376,32 +379,39 @@ class FeatureStore:
                 # merge according to `entity`
                 df = df.merge(entity_df, on=entity_name, how="inner")
                 # filter time condition
-                if include:
-                    fil = (
-                        df[  # latest time
-                            (df[TIME_COL + "_y"] >= df[TIME_COL + "_x"])
-                            & (  # earliest time
-                                df[TIME_COL + "_x"]
-                                > df[TIME_COL + "_y"].map(lambda x: x - relativedelta(**parse_date(cfg.ttl)))
-                            )
-                        ]
-                        if cfg.ttl
-                        else df[df[TIME_COL + "_y"] >= df[TIME_COL + "_x"]]  # latest time
-                    )
-                else:
-                    fil = (
-                        df[  # latest time
-                            (df[TIME_COL + "_y"] > df[TIME_COL + "_x"])
-                            & (  # earliest time
-                                df[TIME_COL + "_x"]
-                                >= df[TIME_COL + "_y"].map(lambda x: x - relativedelta(**parse_date(cfg.ttl)))
-                            )
-                        ]
-                        if cfg.ttl
-                        else df[df[TIME_COL + "_y"] > df[TIME_COL + "_x"]]  # latest time
-                    )
+                if self.sources[cfg.batch_source].event_time:  #  time-relavent features
+                    if include:
+                        fil = (
+                            df[  # latest time
+                                (df[TIME_COL + "_y"] >= df[TIME_COL + "_x"])
+                                & (  # earliest time
+                                    df[TIME_COL + "_x"]
+                                    > df[TIME_COL + "_y"].map(
+                                        lambda x: x - relativedelta(**parse_date(cfg.ttl))
+                                    )
+                                )
+                            ]
+                            if cfg.ttl
+                            else df[df[TIME_COL + "_y"] >= df[TIME_COL + "_x"]]  # latest time
+                        )
+                    else:
+                        fil = (
+                            df[  # latest time
+                                (df[TIME_COL + "_y"] > df[TIME_COL + "_x"])
+                                & (  # earliest time
+                                    df[TIME_COL + "_x"]
+                                    >= df[TIME_COL + "_y"].map(
+                                        lambda x: x - relativedelta(**parse_date(cfg.ttl))
+                                    )
+                                )
+                            ]
+                            if cfg.ttl
+                            else df[df[TIME_COL + "_y"] > df[TIME_COL + "_x"]]  # latest time
+                        )
                     # newest record
-                dfs.append(get_grouped_record(fil, TIME_COL, entity_name))
+                    dfs.append(get_grouped_record(fil, TIME_COL, entity_name))
+                else:  #  not time-relavent features
+                    dfs.append(df)
         return reduce(lambda l, r: pd.merge(l, r, on=[TIME_COL, entity_name], how="inner"), dfs)
 
     def _get_period_record(
@@ -421,11 +431,13 @@ class FeatureStore:
         dfs = []
         for _, cfg in views.items():
             if entity_name in cfg.entity and self.sources[cfg.batch_source].event_time:
+                all_entity_col = {self.entity[en].entity: en for en in cfg.entity}
                 # time column name in table
                 df = read_file(
                     os.path.join(self.project_folder, self.sources[cfg.batch_source].file_path),
                     self.sources[cfg.batch_source].file_format,
                     self.sources[cfg.batch_source].event_time,
+                    list(all_entity_col.keys()),
                 )
                 # ensure the time col of result df
                 df.rename(
