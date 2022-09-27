@@ -40,6 +40,7 @@ def service_to_dict(schema):
 
 
 def read_file(path, type, time_col=None, entity_cols=None):
+    time_col = [i for i in time_col if i]
     path = remove_prefix(path, "file://")
     if type.startswith("parq"):
         df = pd.read_parquet(path)
@@ -49,8 +50,8 @@ def read_file(path, type, time_col=None, entity_cols=None):
         df = pd.read_csv(path, sep=" ", parse_dates=[time_col] if time_col else [])
     else:
         df = pd.read_csv(path, parse_dates=[time_col] if time_col else [])
-    if time_col:
-        df[time_col] = pd.to_datetime(df[time_col], utc=True)
+    for col in time_col:
+        df[col] = pd.to_datetime(df[col], utc=True)
     if entity_cols:
         df[entity_cols] = df[entity_cols].astype("str")
     return df
@@ -69,12 +70,14 @@ def parse_date(dt):
     return {**transform_freq(dt)} if dt else None
 
 
-def get_grouped_record(df, time_col, entity_id):
-    return df.groupby(entity_id).apply(get_latest_record, time_col).reset_index(drop=True)
+def get_grouped_record(df, time_col, entity_id, create_time):
+    return df.groupby(entity_id).apply(get_latest_record, time_col, create_time).reset_index(drop=True)
 
 
-def get_latest_record(df, time_col):
+def get_latest_record(df, time_col, create_time):
     df = df[df[time_col + "_x"] == df[time_col + "_x"].max()]
+    if create_time in df.columns:
+        df = df[df[create_time] == df[create_time].max()]
     df.drop(columns=time_col + "_x", inplace=True)  # drop action timestamp
     df.rename(columns={time_col + "_y": time_col}, inplace=True)  # rename
     return df

@@ -27,6 +27,7 @@ from dateutil.relativedelta import relativedelta
 
 
 TIME_COL = "event_timestamp"
+CREATE_COL = "created_timestamp"
 
 
 class FeatureStore:
@@ -353,17 +354,25 @@ class FeatureStore:
                 df = read_file(
                     os.path.join(self.project_folder, self.sources[cfg.batch_source].file_path),
                     self.sources[cfg.batch_source].file_format,
-                    self.sources[cfg.batch_source].event_time,
+                    [self.sources[cfg.batch_source].event_time, self.sources[cfg.batch_source].create_time],
                     list(all_entity_col.keys()),
                 )
                 # ensure the time col of result df
-                df.rename(columns={self.sources[cfg.batch_source].event_time: TIME_COL}, inplace=True)
+                df.rename(
+                    columns={
+                        self.sources[cfg.batch_source].event_time: TIME_COL,
+                        self.sources[cfg.batch_source].create_time: CREATE_COL,
+                    },
+                    inplace=True,
+                )
                 # filter feature/label columns
                 if is_label:
                     df = df[
                         [
                             col
-                            for col in list(all_entity_col.keys()) + list(cfg.labels.keys()) + [TIME_COL]
+                            for col in list(all_entity_col.keys())
+                            + list(cfg.labels.keys())
+                            + [TIME_COL, CREATE_COL]
                             if col in df.columns
                         ]
                     ]
@@ -371,7 +380,9 @@ class FeatureStore:
                     df = df[
                         [
                             col
-                            for col in list(all_entity_col.keys()) + list(cfg.features.keys()) + [TIME_COL]
+                            for col in list(all_entity_col.keys())
+                            + list(cfg.features.keys())
+                            + [TIME_COL, CREATE_COL]
                             if col in df.columns
                         ]
                     ]
@@ -382,7 +393,7 @@ class FeatureStore:
                 if self.sources[cfg.batch_source].event_time:  #  time-relavent features
                     fil = self._fil_timelimit(include, cfg, df)
                     # newest record
-                    dfs.append(get_grouped_record(fil, TIME_COL, entity_name))
+                    dfs.append(get_grouped_record(fil, TIME_COL, entity_name, CREATE_COL))
                 else:  #  not time-relavent features
                     dfs.append(df)
         return reduce(lambda l, r: pd.merge(l, r, on=[TIME_COL, entity_name], how="inner"), dfs)
