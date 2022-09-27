@@ -38,7 +38,7 @@ def get_service_cfg(url: str):
     """
     service_cfg = {}
     for cfg in os.listdir(remove_prefix(url, "file://")):
-        if cfg.endswith(".yml"):
+        if cfg.endswith(".yml") or cfg.endswith(".yaml"):
             cfg = read_yml(os.path.join(url, cfg))
             service = Service(
                 features=service_to_dict(cfg["features"]),
@@ -56,7 +56,7 @@ def get_entity_cfg(url: str):
     """
     entities = {}
     for cfg in os.listdir(remove_prefix(url, "file://")):
-        if cfg.endswith(".yml"):
+        if cfg.endswith(".yml") or cfg.endswith(".yaml"):
             cfg = read_yml(os.path.join(url, cfg))
             entity_cfg = Entity(entity=cfg.get("join_keys", [cfg["name"]])[0])
             entities.update({cfg["name"]: entity_cfg})
@@ -71,7 +71,7 @@ def get_feature_views(url: str):
     """
     feature_views = {}
     for cfg in os.listdir(remove_prefix(url, "file://")):
-        if cfg.endswith(".yml"):
+        if cfg.endswith(".yml") or cfg.endswith(".yaml"):
             cfg = read_yml(os.path.join(url, cfg))
             feature_cfg = FeatureViews(
                 entity=cfg["entities"],
@@ -93,7 +93,7 @@ def get_label_views(url: str):
     """
     label_views = {}
     for cfg in os.listdir(remove_prefix(url, "file://")):
-        if cfg.endswith(".yml"):
+        if cfg.endswith(".yml") or cfg.endswith(".yaml"):
             cfg = read_yml(os.path.join(url, cfg))
             label_cfg = LabelViews(
                 entity=cfg["entities"],
@@ -114,7 +114,7 @@ def get_source_cfg(url: str):
     """
     source_dict = {}
     for filename in os.listdir(remove_prefix(url, "file://")):
-        if filename.endswith(".yml"):
+        if filename.endswith(".yml") or cfg.endswith(".yaml"):
             cfg = read_yml(os.path.join(url, filename))
             cfg["file_path"] = cfg.pop("path", None)
             cfg["event_time"] = cfg.pop("timestamp_field", None)

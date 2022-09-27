@@ -268,7 +268,7 @@ class FeatureStore:
             if self.connection.type == "file":
                 dfs = []
                 for view in views.values():
-                    if name in view.entity:
+                    if name in view.entity and self.sources[view.batch_source].event_time:
                         df = read_file(
                             os.path.join(self.project_folder, self.sources[view.batch_source].file_path),
                             self.sources[view.batch_source].file_format,
@@ -316,7 +316,7 @@ class FeatureStore:
         """get from `start` to `end` length data for training from `views`
 
         Args:
-            service (List): `SERVICE` to use
+            service: `SERVICE` to use
             start (str, optional): _description_. Defaults to None.
             end (str, optional): _description_. Defaults to None.
             sampler (callable, optional): _description_. Defaults to None.

@@ -13,6 +13,7 @@ if __name__ == "__main__":
     get_f2ai_parser(parser)
     kwargs = vars(parser.parse_args())
     fs = FeatureStore(kwargs.pop("url"))
+    fs.get_latest_entities(fs.features)
 
     def get_period_data(period):
         entity_loan = pd.DataFrame.from_dict(
@@ -52,4 +53,7 @@ if __name__ == "__main__":
             fs.get_period_features(fs.features, entity_dobssn_period, period, features=None, include=True)
         )  # TODO include设置再确定一下
 
-    get_period_data(period="25 days")  # period = "2 days"
+    # get_period_data(period="25 days")  # period = "2 days"
+
+    def get_latest_entity():
+        fs.get_latest_entities(fs.features)
