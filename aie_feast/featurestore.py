@@ -43,7 +43,7 @@ class FeatureStore:
         self.entity = get_entity_cfg(os.path.join(project_folder, "entities"))
         self.features = get_feature_views(os.path.join(project_folder, "feature_views"))
         self.labels = get_label_views(os.path.join(project_folder, "label_views"))
-        self.service = get_service_cfg(os.path.join(project_folder, "services"))
+        # self.service = get_service_cfg(os.path.join(project_folder, "services"))
 
     def __check_format(self, entity_df):
         if len(entity_df.columns) != 2 or entity_df.columns[1] != TIME_COL:
@@ -412,7 +412,7 @@ class FeatureStore:
         entity_name = entity_df.columns[0]  # entity column name in table
         dfs = []
         for _, cfg in views.items():
-            if entity_name in cfg.entity:
+            if entity_name in cfg.entity and self.sources[cfg.batch_source].event_time:
                 # time column name in table
                 df = read_file(
                     os.path.join(self.project_folder, self.sources[cfg.batch_source].file_path),
@@ -463,7 +463,7 @@ class FeatureStore:
                     )
                     # newest record
                 newest_record = get_grouped_record(fil, TIME_COL, entity_name)
-                dfs.append(newest_record)  # TODO 这个时间不对
+                # TODO 这个时间不对
                 # get time window data
                 df_for_period = df_for_period[
                     df_for_period[entity_name].apply(lambda x: x in newest_record[entity_name].values)
@@ -473,8 +473,12 @@ class FeatureStore:
                     entity_name, TIME_COL, df_for_period, newest_record, period, is_label
                 )
 
+                df.sort_values(by=["query_timestamp", TIME_COL])
+
+                dfs.append(df)
+
                 # TODO 多个view返回的场景要修改一下
-        return df.sort_values(by=["query_timestamp", TIME_COL])
+        return pd.concat(dfs) if len(dfs) > 0 else None
 
     def get_period_record(self, entity_name, TIME_COL, df_for_period, newest_record, period, is_label):
         period_df = []
@@ -484,11 +488,19 @@ class FeatureStore:
                     (df_for_period[entity_name] == entity_value)
                     & (
                         df_for_period[TIME_COL]
-                        <= (
+                        < (
                             pd.to_datetime(
                                 newest_record[newest_record[entity_name] == entity_value][TIME_COL].values[0]
                             )
                             + relativedelta(**parse_date(period))
+                        ).tz_localize("utc")
+                    )
+                    & (
+                        df_for_period[TIME_COL]
+                        >= (
+                            pd.to_datetime(
+                                newest_record[newest_record[entity_name] == entity_value][TIME_COL].values[0]
+                            )
                         ).tz_localize("utc")
                     )
                 ].drop_duplicates()
@@ -498,11 +510,19 @@ class FeatureStore:
                     (df_for_period[entity_name] == entity_value)
                     & (
                         df_for_period[TIME_COL]
-                        >= (
+                        > (
                             pd.to_datetime(
                                 newest_record[newest_record[entity_name] == entity_value][TIME_COL].values[0]
                             )
                             - relativedelta(**parse_date(period))
+                        ).tz_localize("utc")
+                    )
+                    & (
+                        df_for_period[TIME_COL]
+                        <= (
+                            pd.to_datetime(
+                                newest_record[newest_record[entity_name] == entity_value][TIME_COL].values[0]
+                            )
                         ).tz_localize("utc")
                     )
                 ].drop_duplicates()
