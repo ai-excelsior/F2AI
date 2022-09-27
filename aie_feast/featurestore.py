@@ -255,7 +255,7 @@ class FeatureStore:
                     result.update({fea: reduce(lambda l, r: pd.merge(l, r, on=[fea], how="outer"), dfs)})
             return result
 
-    def get_latest_entities(self, views):
+    def get_latest_entities(self, views, entity=None):
         """get latest entity and its timestamp from `views`
 
         Args:
@@ -263,7 +263,8 @@ class FeatureStore:
         """
         result = {}
         views = get_consistent_format(views)
-        for name, entity in self.entity.items():
+        entities = {entity: self.entity[entity]} if entity else self.entity
+        for name, entity in entities.items():
             if self.connection.type == "file":
                 dfs = []
                 for view in views.values():

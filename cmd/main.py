@@ -57,7 +57,9 @@ if __name__ == "__main__":
     # get_period_data(period="25 days")  # period = "2 days"
 
     def get_latest_entity():
-        fs.get_latest_entities(fs.features)
+        fs.get_latest_entities(fs.features, "loan")
+
+    get_latest_entity()
 
     def stats():
         entity_link = pd.DataFrame.from_dict(
@@ -102,7 +104,7 @@ if __name__ == "__main__":
         )
         fs.get_features(fs.features, entity_link)
 
-    get_features()
+    # get_features()
 
     period = "2 days"
     entity_loan = pd.DataFrame.from_dict(
