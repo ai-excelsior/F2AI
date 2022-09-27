@@ -380,39 +380,39 @@ class FeatureStore:
                 df = df.merge(entity_df, on=entity_name, how="inner")
                 # filter time condition
                 if self.sources[cfg.batch_source].event_time:  #  time-relavent features
-                    if include:
-                        fil = (
-                            df[  # latest time
-                                (df[TIME_COL + "_y"] >= df[TIME_COL + "_x"])
-                                & (  # earliest time
-                                    df[TIME_COL + "_x"]
-                                    > df[TIME_COL + "_y"].map(
-                                        lambda x: x - relativedelta(**parse_date(cfg.ttl))
-                                    )
-                                )
-                            ]
-                            if cfg.ttl
-                            else df[df[TIME_COL + "_y"] >= df[TIME_COL + "_x"]]  # latest time
-                        )
-                    else:
-                        fil = (
-                            df[  # latest time
-                                (df[TIME_COL + "_y"] > df[TIME_COL + "_x"])
-                                & (  # earliest time
-                                    df[TIME_COL + "_x"]
-                                    >= df[TIME_COL + "_y"].map(
-                                        lambda x: x - relativedelta(**parse_date(cfg.ttl))
-                                    )
-                                )
-                            ]
-                            if cfg.ttl
-                            else df[df[TIME_COL + "_y"] > df[TIME_COL + "_x"]]  # latest time
-                        )
+                    fil = self._fil_timelimit(include, cfg, df)
                     # newest record
                     dfs.append(get_grouped_record(fil, TIME_COL, entity_name))
                 else:  #  not time-relavent features
                     dfs.append(df)
         return reduce(lambda l, r: pd.merge(l, r, on=[TIME_COL, entity_name], how="inner"), dfs)
+
+    def _fil_timelimit(self, include, cfg, df):
+        if include:
+            return (
+                df[  # latest time
+                    (df[TIME_COL + "_y"] >= df[TIME_COL + "_x"])
+                    & (  # earliest time
+                        df[TIME_COL + "_x"]
+                        > df[TIME_COL + "_y"].map(lambda x: x - relativedelta(**parse_date(cfg.ttl)))
+                    )
+                ]
+                if cfg.ttl
+                else df[df[TIME_COL + "_y"] >= df[TIME_COL + "_x"]]
+            )  # latest time
+
+        else:
+            return (
+                df[  # latest time
+                    (df[TIME_COL + "_y"] > df[TIME_COL + "_x"])
+                    & (  # earliest time
+                        df[TIME_COL + "_x"]
+                        >= df[TIME_COL + "_y"].map(lambda x: x - relativedelta(**parse_date(cfg.ttl)))
+                    )
+                ]
+                if cfg.ttl
+                else df[df[TIME_COL + "_y"] > df[TIME_COL + "_x"]]
+            )  # latest time
 
     def _get_period_record(
         self, views, entity_df: pd.DataFrame, period: str, include: bool = True, is_label: bool = False
