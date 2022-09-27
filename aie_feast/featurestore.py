@@ -161,7 +161,7 @@ class FeatureStore:
         end: str = None,
         include: str = "both",
     ):
-        """get from `start` to `end` statistical `fn` results of `entity_df` from `views`, only work for features varied with time
+        """get from `start` to `end` statistical `fn` results of `entity_df` from `views`, only work for numeric features varied with time
 
         Args:
             views (List): _description_
@@ -357,7 +357,6 @@ class FeatureStore:
                 )
                 # ensure the time col of result df
                 df.rename(columns={self.sources[cfg.batch_source].event_time: TIME_COL}, inplace=True)
-
                 # filter feature/label columns
                 if is_label:
                     df = df[
