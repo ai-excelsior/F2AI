@@ -2,6 +2,7 @@ import pandas as pd
 
 
 FSKEY = "__FS__"
+TIME_COL = "event_timestamp"
 
 
 def remove_prefix(text: str, prefix: str):
@@ -78,3 +79,22 @@ def get_latest_record(df, time_col):
 
 def get_consistent_format(views):
     return views if isinstance(views, dict) else {FSKEY: views}
+
+
+def get_stats_result(data, fn, primary_keys, include, start):
+    if include == "neither":
+        return data[(data[TIME_COL + "_x"] < data[TIME_COL + "_y"]) & (data[TIME_COL + "_x"] > start)][
+            [fea for fea in data.columns if fea not in primary_keys]
+        ].apply(lambda x: getattr(pd.Series, fn)(x), axis=0)
+    elif include == "left":
+        return data[(data[TIME_COL + "_x"] < data[TIME_COL + "_y"]) & (data[TIME_COL + "_x"] >= start)][
+            [fea for fea in data.columns if fea not in primary_keys]
+        ].apply(lambda x: getattr(pd.Series, fn)(x), axis=0)
+    elif include == "right":
+        return data[(data[TIME_COL + "_x"] <= data[TIME_COL + "_y"]) & (data[TIME_COL + "_x"] > start)][
+            [fea for fea in data.columns if fea not in primary_keys]
+        ].apply(lambda x: getattr(pd.Series, fn)(x), axis=0)
+    else:
+        return data[(data[TIME_COL + "_x"] <= data[TIME_COL + "_y"]) & (data[TIME_COL + "_x"] >= start)][
+            [fea for fea in data.columns if fea not in primary_keys]
+        ].apply(lambda x: getattr(pd.Series, fn)(x), axis=0)

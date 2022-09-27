@@ -1,9 +1,11 @@
-from typing import List
+from datetime import datetime
+from typing import List, Dict
 import pandas as pd
 import os
 from functools import reduce
 
-from sqlalchemy import column
+from aie_feast.views import FeatureViews
+
 from dataset.dataset import Dataset
 from common.get_config import (
     get_conn_cfg,
@@ -13,7 +15,14 @@ from common.get_config import (
     get_feature_views,
     get_source_cfg,
 )
-from common.utils import read_file, parse_date, get_grouped_record, get_consistent_format
+from common.utils import (
+    FSKEY,
+    read_file,
+    parse_date,
+    get_grouped_record,
+    get_consistent_format,
+    get_stats_result,
+)
 from dateutil.relativedelta import relativedelta
 
 
@@ -41,6 +50,17 @@ class FeatureStore:
             raise ValueError(
                 "Check entity_df make sure it has 2 columns and event_timestamp at the second column"
             )
+
+    def __check_fns(self, fn):
+        assert fn in [
+            "mean",
+            "sum",
+            "std",
+            "mode",
+            "median",
+            "min",
+            "max",
+        ], f"{fn}is not a available function, you can use fs.query() to customize your function"
 
     def get_features(
         self, feature_views, entity_df: pd.DataFrame, features: List = None, include: bool = True
@@ -152,7 +172,89 @@ class FeatureStore:
             end (str, optional): end_time. Defaults to None.
             include(str,optional): whether to include `start` or `end` timestamp
         """
-        pass
+        views = get_consistent_format(views)
+        self.__check_fns(fn)
+        features = (
+            features
+            if features
+            else reduce(
+                lambda a, b: a + b,
+                [
+                    list(view.features.keys()) if isinstance(view, FeatureViews) else list(view.labels.keys())
+                    for view in views.values()
+                ],
+            )
+        )
+        dict_data = {}
+
+        if entity_df is not None:
+            self.__check_format(entity_df)
+            entities = [entity_df.columns[0]]
+            start = pd.to_datetime(0, utc=True)
+        else:
+            entities = self.entity.keys()
+            end = end if end else pd.to_datetime(datetime.now(), utc=True)
+            start = start if start else pd.to_datetime(0, utc=True)
+
+        if self.connection.type == "file":
+            for entity_name in entities:
+                dfs = []
+                for _, cfg in views.items():
+                    if entity_name in cfg.entity:
+                        df = read_file(
+                            os.path.join(self.project_folder, self.sources[cfg.batch_source].file_path),
+                            self.sources[cfg.batch_source].file_format,
+                            self.sources[cfg.batch_source].event_time,
+                        )
+                        # filter columns
+                        df = df[
+                            [
+                                fea
+                                for fea, type in cfg.features.items()
+                                if fea in features and type != "string"
+                            ]
+                            + [
+                                self.sources[cfg.batch_source].event_time,
+                                self.entity[entity_name].entity,
+                            ]
+                        ]
+                        df.rename(
+                            columns={
+                                self.sources[cfg.batch_source].event_time: TIME_COL,
+                                self.entity[entity_name].entity: entity_name,
+                            },
+                            inplace=True,
+                        )
+                        if entity_df is not None:
+                            df = df.merge(entity_df, how="right", on=entity_name)
+                        else:
+                            df.rename(
+                                columns={TIME_COL: TIME_COL + "_x"},
+                                inplace=True,
+                            )
+                            # end_time limit
+                            df = df.assign(**{TIME_COL + "_y": end})
+                        dfs.append(df)
+                    if dfs:
+                        dict_data.update({entity_name: dfs})
+            result = {}
+            for fea, datas in dict_data.items():
+                dfs = []
+                for data in datas:
+                    if not group:  # create a virtual group
+                        data[fea] = fea
+                    dfs.append(
+                        data.groupby(fea).apply(
+                            get_stats_result,
+                            fn,
+                            primary_keys=[fea, TIME_COL + "_x", TIME_COL + "_y"],
+                            include=include,
+                            start=start,
+                        )
+                    )
+                if dfs:
+                    result.update({fea: reduce(lambda l, r: pd.merge(l, r, on=[fea], how="outer"), dfs)})
+            return result
 
     def get_latest_entities(self, views):
         """get latest entity and its timestamp from `views`
@@ -171,7 +273,8 @@ class FeatureStore:
                             os.path.join(self.project_folder, self.sources[view.batch_source].file_path),
                             self.sources[view.batch_source].file_format,
                             self.sources[view.batch_source].event_time,
-                        )[[entity.entity, self.sources[view.batch_source].event_time]]
+                        )
+                        df = df[[entity.entity, self.sources[view.batch_source].event_time]]
                         # sort by event_time, decending
                         df.sort_values(
                             by=self.sources[view.batch_source].event_time,
@@ -213,7 +316,7 @@ class FeatureStore:
         """get from `start` to `end` length data for training from `views`
 
         Args:
-            views (List): _description_
+            views (List): `SERVICE` to use
             start (str, optional): _description_. Defaults to None.
             end (str, optional): _description_. Defaults to None.
             sampler (callable, optional): _description_. Defaults to None.
