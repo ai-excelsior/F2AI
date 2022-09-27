@@ -362,9 +362,21 @@ class FeatureStore:
                 )
                 # filter feature/label columns
                 if is_label:
-                    df = df[[col for col in list(entity_df.columns) + list(cfg.labels.keys())]]
+                    df = df[
+                        [
+                            col
+                            for col in cfg.entity + list(cfg.labels.keys()) + [TIME_COL]
+                            if col in df.columns
+                        ]
+                    ]
                 else:
-                    df = df[[col for col in list(entity_df.columns) + list(cfg.features.keys())]]
+                    df = df[
+                        [
+                            col
+                            for col in cfg.entity + list(cfg.features.keys()) + [TIME_COL]
+                            if col in df.columns
+                        ]
+                    ]
                 # merge according to `entity`
                 df = df.merge(entity_df, on=entity_name, how="inner")
                 # filter time condition

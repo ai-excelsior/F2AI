@@ -80,6 +80,14 @@ if __name__ == "__main__":
                 ],
             }
         )
-        fs.get_features(fs.features, entity_link)
+        entity_loan = pd.DataFrame.from_dict(
+            {
+                "loan": [38633],
+                TIME_COL: [
+                    datetime(2020, 12, 12, 10, 59, 42, tzinfo=timezone.utc),
+                ],
+            }
+        )
+        fs.get_features(fs.features, entity_loan)
 
     get_features()
