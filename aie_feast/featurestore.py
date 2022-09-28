@@ -455,7 +455,7 @@ class FeatureStore:
         result = {}
         for name, cfg in views.items():
             if entity_name in cfg.entity and self.sources[cfg.batch_source].event_time:
-                df = self._read_file_and_filter_by_is_label(cfg, is_label)
+                df = self._read_and_filter(cfg, is_label)
                 df_for_period = df
                 # merge according to `entity`
                 df = df.merge(entity_df, on=entity_name, how="inner")
@@ -494,7 +494,7 @@ class FeatureStore:
             period_df.append(df)
         return pd.concat(period_df)
 
-    def _read_file_and_filter_by_is_label(self, cfg, is_label):
+    def _read_and_filter(self, cfg, is_label):
         all_entity_col = {self.entity[en].entity: en for en in cfg.entity}
         df = read_file(
             os.path.join(self.project_folder, self.sources[cfg.batch_source].file_path),
