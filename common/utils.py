@@ -74,6 +74,14 @@ def get_grouped_record(df, time_col, entity_id, create_time):
     return df.groupby(entity_id).apply(get_latest_record, time_col, create_time).reset_index(drop=True)
 
 
+def get_period_grouped_record(df, time_col, entity_id, create_time):
+    return (
+        df.groupby([entity_id, time_col + "_y"])
+        .apply(get_latest_record, time_col, create_time)
+        .reset_index(drop=True)
+    )
+
+
 def get_latest_record(df, time_col, create_time):
     df = df[df[time_col + "_x"] == df[time_col + "_x"].max()]
     if create_time in df.columns:
