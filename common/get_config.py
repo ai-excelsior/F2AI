@@ -21,7 +21,15 @@ def get_conn_cfg(url: str):
     elif cfg["offline_store"]["type"] == "influxdb":
         conn = ConnectConfig(cfg)
     elif cfg["offline_store"]["type"] == "pgsql":
-        conn = ConnectConfig(cfg)
+        conn = ConnectConfig(
+            type=cfg["offline_store"]["type"],
+            user=cfg["offline_store"]["pgsql_conf"].get("user", "postgres"),
+            passwd=cfg["offline_store"]["pgsql_conf"].get("password", "password"),
+            host=cfg["offline_store"]["pgsql_conf"]["host"],
+            port=cfg["offline_store"]["pgsql_conf"].get("port", "5432"),
+            database=cfg["offline_store"]["pgsql_conf"]["database"],
+            schema=cfg["offline_store"]["pgsql_conf"].get("schema", "public"),
+        )
     elif cfg["offline_store"]["type"] == "spark":
         conn = ConnectConfig(type=cfg["offline_store"]["type"])  # TODO:will be implemented in future
     else:

@@ -24,12 +24,17 @@ from common.utils import (
     get_stats_result,
     get_period_grouped_record,
 )
+from common.psl_utils import psy_conn, to_pgsql, remove_table, close_conn
 from dateutil.relativedelta import relativedelta
 
 
 TIME_COL = "event_timestamp"
 CREATE_COL = "created_timestamp"
+<<<<<<< HEAD
 QUERY_COL = "query_timestamp"
+=======
+TMP_TBL = "entity_df"
+>>>>>>> 01f38eb (add a little pgsql relevent)
 
 
 class FeatureStore:
@@ -86,6 +91,14 @@ class FeatureStore:
                     [TIME_COL, entity_df.columns[0]] + features
                 ]
             )
+        elif self.connection.type == "pgsql":
+            conn = psy_conn(**self.connection.__dict__)
+            # upload `entity_df` to database
+            to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
+
+            # remove table entity_df
+            remove_table(TMP_TBL, conn)
+            conn.close()
 
     def get_period_features(
         self,

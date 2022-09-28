@@ -8,7 +8,7 @@ class SourceConfig:
     """realize the data sources(not database) relation"""
 
     name: str
-    event_time: str
+    event_time: str = field(default_factory=get_default_value)
     create_time: str = field(default_factory=get_default_value)
     type: str = field(default_factory=get_default_value)
     file_format: int = field(default_factory=get_default_value)

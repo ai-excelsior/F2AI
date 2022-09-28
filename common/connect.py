@@ -8,7 +8,7 @@ class ConnectConfig:
 
     type: str
     host: str = field(default_factory=get_default_value)
-    port: int = field(default_factory=get_default_value)
+    port: str = field(default_factory=get_default_value)
     database: str = field(default_factory=get_default_value)
     schema: str = field(default_factory=get_default_value)
     user: str = field(default_factory=get_default_value)
