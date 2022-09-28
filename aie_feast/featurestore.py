@@ -458,62 +458,19 @@ class FeatureStore:
         result = {}
         for name, cfg in views.items():
             if entity_name in cfg.entity and self.sources[cfg.batch_source].event_time:
-                all_entity_col = {self.entity[en].entity: en for en in cfg.entity}
-                dfs = []
-                # time column name in table
-                df = read_file(
-                    os.path.join(self.project_folder, self.sources[cfg.batch_source].file_path),
-                    self.sources[cfg.batch_source].file_format,
-                    [self.sources[cfg.batch_source].event_time, self.sources[cfg.batch_source].create_time],
-                    list(all_entity_col.keys()),
-                )
-                df.rename(
-                    columns={
-                        self.sources[cfg.batch_source].event_time: TIME_COL,
-                        self.sources[cfg.batch_source].create_time: CREATE_COL,
-                    },
-                    inplace=True,
-                )
-
-                if is_label:
-                    df = df[
-                        [
-                            col
-                            for col in list(all_entity_col.keys())
-                            + list(cfg.labels.keys())
-                            + [TIME_COL, CREATE_COL]
-                            if col in df.columns
-                        ]
-                    ]
-                else:
-                    df = df[
-                        [
-                            col
-                            for col in list(all_entity_col.keys())
-                            + list(cfg.features.keys())
-                            + [TIME_COL, CREATE_COL]
-                            if col in df.columns
-                        ]
-                    ]
-                df.rename(columns=all_entity_col, inplace=True)
-
+                df = self._read_file_and_filter_by_is_label(cfg, is_label)
                 df_for_period = df
                 # merge according to `entity`
                 df = df.merge(entity_df, on=entity_name, how="inner")
                 # filter time condition
-
                 fil = self._fil_timelimit(include, cfg, df)
-
                 newest_record = get_period_grouped_record(fil, TIME_COL, entity_name, CREATE_COL)
-
                 df_for_period = pd.merge(
                     df_for_period, newest_record[entity_name].drop_duplicates(), on=entity_name, how="inner"
                 )
-
                 df = self.get_period_record(
                     entity_name, TIME_COL, df_for_period, newest_record, period, is_label
                 )
-
                 df.sort_values(by=[entity_name, QUERY_COL, TIME_COL], inplace=True)
                 df.drop_duplicates()
                 df.reset_index(inplace=True, drop=True)
@@ -539,3 +496,40 @@ class FeatureStore:
             df[QUERY_COL] = info[1]
             period_df.append(df)
         return pd.concat(period_df)
+
+    def _read_file_and_filter_by_is_label(self, cfg, is_label):
+        all_entity_col = {self.entity[en].entity: en for en in cfg.entity}
+        df = read_file(
+            os.path.join(self.project_folder, self.sources[cfg.batch_source].file_path),
+            self.sources[cfg.batch_source].file_format,
+            [self.sources[cfg.batch_source].event_time, self.sources[cfg.batch_source].create_time],
+            list(all_entity_col.keys()),
+        )
+        df.rename(
+            columns={
+                self.sources[cfg.batch_source].event_time: TIME_COL,
+                self.sources[cfg.batch_source].create_time: CREATE_COL,
+            },
+            inplace=True,
+        )
+
+        if is_label:
+            df = df[
+                [
+                    col
+                    for col in list(all_entity_col.keys()) + list(cfg.labels.keys()) + [TIME_COL, CREATE_COL]
+                    if col in df.columns
+                ]
+            ]
+        else:
+            df = df[
+                [
+                    col
+                    for col in list(all_entity_col.keys())
+                    + list(cfg.features.keys())
+                    + [TIME_COL, CREATE_COL]
+                    if col in df.columns
+                ]
+            ]
+        df.rename(columns=all_entity_col, inplace=True)
+        return df
