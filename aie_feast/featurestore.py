@@ -454,17 +454,13 @@ class FeatureStore:
                     [self.sources[cfg.batch_source].event_time, self.sources[cfg.batch_source].create_time],
                     list(all_entity_col.keys()),
                 )
-                df.rename({self.sources[cfg.batch_source].event_time: TIME_COL}, inplace=True)
-                # ensure the time col of result df
-                # filter feature/label columns
-                # if is_label:
-                #     df = df[
-                #         [col for col in set(list(entity_df.columns) + list(cfg.labels.keys()) + cfg.entity)]
-                #     ]
-                # else:
-                #     df = df[
-                #         [col for col in set(list(entity_df.columns) + list(cfg.features.keys()) + cfg.entity)]
-                #     ]
+                df.rename(
+                    columns={
+                        self.sources[cfg.batch_source].event_time: TIME_COL,
+                        self.sources[cfg.batch_source].create_time: CREATE_COL,
+                    },
+                    inplace=True,
+                )
 
                 if is_label:
                     df = df[
@@ -492,30 +488,8 @@ class FeatureStore:
                 # merge according to `entity`
                 df = df.merge(entity_df, on=entity_name, how="inner")
                 # filter time condition
-                if include:
-                    fil = (
-                        df[  # latest time
-                            (df[TIME_COL + "_y"] >= df[TIME_COL + "_x"])
-                            & (  # earliest time
-                                df[TIME_COL + "_x"]
-                                > df[TIME_COL + "_y"].map(lambda x: x - relativedelta(**parse_date(cfg.ttl)))
-                            )
-                        ]
-                        if cfg.ttl
-                        else df[df[TIME_COL + "_y"] >= df[TIME_COL + "_x"]]  # latest time
-                    )
-                else:
-                    fil = (
-                        df[  # latest time
-                            (df[TIME_COL + "_y"] > df[TIME_COL + "_x"])
-                            & (  # earliest time
-                                df[TIME_COL + "_x"]
-                                >= df[TIME_COL + "_y"].map(lambda x: x - relativedelta(**parse_date(cfg.ttl)))
-                            )
-                        ]
-                        if cfg.ttl
-                        else df[df[TIME_COL + "_y"] > df[TIME_COL + "_x"]]  # latest time
-                    )
+
+                fil = self._fil_timelimit(include, cfg, df)
 
                 newest_record = get_period_grouped_record(fil, TIME_COL, entity_name, CREATE_COL)
 
@@ -530,12 +504,7 @@ class FeatureStore:
                 df.sort_values(by=[entity_name, QUERY_COL, TIME_COL], inplace=True)
                 df.drop_duplicates()
                 df.reset_index(inplace=True, drop=True)
-
-                dfs.append(df)
-
-                if len(dfs) > 0:
-                    dfs = reduce(lambda l, r: pd.merge(l, r, on=name, how="outer"), dfs)
-                    result.update({name: dfs})
+                result.update({name: df})
         return result
 
     def get_period_record(self, entity_name, TIME_COL, df_for_period, newest_record, period, is_label):
