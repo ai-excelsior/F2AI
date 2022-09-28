@@ -30,11 +30,8 @@ from dateutil.relativedelta import relativedelta
 
 TIME_COL = "event_timestamp"
 CREATE_COL = "created_timestamp"
-<<<<<<< HEAD
 QUERY_COL = "query_timestamp"
-=======
 TMP_TBL = "entity_df"
->>>>>>> 01f38eb (add a little pgsql relevent)
 
 
 class FeatureStore:
@@ -468,7 +465,7 @@ class FeatureStore:
                 df_for_period = pd.merge(
                     df_for_period, newest_record[entity_name].drop_duplicates(), on=entity_name, how="inner"
                 )
-                df = self.get_period_record(
+                df = self._get_time_window_record(
                     entity_name, TIME_COL, df_for_period, newest_record, period, is_label
                 )
                 df.sort_values(by=[entity_name, QUERY_COL, TIME_COL], inplace=True)
@@ -477,7 +474,7 @@ class FeatureStore:
                 result.update({name: df})
         return result
 
-    def get_period_record(self, entity_name, TIME_COL, df_for_period, newest_record, period, is_label):
+    def _get_time_window_record(self, entity_name, TIME_COL, df_for_period, newest_record, period, is_label):
         period_df = []
         for info in newest_record[[entity_name, TIME_COL]].values:
             if is_label:
