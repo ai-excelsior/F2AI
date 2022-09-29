@@ -16,7 +16,6 @@ from common.get_config import (
     get_source_cfg,
 )
 from common.utils import (
-    FSKEY,
     read_file,
     parse_date,
     get_grouped_record,
@@ -24,7 +23,7 @@ from common.utils import (
     get_stats_result,
     get_period_grouped_record,
 )
-from common.psl_utils import psy_conn, to_pgsql, remove_table, close_conn
+from common.psl_utils import execute_sql, psy_conn, to_pgsql, remove_table, close_conn, sql_df
 from dateutil.relativedelta import relativedelta
 
 
@@ -90,12 +89,68 @@ class FeatureStore:
             )
         elif self.connection.type == "pgsql":
             conn = psy_conn(**self.connection.__dict__)
+            features = (
+                features
+                if features
+                else reduce(
+                    lambda a, b: a + b,
+                    [
+                        list(view.features.keys())
+                        if isinstance(view, FeatureViews)
+                        else list(view.labels.keys())
+                        for view in feature_views.values()
+                    ],
+                )
+            )
             # upload `entity_df` to database
             to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
+            entity_name = entity_df.columns[0]  # entity column name in table
+            views_to_use = {name: view for name, view in feature_views.items() if entity_name in view.entity}
+            sqls = []
+            for view_name, cfg in views_to_use.items():
+                if entity_name in cfg.entity:
+                    # time column name in table
+                    ent_select = [self.entity[en].entity + " as " + en for en in cfg.entity]
+                    fea_select = list(cfg.features.keys())
+                    if (
+                        not self.sources[cfg.batch_source].event_time
+                        and not self.sources[cfg.batch_source].create_time
+                    ):  # non time relevant features and is unique for entity
+                        sql = f"(SELECT a.{TIME_COL} ,b.* FROM {TMP_TBL} a LEFT JOIN (SELECT {','.join(fea_select + ent_select)} FROM {cfg.batch_source}) b using({entity_name})) as {view_name}"
+                    elif not self.sources[cfg.batch_source].create_time:
+                        # time relevant features and has no redundency
+                        sql = f"(SELECT {TIME_COL}, {','.join([en for en in cfg.entity] + fea_select )} from \
+                                (SELECT *,row_number() over (partition by c.{entity_name} order by c.{TIME_COL}_b  DESC ) as row_id from \
+                                    (SELECT a.{TIME_COL} ,b.* FROM \
+                                        {TMP_TBL} a LEFT JOIN \
+                                        (SELECT {','.join(fea_select + ent_select)},{self.sources[cfg.batch_source].event_time} as {TIME_COL}_b \
+                                        FROM {cfg.batch_source}) b using ({entity_name}) \
+                                    where cast(a.{TIME_COL} as date) >= cast(b.{TIME_COL}_b as date)) c \
+                                )tmp where tmp.row_id=1) as {view_name}"
+                    elif not self.sources[cfg.batch_source].event_time:
+                        # non time relevant features but may have redundency:
+                        sql = f"(SELECT {TIME_COL}, {','.join([en for en in cfg.entity] + fea_select)} from \
+                                (SELECT *,row_number() over (partition by c.{entity_name} order by c.{CREATE_COL}  DESC ) as row_id from \
+                                    (SELECT a.{TIME_COL},b.* FROM \
+                                        {TMP_TBL} a LEFT JOIN \
+                                        (SELECT {','.join(fea_select + ent_select)},{self.sources[cfg.batch_source].create_time} as {CREATE_COL} FROM {cfg.batch_source}) b on using ({entity_name}) ) c \
+                                ) tmp where tmp.row_id=1) as {view_name}"
 
-            # remove table entity_df
-            remove_table(TMP_TBL, conn)
-            conn.close()
+                    else:
+                        sql = f"(SELECT {TIME_COL}, {','.join([en for en in cfg.entity] +fea_select)} from \
+                                (SELECT *,row_number() over (partition by c.{entity_name} order by c.{CREATE_COL} DESC, c.{TIME_COL}_b DESC ) as row_id from \
+                                    (SELECT a.{TIME_COL} ,b.* FROM \
+                                        {TMP_TBL} a LEFT JOIN \
+                                        (SELECT {','.join(fea_select + ent_select)},{self.sources[cfg.batch_source].event_time} as {TIME_COL}_b,{self.sources[cfg.batch_source].create_time} as {CREATE_COL} \
+                                        FROM {cfg.batch_source}) b on a.{entity_name}=b.{entity_name} \
+                                    where cast(a.{TIME_COL} as date) >= cast(b.{TIME_COL}_b as date)) c \
+                                )tmp where tmp.row_id=1) as {view_name}"
+                    sqls.append(sql)
+            final_sql = "SELECT * FROM " + reduce(
+                lambda a, b: f"{a} join {b} using ({entity_name},{TIME_COL})", sqls
+            )
+            result = pd.DataFrame(sql_df(final_sql, conn))
+            result
 
     def get_period_features(
         self,
@@ -168,7 +223,7 @@ class FeatureStore:
         views,
         entity_df: pd.DataFrame = None,
         features: List[str] = None,
-        group: bool = True,
+        group_key: List[str] = None,
         fn: str = "mean",
         start: str = None,
         end: str = None,
@@ -178,11 +233,11 @@ class FeatureStore:
 
         Args:
             views (List): _description_
-            entity_df (pd.DataFrame,optional), if given, ignore `start` and `end`. Defaults to None.
-            group (bool, optional): whether to group according to `entity_df`. Defaults to True.
-            fn (str, optional): statistical method, min, max, std, avg, mode,median. Defaults to "mean".
-            start (str, optional): start_time. Defaults to None.
-            end (str, optional): end_time. Defaults to None.
+            entity_df (pd.DataFrame,optional), if given, ignore `start` and `end`. Defaults to None, has the supreme priority.
+            group_key (list): entities to do stats, entities must in `Entity`, only works when `entity_df` is None, if None, means all entities.
+            fn (str, optional): statistical method, min, max, std, avg, mode, median. Defaults to "mean".
+            start (str, optional): start_time. Defaults to None, works and only works when `entity_df` is None.
+            end (str, optional): end_time. Defaults to None, works and only works when `entity_df` is None.
             include(str,optional): whether to include `start` or `end` timestamp
         """
         views = get_consistent_format(views)
@@ -205,7 +260,7 @@ class FeatureStore:
             entities = [entity_df.columns[0]]
             start = pd.to_datetime(0, utc=True)
         else:
-            entities = self.entity.keys()
+            entities = group_key if group_key else self.entity.keys()
             end = end if end else pd.to_datetime(datetime.now(), utc=True)
             start = start if start else pd.to_datetime(0, utc=True)
 
@@ -218,7 +273,7 @@ class FeatureStore:
                         df = read_file(
                             os.path.join(self.project_folder, self.sources[cfg.batch_source].file_path),
                             self.sources[cfg.batch_source].file_format,
-                            self.sources[cfg.batch_source].event_time,
+                            [self.sources[cfg.batch_source].event_time],
                             list(all_entity_col.keys()),
                         )
                         df.rename(columns={self.sources[cfg.batch_source].event_time: TIME_COL}, inplace=True)
@@ -250,22 +305,22 @@ class FeatureStore:
                     if dfs:
                         dict_data.update({entity_name: dfs})
             result = {}
-            for fea, datas in dict_data.items():
+            for entity_name, datas in dict_data.items():
                 dfs = []
                 for data in datas:
-                    if not group:  # create a virtual group
-                        data[fea] = fea
                     dfs.append(
-                        data.groupby(fea).apply(
+                        data.groupby(entity_name).apply(
                             get_stats_result,
                             fn,
-                            primary_keys=[fea, TIME_COL + "_x", TIME_COL + "_y"],
+                            primary_keys=[entity_name, TIME_COL + "_x", TIME_COL + "_y"],
                             include=include,
                             start=start,
                         )
                     )
                 if dfs:
-                    result.update({fea: reduce(lambda l, r: pd.merge(l, r, on=[fea], how="outer"), dfs)})
+                    result.update(
+                        {entity_name: reduce(lambda l, r: pd.merge(l, r, on=[entity_name], how="outer"), dfs)}
+                    )
             return result
 
     def get_latest_entities(self, views, entity: List[str] = None):
@@ -286,7 +341,7 @@ class FeatureStore:
                         df = read_file(
                             os.path.join(self.project_folder, self.sources[view.batch_source].file_path),
                             self.sources[view.batch_source].file_format,
-                            self.sources[view.batch_source].event_time,
+                            [self.sources[view.batch_source].event_time],
                             list(all_entity_col.keys()),
                         )
                         df = df[[entity.entity, self.sources[view.batch_source].event_time]]
@@ -311,7 +366,7 @@ class FeatureStore:
         return result
 
     def query(self, query: str = None):
-        """customized query
+        """customized query, for example, distinct
 
         Args:
             query (str, optional): _description_. Defaults to None.
