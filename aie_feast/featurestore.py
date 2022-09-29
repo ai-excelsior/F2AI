@@ -305,10 +305,10 @@ class FeatureStore:
                     if dfs:
                         dict_data.update({entity_name: dfs})
             result = {}
-            for entity_name, datas in dict_data.items():
-                dfs = []
-                for data in datas:
-                    dfs.append(
+            for entity_name, dfs in dict_data.items():
+                datas = []
+                for data in dfs:
+                    datas.append(
                         data.groupby(entity_name).apply(
                             get_stats_result,
                             fn,
@@ -317,9 +317,13 @@ class FeatureStore:
                             start=start,
                         )
                     )
-                if dfs:
+                if datas:
                     result.update(
-                        {entity_name: reduce(lambda l, r: pd.merge(l, r, on=[entity_name], how="outer"), dfs)}
+                        {
+                            entity_name: reduce(
+                                lambda l, r: pd.merge(l, r, on=[entity_name], how="outer"), datas
+                            )
+                        }
                     )
             return result
 

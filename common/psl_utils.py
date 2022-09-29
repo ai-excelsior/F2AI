@@ -30,6 +30,14 @@ def to_pgsql(df, tbl_name, **kwagrs):
     df.to_sql(f"{tbl_name}", engine, schema=kwagrs.get("schema"), if_exists="replace")
 
 
+def sql_df(sql, conn):
+    cursor = conn.cursor()
+    cursor.execute(sql)
+    df = list(cursor.fetchall())
+    conn.commit()
+    return df
+
+
 def remove_table(tbl_name, conn):
     sql = f"drop table if exists {tbl_name}"
     execute_sql(sql, conn)
