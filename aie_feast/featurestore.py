@@ -67,6 +67,9 @@ class FeatureStore:
             "max",
         ], f"{fn}is not a available function, you can use fs.query() to customize your function"
 
+    def __check_entity(self, keys):
+        assert [key in self.entity for key in keys], "group_key must be all in Entities"
+
     def get_features(
         self, feature_views, entity_df: pd.DataFrame, features: List = None, include: bool = True
     ):
@@ -261,7 +264,7 @@ class FeatureStore:
             entities = [entity_df.columns[0]]
             start = pd.to_datetime(0, utc=True)
         else:
-            entities = group_key if group_key else self.entity.keys()
+            entities = group_key if self.__check_entity(group_key) else self.entity.keys()
             end = end if end else pd.to_datetime(datetime.now(), utc=True)
             start = start if start else pd.to_datetime(0, utc=True)
 
