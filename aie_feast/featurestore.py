@@ -3,9 +3,9 @@ from typing import List, Dict
 import pandas as pd
 import os
 from functools import reduce
-
-from aie_feast.views import FeatureViews
-
+from aie_feast.views import FeatureViews, LabelViews
+from aie_feast.service import Service
+from common.source import SourceConfig
 from dataset.dataset import Dataset
 from common.get_config import (
     get_conn_cfg,
@@ -47,7 +47,8 @@ class FeatureStore:
         self.entity = get_entity_cfg(os.path.join(project_folder, "entities"))
         self.features = get_feature_views(os.path.join(project_folder, "feature_views"))
         self.labels = get_label_views(os.path.join(project_folder, "label_views"))
-        # self.service = get_service_cfg(os.path.join(project_folder, "services"))
+        self.service = get_service_cfg(os.path.join(project_folder, "services"))
+        self.dataset = {}
 
     def __check_format(self, entity_df):
         if len(entity_df.columns) != 2 or entity_df.columns[1] != TIME_COL:
@@ -398,14 +399,29 @@ class FeatureStore:
             stride (int, optional): stride to sample, Defaults to 1 means no stride
             include(str,optional): whether to include `start` or `end` timestamp
         """
-        pass
 
-    def materialize(self, views):
+        service_entity: Service = self.service['service']
+        return Dataset(
+            self,
+            service_entity.features,
+            service_entity.labels,
+            start,
+            end,
+            sampler,
+            bucket,
+            stride,
+            include
+        )
+
+    def materialize(self, service):
         """incrementally join `views` to generate tables
 
         Args:
             views (List): _description_
         """
+        if self.connection.type == "file":
+            self.offline_file_materialize(service)
+
 
     def _get_point_record(self, views, entity_df: pd.DataFrame, include: bool = True, is_label: bool = False):
         """non-series prediction use
@@ -589,3 +605,61 @@ class FeatureStore:
             ]
         df.rename(columns=all_entity_col, inplace=True)
         return df
+
+    def offline_file_materialize(self, service):
+        """materialize offline file
+
+        Args:
+            service (str): service name
+        """
+        # get service entity
+        service_config: Service = self.service[service]
+        # get feature views
+        feature_views = service_config.features
+        # get label views
+        label_views = service_config.labels
+        # get label dataframe
+        joined_frame = pd.DataFrame()
+        for label_key, _ in label_views.items():
+            label_view: LabelViews = self.labels[label_key]
+            batch_source: SourceConfig = self.sources[label_view.batch_source]
+            file_path = batch_source.file_path
+            dataframe = pd.read_parquet(os.path.join(self.project_folder, file_path))
+            joined_frame = pd.concat([joined_frame, dataframe[label_view.entity + 
+                list(label_view.labels.keys()) + 
+                [batch_source.event_time, batch_source.create_time]]])
+
+        # join features dataframe
+        for feature_key, feature_col_maps in feature_views.items():
+            feature_view: FeatureViews = self.features[feature_key]
+            cols = list(map(lambda i: next(iter(i)), feature_col_maps))
+            feature_cols = list(feature_view.features.keys()) if "__all__" in cols else cols
+            batch_source: SourceConfig = self.sources[feature_view.batch_source]
+            event_time_field: str = batch_source.event_time
+            create_time_field: str = batch_source.create_time
+            file_path = batch_source.file_path
+            dataframe = pd.read_parquet(os.path.join(self.project_folder, file_path))
+            dataframe = dataframe[feature_view.entity + feature_cols + [event_time_field, create_time_field]]
+            joined_frame = pd.merge(joined_frame, dataframe, how="left", on=feature_view.entity, suffixes=(None, f"_{feature_key}"))
+            # clean duplicate rows by created_timestamp
+            duplicated_rows = joined_frame[joined_frame[[event_time_field,f"{event_time_field}_{feature_key}"]].duplicated(keep=False)]
+            duplicated_max_create_time = duplicated_rows.groupby([event_time_field,f"{event_time_field}_{feature_key}"])[f"{create_time_field}_{feature_key}"].max()
+            should_drop_index = duplicated_rows[~(duplicated_rows[f"{create_time_field}_{feature_key}"].isin(duplicated_max_create_time.to_list()))].index
+            joined_frame = joined_frame.drop(should_drop_index)
+        
+        # filter
+        columns: List[str] = joined_frame.columns.to_list()
+        if "event_timestamp" in columns:
+            event_timestamp_temp_cols = [column for column in columns if column.startswith("event_timestamp_")]
+            joined_frame = joined_frame.drop(joined_frame[
+                reduce(
+                    lambda x, y: x | y, 
+                    [
+                    (joined_frame["event_timestamp"].astype('datetime64[ns, UTC]') < joined_frame[col].astype('datetime64[ns, UTC]'))
+                    for col in event_timestamp_temp_cols
+                    ]
+                )
+            ].index)
+
+        # save
+        joined_frame.to_parquet(os.path.join(self.project_folder, f"row_data/{service}_offline.parquet"))
