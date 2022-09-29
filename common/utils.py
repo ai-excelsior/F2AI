@@ -70,7 +70,7 @@ def parse_date(dt):
     return {**transform_freq(dt)} if dt else None
 
 
-def get_grouped_record(df, time_col, entity_id, create_time):
+def get_newest_record(df, time_col, entity_id, create_time):
     return df.groupby(entity_id).apply(get_latest_record, time_col, create_time).reset_index(drop=True)
 
 
@@ -84,10 +84,11 @@ def get_period_grouped_record(df, time_col, entity_id, create_time):
 
 def get_latest_record(df, time_col, create_time):
     df = df[df[time_col + "_x"] == df[time_col + "_x"].max()]
-    if create_time in df.columns:
+    if create_time in df.columns:  # only used when have duplicate event_timestamp values
         df = df[df[create_time] == df[create_time].max()]
-    df.drop(columns=time_col + "_x", inplace=True)  # drop action timestamp
-    df.rename(columns={time_col + "_y": time_col}, inplace=True)  # rename
+        df.drop(columns=create_time, inplace=True)
+    df.rename(columns={time_col + "_x": create_time}, inplace=True)  # rename action timestamp
+    df.rename(columns={time_col + "_y": time_col}, inplace=True)  # time defined in `entity_df`
     return df
 
 

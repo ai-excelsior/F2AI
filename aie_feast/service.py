@@ -1,5 +1,6 @@
 from typing import Dict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from common.utils import get_default_value
 
 
 @dataclass
@@ -8,6 +9,7 @@ class Service:
 
     features: Dict
     labels: Dict
+    materialize_path: str = field(default_factory=get_default_value)
 
 
 @dataclass

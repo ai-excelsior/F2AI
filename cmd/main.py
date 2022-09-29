@@ -69,9 +69,7 @@ if __name__ == "__main__":
                 ],
             }
         )
-        fs.stats(fs.features, group_key=["dob_ssn"], fn="mean")
-
-    stats()
+        fs.stats(fs.features["loan"], group_key=["dob_ssn", "zipcode"], fn="mean")
 
     def get_features():
         entity_link = pd.DataFrame.from_dict(
@@ -92,14 +90,17 @@ if __name__ == "__main__":
         )
         entity_dobssn_period = pd.DataFrame.from_dict(
             {
-                "dob_ssn": ["19991113_3598"],
+                "dob_ssn": ["19991113_3598", "19991113_3598", "19991113_3598"],
                 TIME_COL: [
-                    # datetime(2020, 8, 26, tzinfo=timezone.utc), 这种时间格式大小比较有bug
-                    datetime(2021, 8, 26, 10, 59, 42, tzinfo=timezone.utc),
+                    datetime(2021, 8, 26, tzinfo=timezone.utc),
+                    datetime(2021, 5, 1, 10, 59, 42, tzinfo=timezone.utc),
+                    datetime(2021, 7, 1, 10, 59, 42, tzinfo=timezone.utc),
                 ],
             }
         )
-        fs.get_features(fs.features, entity_link)
+
+        fs.get_features(fs.features["loan_features"], entity_dobssn_period)
+        fs.get_labels(fs.labels["loan_label_view"], entity_dobssn_period)
 
     get_features()
 
