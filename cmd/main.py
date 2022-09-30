@@ -108,6 +108,8 @@ if __name__ == "__main__":
     def do_materailize():
         fs.materialize(fs.service["credit_scoring_v1"])
 
+    do_materailize()
+
     def get_period_features_and_labels():
         period = "5 hours"
         entity_link_ID_period = pd.DataFrame.from_dict(
@@ -115,12 +117,8 @@ if __name__ == "__main__":
                 "link": [
                     "3377906289228510514",
                     "3377906289228510514",
-                    "4377906284141600514",
-                    "4377906284141600514",
                 ],
                 TIME_COL: [
-                    datetime(2016, 5, 30, 0, 0, 0, tzinfo=timezone.utc),
-                    datetime(2016, 5, 26, 0, 0, 0, tzinfo=timezone.utc),
                     datetime(2016, 5, 30, 0, 0, 0, tzinfo=timezone.utc),
                     datetime(2016, 5, 26, 0, 0, 0, tzinfo=timezone.utc),
                 ],
@@ -141,4 +139,4 @@ if __name__ == "__main__":
             )
         )
 
-    stats()
+    #stats()

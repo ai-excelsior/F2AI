@@ -446,7 +446,7 @@ class FeatureStore:
                 # match time_limit
                 df = self._fil_timelimit(include, views.ttl, df)
                 # newest record
-                df = get_newest_record(df, TIME_COL, entity_name, CREATE_COL)
+                df = get_newest_record(df, TIME_COL, [entity_name], CREATE_COL)
         else:  # `Service`, read from materialized table
             df = read_file(
                 os.path.join(self.project_folder, views.materialize_path + ".parquet"),
@@ -459,7 +459,7 @@ class FeatureStore:
             # match time_limit
             df = self._fil_timelimit(include, views.ttl, df)
             # newest record
-            df = get_newest_record(df, TIME_COL, entity_name, CREATE_COL)
+            df = get_newest_record(df, TIME_COL, [entity_name], CREATE_COL)
         return df
 
     def _fil_timelimit(self, include, ttl, df):
@@ -601,103 +601,27 @@ class FeatureStore:
         Args:
             service (Service): service entity
         """
-        # get feature views
-        feature_views = service.features
-        # get label views
-        label_views = service.labels
-        # get label dataframe
-        joined_frame = pd.DataFrame()
-        for label_key, _ in label_views.items():
-            label_view: LabelViews = self.labels[label_key]
-            batch_source: SourceConfig = self.sources[label_view.batch_source]
-            file_path = batch_source.file_path
-            dataframe = pd.read_parquet(os.path.join(self.project_folder, file_path))
-            dataframe.rename(
-                columns={
-                    cast(Entity, self.entity[entity_key]).entity: entity_key
-                    for entity_key in label_view.entity
-                },
-                inplace=True,
-            )
-            joined_frame = pd.concat(
-                [
-                    joined_frame,
-                    dataframe[
-                        label_view.entity
-                        + list(label_view.labels.keys())
-                        + [batch_source.event_time, batch_source.create_time]
-                    ],
-                ]
-            )
-
+        use_all_features = self._get_avaliable_features(service)
+        for label_key in service.labels.keys():
+            labels = self._get_available_labels(service)
+            entities = self._get_avaliable_entity(service)
+            all_entity_col = {self.entity[en].entity: en for en in entities}
+            joined_frame = self._read_local_file(self.labels[label_key], labels, all_entity_col)
+            joined_frame.drop(columns=[CREATE_COL], inplace=True)  # CREATE_COL makes no sense to labels
         # join features dataframe
-        for feature_key, feature_col_maps in feature_views.items():
+        for feature_key in service.features.keys():
             feature_view: FeatureViews = self.features[feature_key]
-            cols = list(map(lambda i: next(iter(i)), feature_col_maps))
-            feature_cols = list(feature_view.features.keys()) if "__all__" in cols else cols
-            batch_source: SourceConfig = self.sources[feature_view.batch_source]
-            event_time_field: str = batch_source.event_time
-            create_time_field: str = batch_source.create_time
-            file_path = batch_source.file_path
-            dataframe = pd.read_parquet(os.path.join(self.project_folder, file_path))
-            dataframe.rename(
-                columns={
-                    cast(Entity, self.entity[entity_key]).entity: entity_key
-                    for entity_key in feature_view.entity
-                },
-                inplace=True,
-            )
-            dataframe = dataframe[feature_view.entity + feature_cols + [event_time_field, create_time_field]]
-            joined_frame = pd.merge(
-                joined_frame,
-                dataframe,
-                how="left",
-                on=feature_view.entity,
-                suffixes=(None, f"_{feature_key}"),
-            )
-            # clean duplicate rows by created_timestamp
-            duplicated_rows = joined_frame[
-                joined_frame[[event_time_field, f"{event_time_field}_{feature_key}"]].duplicated(keep=False)
+            feature_cols = [
+                item for item in use_all_features if item in self._get_avaliable_features(feature_view)
             ]
-            duplicated_max_create_time = duplicated_rows.groupby(
-                [event_time_field, f"{event_time_field}_{feature_key}"]
-            )[f"{create_time_field}_{feature_key}"].max()
-            should_drop_index = duplicated_rows[
-                ~(
-                    duplicated_rows[f"{create_time_field}_{feature_key}"].isin(
-                        duplicated_max_create_time.to_list()
-                    )
-                )
-            ].index
-            joined_frame = joined_frame.drop(should_drop_index)
+            entities = self._get_avaliable_entity(feature_view)
+            entity_col = {self.entity[en].entity: en for en in entities}
+            tmp_fea = self._read_local_file(feature_view, feature_cols, entity_col)
+            joined_frame = tmp_fea.merge(joined_frame, how="right", on=entities)
+            if self.sources[feature_view.batch_source].event_time:  # time relevant features
+                joined_frame = self._fil_timelimit(include=True, ttl=feature_view.ttl, df=joined_frame)
+                joined_frame = get_newest_record(joined_frame, TIME_COL, entities, CREATE_COL)
+                # action timestamp makes no use to result
+                joined_frame.drop(columns=[CREATE_COL], inplace=True)
 
-        # filter
-        columns: List[str] = joined_frame.columns.to_list()
-        if "event_timestamp" in columns:
-            event_timestamp_temp_cols = [
-                column for column in columns if column.startswith("event_timestamp_")
-            ]
-            joined_frame = joined_frame.drop(
-                joined_frame[
-                    reduce(
-                        lambda x, y: x | y,
-                        [
-                            (
-                                joined_frame["event_timestamp"].astype("datetime64[ns, UTC]")
-                                < joined_frame[col].astype("datetime64[ns, UTC]")
-                            )
-                            for col in event_timestamp_temp_cols
-                        ],
-                    )
-                ].index
-            )
-
-        # save
-        joined_frame.to_parquet(
-            os.path.join(
-                self.project_folder,
-                f"{service.materialize_path}"
-                if service.materialize_path
-                else f"{'_'.join([*service.labels.keys(), *service.features.keys()])}_offline.parquet",
-            )
-        )
+        joined_frame.to_parquet(os.path.join(self.project_folder, f"{service.materialize_path}"))

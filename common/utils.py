@@ -72,7 +72,7 @@ def parse_date(dt):
 
 def get_newest_record(df, time_col, entity_id, create_time):
     return (
-        df.groupby([entity_id, time_col + "_y"])
+        df.groupby(entity_id + [time_col + "_y"])
         .apply(get_latest_record, time_col, create_time)
         .reset_index(drop=True)
     )
