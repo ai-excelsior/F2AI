@@ -1,13 +1,10 @@
 from datetime import datetime
-from tokenize import group
 from typing import List, Dict, cast
 import pandas as pd
 import os
 from functools import reduce
-from aie_feast.entity import Entity
 from aie_feast.views import FeatureViews, LabelViews
 from aie_feast.service import Service
-from common.source import SourceConfig
 from dataset.dataset import Dataset
 from common.get_config import (
     get_conn_cfg,
@@ -25,14 +22,13 @@ from common.utils import (
 )
 from common.psl_utils import execute_sql, psy_conn, to_pgsql, remove_table, close_conn, sql_df
 from dateutil.relativedelta import relativedelta
-from copy import deepcopy
 
 
-TIME_COL = "event_timestamp"
-CREATE_COL = "created_timestamp"  # use and only used when have multiple identical event_timestamp value
-QUERY_COL = "query_timestamp"  # use in period query
+TIME_COL = "event_timestamp"  # timestamp of action taken in original tables or period-query result, or query time in single-query result table
+CREATE_COL = "created_timestamp"  # timestamp of record of the action taken in original tables, or timestamp of action taken in single-query result table
+QUERY_COL = "query_timestamp"  # only use in period query, query time in period-query result table
 TMP_TBL = "entity_df"  # temp table upload in database
-MATERIALIZE_TIME = "materialize_time"  # time to done materialize
+MATERIALIZE_TIME = "materialize_time"  # timestamp to done materialize, only used in materialized result
 
 
 class FeatureStore:
@@ -509,7 +505,7 @@ class FeatureStore:
                 joined_frame = get_newest_record(joined_frame, TIME_COL, fea_entities, CREATE_COL)
                 # feature timestamp makes no use to result
                 joined_frame.drop(columns=[CREATE_COL], inplace=True)
-        
+
         joined_frame[MATERIALIZE_TIME] = pd.to_datetime(datetime.now(), utc=True)
         joined_frame.to_parquet(os.path.join(self.project_folder, f"{service.materialize_path}.parquet"))
 
