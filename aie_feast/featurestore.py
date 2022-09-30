@@ -473,9 +473,9 @@ class FeatureStore:
             views (List): _description_
         """
         if self.connection.type == "file":
-            self.offline_file_materialize(service)
+            self._offline_file_materialize(service)
 
-    def offline_file_materialize(self, service: Service):
+    def _offline_file_materialize(self, service: Service):
         """materialize offline file
 
         Args:
