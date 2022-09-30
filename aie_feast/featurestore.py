@@ -21,7 +21,6 @@ from common.utils import (
     read_file,
     parse_date,
     get_newest_record,
-    get_consistent_format,
     get_stats_result,
     get_period_grouped_record,
 )
@@ -70,7 +69,9 @@ class FeatureStore:
             "max",
         ], f"{fn}is not a available function, you can use fs.query() to customize your function"
 
-    def get_features(self, feature_view, entity_df: pd.DataFrame, features: list = [], include: bool = True):
+    def get_features(
+        self, feature_view, entity_df: pd.DataFrame, features: list = None, include: bool = True
+    ):
         """non-series prediction use: get `features` of `entity_df` from `feature_views`
 
         Args:
@@ -152,7 +153,11 @@ class FeatureStore:
 
     def _get_avaliable_features(self, view, check_type: bool = False):
         if isinstance(view, FeatureViews):
-            features = [k for k, v in view.features.items() if v not in ["string", "bool"]]
+            features = (
+                [k for k, v in view.features.items() if v not in ["string", "bool"]]
+                if check_type
+                else list(view.features.keys())
+            )
         elif isinstance(view, Service):  # Services
             features = []
             for table, cols in view.features.items():
@@ -180,7 +185,11 @@ class FeatureStore:
 
     def _get_available_labels(self, view, check_type: bool = False):
         if isinstance(view, LabelViews):
-            labels = [k for k, v in view.labels.items() if v not in ["string", "bool"]]
+            labels = (
+                [k for k, v in view.labels.items() if v not in ["string", "bool"]]
+                if check_type
+                else list(view.labels.keys())
+            )
         elif isinstance(view, Service):  # Services
             labels = []
             for table, cols in view.labels.items():
@@ -221,7 +230,7 @@ class FeatureStore:
 
     def get_period_features(
         self,
-        feature_views,
+        feature_view,
         entity_df: pd.DataFrame,
         period: str,
         features: List = None,
@@ -237,15 +246,11 @@ class FeatureStore:
             include (bool, optional): include timestamp defined in `entity_df` or not. Defaults to True.
         """
         self.__check_format(entity_df)
-        feature_views = get_consistent_format(feature_views)
+        if not features:
+            features = self._get_avaliable_features(feature_view)
+
         if self.connection.type == "file":
-            return (
-                self._get_period_record(feature_views, entity_df, period, include, is_label=False)
-                if not features
-                else self._get_period_record(feature_views, entity_df, period, include, is_label=False)[
-                    [TIME_COL, entity_df.columns[0]] + features
-                ]
-            )
+            return self._get_period_record(feature_view, entity_df, period, features, include, is_label=False)
 
     def get_labels(self, label_views, entity_df: pd.DataFrame, include: bool = False):
         """non-time series prediction use: get labels of `entity_df` from `label_views`
@@ -263,7 +268,7 @@ class FeatureStore:
 
     def get_period_labels(
         self,
-        label_views,
+        label_view,
         entity_df: pd.DataFrame,
         period: str,
         include: bool = False,
@@ -277,9 +282,10 @@ class FeatureStore:
             include (bool, optional): include timestamp defined in `entity_df` or not. Defaults to False.
         """
         self.__check_format(entity_df)
-        label_views = get_consistent_format(label_views)
+        labels = self._get_available_labels(label_view)
+
         if self.connection.type == "file":
-            return self._get_period_record(label_views, entity_df, period, include, is_label=True)
+            return self._get_period_record(label_view, entity_df, period, labels, include, is_label=True)
 
     def stats(
         self,
@@ -342,7 +348,7 @@ class FeatureStore:
                     list(all_entity_col.values()),
                 )
 
-            df = df[[col for col in [features] + list(all_entity_col.values()) + [TIME_COL]]]
+            df = df[[col for col in features + list(all_entity_col.values()) + [TIME_COL]]]
             if entity_df is not None:
                 df = df.merge(entity_df, how="right", on=entities)
             else:
@@ -518,7 +524,13 @@ class FeatureStore:
             )  # latest time
 
     def _get_period_record(
-        self, views, entity_df: pd.DataFrame, period: str, include: bool = True, is_label: bool = False
+        self,
+        views,
+        entity_df: pd.DataFrame,
+        period: str,
+        features: list = None,
+        include: bool = True,
+        is_label: bool = False,
     ):
 
         """series prediction use
@@ -527,6 +539,7 @@ class FeatureStore:
             views (List, optional): FeatureViews/LabelViews to lookup.
             entity_df (pd.DataFrame): condition. Defaults to None.
             period: period.
+            features:features/labels to return
             include (bool, optional): include timestamp defined in `entity_df` or not. Defaults to True.
             is_label (bool, optional): LabelViews of not. Defaults to False.
         """
@@ -628,9 +641,13 @@ class FeatureStore:
             batch_source: SourceConfig = self.sources[label_view.batch_source]
             file_path = batch_source.file_path
             dataframe = pd.read_parquet(os.path.join(self.project_folder, file_path))
-            dataframe.rename(columns={
-                cast(Entity, self.entity[entity_key]).entity: entity_key for entity_key in label_view.entity
-            }, inplace=True)
+            dataframe.rename(
+                columns={
+                    cast(Entity, self.entity[entity_key]).entity: entity_key
+                    for entity_key in label_view.entity
+                },
+                inplace=True,
+            )
             joined_frame = pd.concat(
                 [
                     joined_frame,
@@ -652,9 +669,13 @@ class FeatureStore:
             create_time_field: str = batch_source.create_time
             file_path = batch_source.file_path
             dataframe = pd.read_parquet(os.path.join(self.project_folder, file_path))
-            dataframe.rename(columns={
-                cast(Entity, self.entity[entity_key]).entity: entity_key for entity_key in feature_view.entity
-            }, inplace=True)
+            dataframe.rename(
+                columns={
+                    cast(Entity, self.entity[entity_key]).entity: entity_key
+                    for entity_key in feature_view.entity
+                },
+                inplace=True,
+            )
             dataframe = dataframe[feature_view.entity + feature_cols + [event_time_field, create_time_field]]
             joined_frame = pd.merge(
                 joined_frame,
@@ -701,8 +722,11 @@ class FeatureStore:
             )
 
         # save
-        joined_frame.to_parquet(os.path.join(self.project_folder,
-            f"{service.materialize_path}" 
-            if service.materialize_path 
-            else f"{'_'.join([*service.labels.keys(), *service.features.keys()])}_offline.parquet")
+        joined_frame.to_parquet(
+            os.path.join(
+                self.project_folder,
+                f"{service.materialize_path}"
+                if service.materialize_path
+                else f"{'_'.join([*service.labels.keys(), *service.features.keys()])}_offline.parquet",
+            )
         )
