@@ -701,4 +701,8 @@ class FeatureStore:
             )
 
         # save
-        joined_frame.to_parquet(os.path.join(self.project_folder, f"{service.materialize_path}" if service.materialize_path else f"{service}_offline.parquet"))
+        joined_frame.to_parquet(os.path.join(self.project_folder,
+            f"{service.materialize_path}" 
+            if service.materialize_path 
+            else f"{'_'.join([*service.labels.keys(), *service.features.keys()])}_offline.parquet")
+        )
