@@ -13,6 +13,6 @@
 .DS_Store
 *.pid
 **/*log.*
-*.test.py
+*_test.py
 f2ai-credit-scoring-main
 guizhou_traffic-main

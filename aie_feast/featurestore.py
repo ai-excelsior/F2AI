@@ -88,68 +88,6 @@ class FeatureStore:
             return self._get_point_record(feature_view, entity_df, features, include)
         elif self.connection.type == "pgsql":
             conn = psy_conn(**self.connection.__dict__)
-            features = (
-                features
-                if features
-                else reduce(
-                    lambda a, b: a + b,
-                    [
-                        list(view.features.keys())
-                        if isinstance(view, FeatureViews)
-                        else list(view.labels.keys())
-                        for view in feature_view.values()
-                    ],
-                )
-            )
-            # upload `entity_df` to database
-            to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
-            entity_name = entity_df.columns[0]  # entity column name in table
-            views_to_use = {name: view for name, view in feature_view.items() if entity_name in view.entity}
-            sqls = []
-            for view_name, cfg in views_to_use.items():
-                if entity_name in cfg.entity:
-                    # time column name in table
-                    ent_select = [self.entity[en].entity + " as " + en for en in cfg.entity]
-                    fea_select = list(cfg.features.keys())
-                    if (
-                        not self.sources[cfg.batch_source].event_time
-                        and not self.sources[cfg.batch_source].create_time
-                    ):  # non time relevant features and is unique for entity
-                        sql = f"(SELECT a.{TIME_COL} ,b.* FROM {TMP_TBL} a LEFT JOIN (SELECT {','.join(fea_select + ent_select)} FROM {cfg.batch_source}) b using({entity_name})) as {view_name}"
-                    elif not self.sources[cfg.batch_source].create_time:
-                        # time relevant features and has no redundency
-                        sql = f"(SELECT {TIME_COL}, {','.join([en for en in cfg.entity] + fea_select )} from \
-                                (SELECT *,row_number() over (partition by c.{entity_name} order by c.{TIME_COL}_b  DESC ) as row_id from \
-                                    (SELECT a.{TIME_COL} ,b.* FROM \
-                                        {TMP_TBL} a LEFT JOIN \
-                                        (SELECT {','.join(fea_select + ent_select)},{self.sources[cfg.batch_source].event_time} as {TIME_COL}_b \
-                                        FROM {cfg.batch_source}) b using ({entity_name}) \
-                                    where cast(a.{TIME_COL} as date) >= cast(b.{TIME_COL}_b as date)) c \
-                                )tmp where tmp.row_id=1) as {view_name}"
-                    elif not self.sources[cfg.batch_source].event_time:
-                        # non time relevant features but may have redundency:
-                        sql = f"(SELECT {TIME_COL}, {','.join([en for en in cfg.entity] + fea_select)} from \
-                                (SELECT *,row_number() over (partition by c.{entity_name} order by c.{CREATE_COL}  DESC ) as row_id from \
-                                    (SELECT a.{TIME_COL},b.* FROM \
-                                        {TMP_TBL} a LEFT JOIN \
-                                        (SELECT {','.join(fea_select + ent_select)},{self.sources[cfg.batch_source].create_time} as {CREATE_COL} FROM {cfg.batch_source}) b on using ({entity_name}) ) c \
-                                ) tmp where tmp.row_id=1) as {view_name}"
-
-                    else:
-                        sql = f"(SELECT {TIME_COL}, {','.join([en for en in cfg.entity] +fea_select)} from \
-                                (SELECT *,row_number() over (partition by c.{entity_name} order by c.{CREATE_COL} DESC, c.{TIME_COL}_b DESC ) as row_id from \
-                                    (SELECT a.{TIME_COL} ,b.* FROM \
-                                        {TMP_TBL} a LEFT JOIN \
-                                        (SELECT {','.join(fea_select + ent_select)},{self.sources[cfg.batch_source].event_time} as {TIME_COL}_b,{self.sources[cfg.batch_source].create_time} as {CREATE_COL} \
-                                        FROM {cfg.batch_source}) b on a.{entity_name}=b.{entity_name} \
-                                    where cast(a.{TIME_COL} as date) >= cast(b.{TIME_COL}_b as date)) c \
-                                )tmp where tmp.row_id=1) as {view_name}"
-                    sqls.append(sql)
-            final_sql = "SELECT * FROM " + reduce(
-                lambda a, b: f"{a} join {b} using ({entity_name},{TIME_COL})", sqls
-            )
-            result = pd.DataFrame(sql_df(final_sql, conn))
-            result
 
     def _get_avaliable_features(self, view, check_type: bool = False):
         if isinstance(view, FeatureViews):
@@ -412,7 +350,7 @@ class FeatureStore:
             include(str,optional): whether to include `start` or `end` timestamp
         """
 
-        service_entity: Service = self.service["service"]
+        service_entity: Service = service
         return Dataset(
             self, service_entity.features, service_entity.labels, start, end, sampler, bucket, stride, include
         )
@@ -601,27 +539,29 @@ class FeatureStore:
         Args:
             service (Service): service entity
         """
-        use_all_features = self._get_avaliable_features(service)
+        all_features_use = self._get_avaliable_features(service)
         for label_key in service.labels.keys():
             labels = self._get_available_labels(service)
-            entities = self._get_avaliable_entity(service)
-            all_entity_col = {self.entity[en].entity: en for en in entities}
+            all_entities = self._get_avaliable_entity(service)
+            all_entity_col = {self.entity[en].entity: en for en in all_entities}
             joined_frame = self._read_local_file(self.labels[label_key], labels, all_entity_col)
-            joined_frame.drop(columns=[CREATE_COL], inplace=True)  # CREATE_COL makes no sense to labels
+            joined_frame.drop(columns=[CREATE_COL], inplace=True)  # create timestamp makes no sense to labels
         # join features dataframe
         for feature_key in service.features.keys():
             feature_view: FeatureViews = self.features[feature_key]
             feature_cols = [
-                item for item in use_all_features if item in self._get_avaliable_features(feature_view)
+                item for item in all_features_use if item in self._get_avaliable_features(feature_view)
             ]
-            entities = self._get_avaliable_entity(feature_view)
-            entity_col = {self.entity[en].entity: en for en in entities}
+            fea_entities = self._get_avaliable_entity(feature_view)
+            entity_col = {self.entity[en].entity: en for en in fea_entities}
             tmp_fea = self._read_local_file(feature_view, feature_cols, entity_col)
-            joined_frame = tmp_fea.merge(joined_frame, how="right", on=entities)
+            joined_frame = tmp_fea.merge(joined_frame, how="right", on=fea_entities)
             if self.sources[feature_view.batch_source].event_time:  # time relevant features
+                # filter feature timestamp <= label timestamp
                 joined_frame = self._fil_timelimit(include=True, ttl=feature_view.ttl, df=joined_frame)
-                joined_frame = get_newest_record(joined_frame, TIME_COL, entities, CREATE_COL)
-                # action timestamp makes no use to result
+                # get the latest record for each label time after filter feature timestamp <= label timestamp
+                joined_frame = get_newest_record(joined_frame, TIME_COL, fea_entities, CREATE_COL)
+                # feature timestamp makes no use to result
                 joined_frame.drop(columns=[CREATE_COL], inplace=True)
 
-        joined_frame.to_parquet(os.path.join(self.project_folder, f"{service.materialize_path}"))
+        joined_frame.to_parquet(os.path.join(self.project_folder, f"{service.materialize_path}.parquet"))
