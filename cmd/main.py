@@ -70,6 +70,7 @@ if __name__ == "__main__":
             }
         )
         fs.stats(fs.features["gy_link_travel_time_features"], group_key=["link"], fn="mean")
+        fs.get_latest_entities(fs.features["gy_link_travel_time_features"])
 
     def get_features():
         entity_link = pd.DataFrame.from_dict(
