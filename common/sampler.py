@@ -3,6 +3,7 @@ import math
 import pandas as pd
 from dateutil.relativedelta import relativedelta
 from typing import List
+from common.utils import parse_date
 
 
 class AbstractSampler:
@@ -20,10 +21,10 @@ class AbstractSampler:
         self._end = end
         self._stride = stride
 
-        assert self._end > self._start, "end should be grater than start!"
+        assert self._end > self._start, "end should be greater than start!"
         assert self._stride < int(
             self._time_bucket.split(" ", 1)[0]
-        ), "stride should be grater than time_bucket!"
+        ), "time_bucket should be grater than stride!"
 
     def time_bucket_num(self, start: str, end: str, is_stride: bool = False):
         if start and end:  # TODO from和to如果是None要如何处理
@@ -71,26 +72,36 @@ class GroupFixednbrSampler(AbstractSampler):
         bucket_num = len(bucket_mask)
         bucket_size = int(self._time_bucket.split(" ", 1)[0])
         time_bucket_unit = self._time_bucket.split(" ", 1)[1]
-        bucket_freq = locals()[time_bucket_unit]  # TODO 参数传法不对
+        sample_list = []
 
-        for i in range(bucket_num):
+        for i in range(bucket_num):  # TODO 最后一个桶的sample方法可能不同min(time_bucket_end,time_bucket_start)
             if bucket_mask[i] == 1:
-                sample_list = []
+
                 time_bucket_start = pd.to_datetime(self._start, utc=True) + relativedelta(
-                    bucket_freq=i * bucket_size
+                    **parse_date(f"{i * bucket_size} {time_bucket_unit}")
                 )
-                time_bucket_end = time_bucket_start + relativedelta(bucket_freq=(i + 1) * bucket_size)
+
+                time_bucket_end = (
+                    time_bucket_start + relativedelta(**parse_date(f"{bucket_size} {time_bucket_unit}"))
+                    if i < (bucket_num - 1)
+                    else pd.to_datetime(self._end, utc=True)
+                )
+                # time_bucket in time_bucket
                 bucket_stride_num = self.time_bucket_num(
                     start=time_bucket_start, end=time_bucket_end, is_stride=True
                 )
                 stride_random = np.random.randint(self._stride, size=bucket_stride_num)
 
-                sample_list = [
-                    time_bucket_start
-                    + relativedelta(bucket_freq=j * self._stride)
-                    + relativedelta(bucket_freq=stride_random[j])
-                    for j in range(bucket_stride_num)
-                ]
+                sample_list.append(
+                    [
+                        time_bucket_start
+                        + relativedelta(**parse_date(f"{j * self._stride} {time_bucket_unit}"))
+                        + relativedelta(**parse_date(f"{stride_random[j]} {time_bucket_unit}"))
+                        if j < bucket_stride_num - 1
+                        else time_bucket_end
+                        for j in range(bucket_stride_num)
+                    ]
+                )
 
         return sample_list
 
@@ -161,12 +172,10 @@ class UniformNPerGroupSampler(GroupFixednbrSampler):
 
 
 if __name__ == "__main__":
-    time_bucket = "2 days"
-    stride = 1
+    time_bucket = "10 days"
+    stride = 3
     start = "2010-01-01 00:00:00"
     end = "2010-01-30 00:00:00"
-    # delta = pd.to_datetime(end) - pd.to_datetime(start)
-    # time_unit = time_bucket.split(" ", 1)[1]
 
     sample1 = GroupFixednbrSampler(time_bucket, stride, start, end, group_ids=None)()
     print(sample1)
