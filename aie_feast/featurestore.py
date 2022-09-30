@@ -69,26 +69,6 @@ class FeatureStore:
             "max",
         ], f"{fn}is not a available function, you can use fs.query() to customize your function"
 
-    def get_features(
-        self, feature_view, entity_df: pd.DataFrame, features: list = None, include: bool = True
-    ):
-        """non-series prediction use: get `features` of `entity_df` from `feature_views`
-
-        Args:
-            feature_view : Single FeatureViews or Service(after materialzed) to lookup. Defaults to None.
-            entity_df (pd.DataFrame): condition. Defaults to None.
-            features (List, optional): features to return. Defaults to None means all features.
-            include (bool, optional):  include timestamp defined in `entity_df` or not. Defaults to True.
-        """
-        self.__check_format(entity_df)
-        if not features:
-            features = self._get_avaliable_features(feature_view)
-
-        if self.connection.type == "file":
-            return self._get_point_record(feature_view, entity_df, features, include)
-        elif self.connection.type == "pgsql":
-            conn = psy_conn(**self.connection.__dict__)
-
     def _get_avaliable_features(self, view, check_type: bool = False):
         if isinstance(view, FeatureViews):
             features = (
@@ -165,6 +145,26 @@ class FeatureStore:
         else:
             raise TypeError("must be FeatureViews,LabelViews or Service")
         return entity
+
+    def get_features(
+        self, feature_view, entity_df: pd.DataFrame, features: list = None, include: bool = True
+    ):
+        """non-series prediction use: get `features` of `entity_df` from `feature_views`
+
+        Args:
+            feature_view : Single FeatureViews or Service(after materialzed) to lookup. Defaults to None.
+            entity_df (pd.DataFrame): condition. Defaults to None.
+            features (List, optional): features to return. Defaults to None means all features.
+            include (bool, optional):  include timestamp defined in `entity_df` or not. Defaults to True.
+        """
+        self.__check_format(entity_df)
+        if not features:
+            features = self._get_avaliable_features(feature_view)
+
+        if self.connection.type == "file":
+            return self._get_point_record(feature_view, entity_df, features, include)
+        elif self.connection.type == "pgsql":
+            conn = psy_conn(**self.connection.__dict__)
 
     def get_period_features(
         self,
@@ -355,15 +355,6 @@ class FeatureStore:
             self, service_entity.features, service_entity.labels, start, end, sampler, bucket, stride, include
         )
 
-    def materialize(self, service: Service):
-        """incrementally join `views` to generate tables
-
-        Args:
-            views (List): _description_
-        """
-        if self.connection.type == "file":
-            self.offline_file_materialize(service)
-
     def _get_point_record(self, views, entity_df: pd.DataFrame, features: list = None, include: bool = True):
         """non time-series prediction use
 
@@ -399,33 +390,6 @@ class FeatureStore:
             # newest record
             df = get_newest_record(df, TIME_COL, [entity_name], CREATE_COL)
         return df
-
-    def _fil_timelimit(self, include, ttl, df):
-        if include:
-            return (
-                df[  # latest time
-                    (df[TIME_COL + "_y"] >= df[TIME_COL + "_x"])
-                    & (  # earliest time
-                        df[TIME_COL + "_x"]
-                        > df[TIME_COL + "_y"].map(lambda x: x - relativedelta(**parse_date(ttl)))
-                    )
-                ]
-                if ttl
-                else df[df[TIME_COL + "_y"] >= df[TIME_COL + "_x"]]
-            )  # latest time
-
-        else:
-            return (
-                df[  # latest time
-                    (df[TIME_COL + "_y"] > df[TIME_COL + "_x"])
-                    & (  # earliest time
-                        df[TIME_COL + "_x"]
-                        >= df[TIME_COL + "_y"].map(lambda x: x - relativedelta(**parse_date(ttl)))
-                    )
-                ]
-                if ttl
-                else df[df[TIME_COL + "_y"] > df[TIME_COL + "_x"]]
-            )  # latest time
 
     def _get_period_record(
         self,
@@ -480,33 +444,6 @@ class FeatureStore:
             df_period.drop_duplicates(subset=[entity_name, QUERY_COL, TIME_COL], keep="first")
             df_period.sort_values(by=[entity_name, QUERY_COL, TIME_COL], inplace=True, ignore_index=True)
 
-    def _read_local_file(self, views, features, all_entity_col):
-        df = df = read_file(
-            os.path.join(self.project_folder, self.sources[views.batch_source].file_path),
-            self.sources[views.batch_source].file_format,
-            [
-                self.sources[views.batch_source].event_time,
-                self.sources[views.batch_source].create_time,
-            ],
-            list(all_entity_col.keys()),
-        )
-        df.rename(
-            columns={
-                self.sources[views.batch_source].event_time: TIME_COL,
-                self.sources[views.batch_source].create_time: CREATE_COL,
-            },
-            inplace=True,
-        )
-        df.rename(columns=all_entity_col, inplace=True)
-        df = df[
-            [
-                col
-                for col in list(all_entity_col.values()) + features + [TIME_COL, CREATE_COL]
-                if col in df.columns
-            ]
-        ]
-        return df
-
     def _get_time_window_record(self, df_period, period, is_label, include):
         if is_label:
             if include:
@@ -532,6 +469,15 @@ class FeatureStore:
         # time defined in `entity_df`
         df_period.rename(columns={TIME_COL + "_y": QUERY_COL}, inplace=True)
         return df_period
+
+    def materialize(self, service: Service):
+        """incrementally join `views` to generate tables
+
+        Args:
+            views (List): _description_
+        """
+        if self.connection.type == "file":
+            self.offline_file_materialize(service)
 
     def offline_file_materialize(self, service: Service):
         """materialize offline file
@@ -563,5 +509,60 @@ class FeatureStore:
                 joined_frame = get_newest_record(joined_frame, TIME_COL, fea_entities, CREATE_COL)
                 # feature timestamp makes no use to result
                 joined_frame.drop(columns=[CREATE_COL], inplace=True)
-
+        
+        joined_frame[MATERIALIZE_TIME] = pd.to_datetime(datetime.now(), utc=True)
         joined_frame.to_parquet(os.path.join(self.project_folder, f"{service.materialize_path}.parquet"))
+
+    def _read_local_file(self, views, features, all_entity_col):
+        df = df = read_file(
+            os.path.join(self.project_folder, self.sources[views.batch_source].file_path),
+            self.sources[views.batch_source].file_format,
+            [
+                self.sources[views.batch_source].event_time,
+                self.sources[views.batch_source].create_time,
+            ],
+            list(all_entity_col.keys()),
+        )
+        df.rename(
+            columns={
+                self.sources[views.batch_source].event_time: TIME_COL,
+                self.sources[views.batch_source].create_time: CREATE_COL,
+            },
+            inplace=True,
+        )
+        df.rename(columns=all_entity_col, inplace=True)
+        df = df[
+            [
+                col
+                for col in list(all_entity_col.values()) + features + [TIME_COL, CREATE_COL]
+                if col in df.columns
+            ]
+        ]
+        return df
+
+    def _fil_timelimit(self, include, ttl, df):
+        if include:
+            return (
+                df[  # latest time
+                    (df[TIME_COL + "_y"] >= df[TIME_COL + "_x"])
+                    & (  # earliest time
+                        df[TIME_COL + "_x"]
+                        > df[TIME_COL + "_y"].map(lambda x: x - relativedelta(**parse_date(ttl)))
+                    )
+                ]
+                if ttl
+                else df[df[TIME_COL + "_y"] >= df[TIME_COL + "_x"]]
+            )  # latest time
+
+        else:
+            return (
+                df[  # latest time
+                    (df[TIME_COL + "_y"] > df[TIME_COL + "_x"])
+                    & (  # earliest time
+                        df[TIME_COL + "_x"]
+                        >= df[TIME_COL + "_y"].map(lambda x: x - relativedelta(**parse_date(ttl)))
+                    )
+                ]
+                if ttl
+                else df[df[TIME_COL + "_y"] > df[TIME_COL + "_x"]]
+            )  # latest time
