@@ -1,9 +1,10 @@
 from datetime import datetime
 from tokenize import group
-from typing import List, Dict
+from typing import List, Dict, cast
 import pandas as pd
 import os
 from functools import reduce
+from aie_feast.entity import Entity
 from aie_feast.views import FeatureViews, LabelViews
 from aie_feast.service import Service
 from common.source import SourceConfig
@@ -426,7 +427,7 @@ class FeatureStore:
             self, service_entity.features, service_entity.labels, start, end, sampler, bucket, stride, include
         )
 
-    def materialize(self, service):
+    def materialize(self, service: Service):
         """incrementally join `views` to generate tables
 
         Args:
@@ -610,18 +611,16 @@ class FeatureStore:
         df.rename(columns=all_entity_col, inplace=True)
         return df
 
-    def offline_file_materialize(self, service):
+    def offline_file_materialize(self, service: Service):
         """materialize offline file
 
         Args:
             service (str): service name
         """
-        # get service entity
-        service_config: Service = self.service[service]
         # get feature views
-        feature_views = service_config.features
+        feature_views = service.features
         # get label views
-        label_views = service_config.labels
+        label_views = service.labels
         # get label dataframe
         joined_frame = pd.DataFrame()
         for label_key, _ in label_views.items():
@@ -629,6 +628,9 @@ class FeatureStore:
             batch_source: SourceConfig = self.sources[label_view.batch_source]
             file_path = batch_source.file_path
             dataframe = pd.read_parquet(os.path.join(self.project_folder, file_path))
+            dataframe.rename(columns={
+                cast(Entity, self.entity[entity_key]).entity: entity_key for entity_key in label_view.entity
+            }, inplace=True)
             joined_frame = pd.concat(
                 [
                     joined_frame,
@@ -650,6 +652,9 @@ class FeatureStore:
             create_time_field: str = batch_source.create_time
             file_path = batch_source.file_path
             dataframe = pd.read_parquet(os.path.join(self.project_folder, file_path))
+            dataframe.rename(columns={
+                cast(Entity, self.entity[entity_key]).entity: entity_key for entity_key in feature_view.entity
+            }, inplace=True)
             dataframe = dataframe[feature_view.entity + feature_cols + [event_time_field, create_time_field]]
             joined_frame = pd.merge(
                 joined_frame,
