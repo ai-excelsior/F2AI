@@ -57,7 +57,7 @@ class GroupFixednbrSampler(AbstractSampler):
     def __init__(
         self, time_bucket: str, stride: int, start: str = None, end: str = None, group_ids: list[str] = []
     ):
-        super.__init__(time_bucket, stride, start, end)
+        super().__init__(time_bucket, stride, start, end)
         self._group_ids = group_ids
 
     def random_bucket(self):
@@ -70,7 +70,8 @@ class GroupFixednbrSampler(AbstractSampler):
 
         bucket_num = len(bucket_mask)
         bucket_size = int(self._time_bucket.split(" ", 1)[0])
-        bucket_freq = locals()[self._time_bucket.split(" ", 1)[1]]  # TODO 参数传法不对
+        time_bucket_unit = self._time_bucket.split(" ", 1)[1]
+        bucket_freq = locals()[time_bucket_unit]  # TODO 参数传法不对
 
         for i in range(bucket_num):
             if bucket_mask[i] == 1:
@@ -160,11 +161,12 @@ class UniformNPerGroupSampler(GroupFixednbrSampler):
 
 
 if __name__ == "__main__":
-    # dataset = pd.read_csv("./common/sample.csv")
-    # dataset = dataset["event_timestamp"]
-    time_bucket = " 2 days"
+    time_bucket = "2 days"
     stride = 1
     start = "2010-01-01 00:00:00"
-    end = "2010-01-01 00:00:00"
-    pd.to_datetime(end) - pd.to_datetime(start)
-    # sample1 = GroupFixednbrSampler(time_bucket, stride, start, end, group_ids=None)
+    end = "2010-01-30 00:00:00"
+    # delta = pd.to_datetime(end) - pd.to_datetime(start)
+    # time_unit = time_bucket.split(" ", 1)[1]
+
+    sample1 = GroupFixednbrSampler(time_bucket, stride, start, end, group_ids=None)()
+    print(sample1)
