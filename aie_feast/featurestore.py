@@ -615,7 +615,7 @@ class FeatureStore:
         """materialize offline file
 
         Args:
-            service (str): service name
+            service (Service): service entity
         """
         # get feature views
         feature_views = service.features
@@ -701,4 +701,4 @@ class FeatureStore:
             )
 
         # save
-        joined_frame.to_parquet(os.path.join(self.project_folder, f"row_data/{service}_offline.parquet"))
+        joined_frame.to_parquet(os.path.join(self.project_folder, f"{service.materialize_path}" if service.materialize_path else f"{service}_offline.parquet"))
