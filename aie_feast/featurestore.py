@@ -69,18 +69,7 @@ class FeatureStore:
             "max",
         ], f"{fn}is not a available function, you can use fs.query() to customize your function"
 
-    def __check_views(self, view):
-        assert isinstance(
-            view, (FeatureViews, LabelViews, Service)
-        ), f"view must be one of FeatureViews, LabelViews, Serivice, but got{type(view)}"
-
-    def __check_features(self, features, view):
-        for item in features:
-            assert item in view.features.keys(), f"make sure all features in FeatureView, {item} not in"
-
-    def get_features(
-        self, feature_view, entity_df: pd.DataFrame, features: list = None, include: bool = True
-    ):
+    def get_features(self, feature_view, entity_df: pd.DataFrame, features: list = [], include: bool = True):
         """non-series prediction use: get `features` of `entity_df` from `feature_views`
 
         Args:
@@ -90,9 +79,8 @@ class FeatureStore:
             include (bool, optional):  include timestamp defined in `entity_df` or not. Defaults to True.
         """
         self.__check_format(entity_df)
-        self.__check_views(feature_view)
-        features = features if features else list(feature_view.features.keys())
-        self.__check_features(features, feature_view)
+        if not features:
+            features = self._get_avaliable_features(feature_view)
 
         if self.connection.type == "file":
             return self._get_point_record(feature_view, entity_df, features, include)
@@ -161,6 +149,75 @@ class FeatureStore:
             result = pd.DataFrame(sql_df(final_sql, conn))
             result
 
+    def _get_avaliable_features(self, view, check_type: bool = False):
+        if isinstance(view, FeatureViews):
+            features = [k for k, v in view.features.items() if v not in ["string", "bool"]]
+        elif isinstance(view, Service):  # Services
+            features = []
+            for table, cols in view.features.items():
+                if len(cols) == 1 and "__all__" in cols[0].keys():
+                    features += (
+                        [k for k, v in self.features[table].features.items() if v != "string"]
+                        if check_type
+                        else list(self.features[table].features.keys())
+                    )
+                else:
+                    for col in cols:
+                        features += (
+                            [
+                                k
+                                for k, _ in col.items()
+                                if self.features[table].features[k] not in ["string", "bool"]
+                            ]
+                            if check_type
+                            else list(col.keys())
+                        )
+
+        else:
+            raise TypeError("must be FeatureViews or Service")
+        return features
+
+    def _get_available_labels(self, view, check_type: bool = False):
+        if isinstance(view, LabelViews):
+            labels = [k for k, v in view.labels.items() if v not in ["string", "bool"]]
+        elif isinstance(view, Service):  # Services
+            labels = []
+            for table, cols in view.labels.items():
+                if len(cols) == 1 and "__all__" in cols[0].keys():
+                    labels += (
+                        [k for k, v in self.labels[table].labels.items() if v != "string"]
+                        if check_type
+                        else list(self.labels[table].labels.keys())
+                    )
+                else:
+                    for col in cols:
+                        labels += (
+                            [
+                                k
+                                for k, _ in col.items()
+                                if self.labels[table].labels[k] not in ["string", "bool"]
+                            ]
+                            if check_type
+                            else list(col.keys())
+                        )
+        else:
+            raise TypeError("must be LabelViews or Service")
+        return labels
+
+    def _get_avaliable_entity(self, view, check_type: bool = False):
+        entity = []
+        if isinstance(view, (FeatureViews, LabelViews)):
+            entity = list(view.entity)
+        elif isinstance(view, Service):  # Services
+            for table, _ in view.features.items():
+                entity += self.features[table].entity
+            for table, _ in view.labels.items():
+                entity += self.labels[table].entity
+            entity = list(set(entity))
+        else:
+            raise TypeError("must be FeatureViews,LabelViews or Service")
+        return entity
+
     def get_period_features(
         self,
         feature_views,
@@ -198,8 +255,8 @@ class FeatureStore:
             include (bool, optional): include timestamp defined in `entity_df` or not. Defaults to False.
         """
         self.__check_format(entity_df)
-        self.__check_views(label_views)
-        labels = list(label_views.labels.keys())
+        labels = self._get_available_labels(label_views)
+
         if self.connection.type == "file":
             return self._get_point_record(label_views, entity_df, labels, include)
 
@@ -245,134 +302,94 @@ class FeatureStore:
             end (str, optional): end_time. Defaults to None, works and only works when `entity_df` is None.
             include(str,optional): whether to include `start` or `end` timestamp
         """
-        self.__check_views(views)
         self.__check_fns(fn)
-        features = (
-            features
-            if features
-            else reduce(
-                lambda a, b: a + b,
-                [
-                    list(view.features.keys()) if isinstance(view, FeatureViews) else list(view.labels.keys())
-                    for view in views.values()
-                ],
+        if not features:
+            features = (
+                self._get_avaliable_features(views, True)
+                if isinstance(views, FeatureViews)
+                else self._get_available_labels(views, True)
+                if isinstance(views, LabelViews)
+                else self._get_avaliable_features(views, True) + self._get_available_labels(views, True)
             )
-        )
-        dict_data = {}
 
         if entity_df is not None:
             self.__check_format(entity_df)
             entities = [entity_df.columns[0]]
             start = pd.to_datetime(0, utc=True)
         else:
-            entities = group_key if group_key else self.entity.keys()
+            entities = group_key if group_key else self._get_avaliable_entity(views)
             end = end if end else pd.to_datetime(datetime.now(), utc=True)
             start = start if start else pd.to_datetime(0, utc=True)
 
         if self.connection.type == "file":
-            for entity_name in entities:
-                dfs = []
-                for _, cfg in views.items():
-                    if entity_name in cfg.entity and self.sources[cfg.batch_source].event_time:
-                        all_entity_col = {self.entity[en].entity: en for en in cfg.entity}
-                        df = read_file(
-                            os.path.join(self.project_folder, self.sources[cfg.batch_source].file_path),
-                            self.sources[cfg.batch_source].file_format,
-                            [self.sources[cfg.batch_source].event_time],
-                            list(all_entity_col.keys()),
-                        )
-                        df.rename(columns={self.sources[cfg.batch_source].event_time: TIME_COL}, inplace=True)
-                        # filter columns
-                        df = df[
-                            [
-                                col
-                                for col in [
-                                    fea
-                                    for fea, type in cfg.features.items()
-                                    if fea in features and type != "string"
-                                ]
-                                + list(all_entity_col.keys())
-                                + [TIME_COL]
-                                if col in df.columns
-                            ]
-                        ]
-                        df.rename(columns=all_entity_col, inplace=True)
-                        if entity_df is not None:
-                            df = df.merge(entity_df, how="right", on=entity_name)
-                        else:
-                            df.rename(
-                                columns={TIME_COL: TIME_COL + "_x"},
-                                inplace=True,
-                            )
-                            # end_time limit
-                            df = df.assign(**{TIME_COL + "_y": end})
-                        dfs.append(df)
-                    if dfs:
-                        dict_data.update({entity_name: dfs})
-            result = {}
-            for entity_name, dfs in dict_data.items():
-                datas = []
-                for data in dfs:
-                    datas.append(
-                        data.groupby(entity_name).apply(
-                            get_stats_result,
-                            fn,
-                            primary_keys=[entity_name, TIME_COL + "_x", TIME_COL + "_y"],
-                            include=include,
-                            start=start,
-                        )
-                    )
-                if datas:
-                    result.update(
-                        {
-                            entity_name: reduce(
-                                lambda l, r: pd.merge(l, r, on=[entity_name], how="outer"), datas
-                            )
-                        }
-                    )
-            return result
+            all_entity_col = {self.entity[en].entity: en for en in entities}
+            if isinstance(views, (FeatureViews, LabelViews)):
+                df = read_file(
+                    os.path.join(self.project_folder, self.sources[views.batch_source].file_path),
+                    self.sources[views.batch_source].file_format,
+                    [self.sources[views.batch_source].event_time],
+                    list(all_entity_col.keys()),
+                )
+                df.rename(columns={self.sources[views.batch_source].event_time: TIME_COL}, inplace=True)
+                df.rename(columns=all_entity_col, inplace=True)
+                # filter columns
+            else:
+                df = read_file(
+                    os.path.join(self.project_folder, views.materialize_path + ".parquet"),
+                    "parquet",
+                    [TIME_COL],
+                    list(all_entity_col.values()),
+                )
 
-    def get_latest_entities(self, views, entity: List[str] = None):
-        """get latest entity and its timestamp from `views`
+            df = df[[col for col in [features] + list(all_entity_col.values()) + [TIME_COL]]]
+            if entity_df is not None:
+                df = df.merge(entity_df, how="right", on=entities)
+            else:
+                df.rename(columns={TIME_COL: TIME_COL + "_x"}, inplace=True)
+                # end_time limit
+                df = df.assign(**{TIME_COL + "_y": end})
+            result = df.groupby(entities).apply(
+                get_stats_result,
+                fn,
+                primary_keys=entities + [TIME_COL + "_x", TIME_COL + "_y"],
+                include=include,
+                start=start,
+            )
+        return result
+
+    def get_latest_entities(self, view, entity: List[str] = []):
+        """get latest entity and its timestamp from a single FeatureViews/LabelViews or a materialzed Service
 
         Args:
             views (List): _description_
         """
-        result = {}
-        views = get_consistent_format(views)
-        entities = {en: self.entity[en] for en in entity} if entity else self.entity
-        for name, entity in entities.items():
-            if self.connection.type == "file":
-                dfs = []
-                for view in views.values():
-                    if name in view.entity and self.sources[view.batch_source].event_time:
-                        all_entity_col = {self.entity[en].entity: en for en in view.entity}
-                        df = read_file(
-                            os.path.join(self.project_folder, self.sources[view.batch_source].file_path),
-                            self.sources[view.batch_source].file_format,
-                            [self.sources[view.batch_source].event_time],
-                            list(all_entity_col.keys()),
-                        )
-                        df = df[[entity.entity, self.sources[view.batch_source].event_time]]
-                        # sort by event_time, decending
-                        df.sort_values(
-                            by=self.sources[view.batch_source].event_time,
-                            ascending=False,
-                            inplace=True,
-                            ignore_index=True,
-                        )
-                        # due to `ascending=False`, keep the `first` record means the latest one
-                        en = df.drop_duplicates(subset=entity.entity, keep="first")
-                        en.columns = [name, TIME_COL]
-                        dfs.append(en)
-                if dfs:  # views have this entity
-                    dfs = reduce(lambda l, r: pd.merge(l, r, on=name, how="outer"), dfs)
-                    # .astype() to avoid nan caused by outer-merge
-                    dfs[TIME_COL] = dfs[[col for col in dfs.columns if col != name]].apply(
-                        lambda row: row.astype(en[TIME_COL].dtype).max(), axis=1
-                    )
-                    result.update({name: dfs[[name, TIME_COL]]})
-        return result
+        if not entity:
+            entity = self._get_avaliable_entity(view)
+
+        all_entity_col = {self.entity[en].entity: en for en in entity}
+        if self.connection.type == "file":
+            if isinstance(view, (FeatureViews, LabelViews)):
+                df = read_file(
+                    os.path.join(self.project_folder, self.sources[view.batch_source].file_path),
+                    self.sources[view.batch_source].file_format,
+                    [self.sources[view.batch_source].event_time],
+                    list(all_entity_col.keys()),
+                )
+                df.rename(columns={self.sources[view.batch_source].event_time: TIME_COL}, inplace=True)
+                df.rename(columns=all_entity_col, inplace=True)
+            else:
+                df = read_file(
+                    os.path.join(self.project_folder, view.materialize_path + ".parquet"),
+                    "parquet",
+                    [TIME_COL],
+                    list(all_entity_col.values()),
+                )
+            df = df[list(all_entity_col.values()) + [TIME_COL]]
+            # sort by event_time, decending
+            df.sort_values(by=TIME_COL, ascending=False, inplace=True, ignore_index=True)
+            # due to `ascending=False`, keep the `first` record means the latest one
+            df = df.drop_duplicates(subset=entity, keep="first")
+        return df
 
     def query(self, query: str = None):
         """customized query, for example, distinct
@@ -427,9 +444,10 @@ class FeatureStore:
             features(list):columns to select besides times and entities
             include (bool, optional): include timestamp defined in `entity_df` or not. Defaults to True.
         """
+        entity = self._get_avaliable_entity(views)
+        all_entity_col = {self.entity[en].entity: en for en in entity}
         entity_name = entity_df.columns[0]  # entity column name in table
         if isinstance(views, (FeatureViews, LabelViews)):  # read from single view
-            all_entity_col = {self.entity[en].entity: en for en in views.entity}
             df = read_file(
                 os.path.join(self.project_folder, self.sources[views.batch_source].file_path),
                 self.sources[views.batch_source].file_format,
@@ -439,6 +457,7 @@ class FeatureStore:
                 ],
                 list(all_entity_col.keys()),
             )
+            # rename time columns
             df.rename(
                 columns={
                     self.sources[views.batch_source].event_time: TIME_COL,
@@ -446,8 +465,9 @@ class FeatureStore:
                 },
                 inplace=True,
             )
-            df = df[[col for col in list(all_entity_col.keys()) + features + [TIME_COL, CREATE_COL]]]
             df.rename(columns=all_entity_col, inplace=True)
+            df = df[[col for col in list(all_entity_col.values()) + features + [TIME_COL, CREATE_COL]]]
+            # rename entity columns
             df = df.merge(entity_df, on=entity_name, how="inner")
             if self.sources[views.batch_source].event_time:  #  time-relavent features
                 # match time_limit
@@ -455,14 +475,13 @@ class FeatureStore:
                 # newest record
                 df = get_newest_record(df, TIME_COL, entity_name, CREATE_COL)
         else:  # `Service`, read from materialized table
-            all_entity_col = {self.entity[en].entity: en for en in self.entity}
             df = read_file(
                 os.path.join(self.project_folder, views.materialize_path + ".parquet"),
                 "parquet",
                 [TIME_COL, MATERIALIZE_TIME],
-                list(all_entity_col.keys()),
+                list(all_entity_col.values()),
             )
-            df = df[[col for col in list(all_entity_col.keys()) + features + [TIME_COL, MATERIALIZE_TIME]]]
+            df = df[[col for col in list(all_entity_col.values()) + features + [TIME_COL, MATERIALIZE_TIME]]]
             df = df.merge(entity_df, on=entity_name, how="inner")
             # match time_limit
             df = self._fil_timelimit(include, views, df)

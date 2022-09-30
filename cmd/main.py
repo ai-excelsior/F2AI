@@ -57,7 +57,7 @@ if __name__ == "__main__":
     # get_period_data(period="25 days")  # period = "2 days"
 
     def get_latest_entity():
-        fs.get_latest_entities(fs.features, ["loan"])
+        fs.get_latest_entities(fs.features["loan_features"])
 
     def stats():
         entity_link = pd.DataFrame.from_dict(
@@ -69,7 +69,7 @@ if __name__ == "__main__":
                 ],
             }
         )
-        fs.stats(fs.features["loan"], group_key=["dob_ssn", "zipcode"], fn="mean")
+        fs.stats(fs.features["loan_features"], group_key=["zipcode", "loan"], fn="mean")
 
     def get_features():
         entity_link = pd.DataFrame.from_dict(
@@ -100,9 +100,9 @@ if __name__ == "__main__":
         )
 
         fs.get_features(fs.features["loan_features"], entity_dobssn_period)
-        fs.get_labels(fs.labels["loan_label_view"], entity_dobssn_period)
+        fs.get_labels(fs.service["credit_scoring_v1"], entity_dobssn_period)
 
-    get_features()
+    stats()
 
     def get_period_features_and_labels():
         period = "2 days"
