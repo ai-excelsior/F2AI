@@ -4,7 +4,6 @@ from aie_feast.views import FeatureViews, LabelViews
 
 
 class IterableDataset:
-
     def __init__(self, dataset: "Dataset", start: str, end: str):
         super().__init__()
         self.dataset = dataset
@@ -19,9 +18,8 @@ class IterableDataset:
 
 
 class Dataset:
-
     def __init__(
-        self, 
+        self,
         features: List[str],
         targets: List[str],
         start: str,
@@ -31,7 +29,7 @@ class Dataset:
         stride: int,
         include: str,
         features_map: Dict[str, FeatureViews] = {},
-        labels_map: Dict[str, LabelViews] = {}
+        labels_map: Dict[str, LabelViews] = {},
     ):
         self.features = features
         self.targets = targets
@@ -48,6 +46,3 @@ class Dataset:
         """convert to iterablt pytorch dataset"""
 
         pass
-
-
-

@@ -22,10 +22,10 @@ from common.utils import (
     parse_date,
     get_newest_record,
     get_stats_result,
-    get_period_grouped_record,
 )
 from common.psl_utils import execute_sql, psy_conn, to_pgsql, remove_table, close_conn, sql_df
 from dateutil.relativedelta import relativedelta
+from copy import deepcopy
 
 
 TIME_COL = "event_timestamp"
@@ -331,15 +331,7 @@ class FeatureStore:
         if self.connection.type == "file":
             all_entity_col = {self.entity[en].entity: en for en in entities}
             if isinstance(views, (FeatureViews, LabelViews)):
-                df = read_file(
-                    os.path.join(self.project_folder, self.sources[views.batch_source].file_path),
-                    self.sources[views.batch_source].file_format,
-                    [self.sources[views.batch_source].event_time],
-                    list(all_entity_col.keys()),
-                )
-                df.rename(columns={self.sources[views.batch_source].event_time: TIME_COL}, inplace=True)
-                df.rename(columns=all_entity_col, inplace=True)
-                # filter columns
+                df = self._read_local_file(views, features, all_entity_col)
             else:
                 df = read_file(
                     os.path.join(self.project_folder, views.materialize_path + ".parquet"),
@@ -347,14 +339,14 @@ class FeatureStore:
                     [TIME_COL],
                     list(all_entity_col.values()),
                 )
-
-            df = df[[col for col in features + list(all_entity_col.values()) + [TIME_COL]]]
+                df = df[[col for col in features + list(all_entity_col.values()) + [TIME_COL]]]
             if entity_df is not None:
                 df = df.merge(entity_df, how="right", on=entities)
             else:
                 df.rename(columns={TIME_COL: TIME_COL + "_x"}, inplace=True)
                 # end_time limit
                 df = df.assign(**{TIME_COL + "_y": end})
+
             result = df.groupby(entities).apply(
                 get_stats_result,
                 fn,
@@ -376,14 +368,7 @@ class FeatureStore:
         all_entity_col = {self.entity[en].entity: en for en in entity}
         if self.connection.type == "file":
             if isinstance(view, (FeatureViews, LabelViews)):
-                df = read_file(
-                    os.path.join(self.project_folder, self.sources[view.batch_source].file_path),
-                    self.sources[view.batch_source].file_format,
-                    [self.sources[view.batch_source].event_time],
-                    list(all_entity_col.keys()),
-                )
-                df.rename(columns={self.sources[view.batch_source].event_time: TIME_COL}, inplace=True)
-                df.rename(columns=all_entity_col, inplace=True)
+                df = self._read_local_file(view, [], all_entity_col)
             else:
                 df = read_file(
                     os.path.join(self.project_folder, view.materialize_path + ".parquet"),
@@ -391,7 +376,6 @@ class FeatureStore:
                     [TIME_COL],
                     list(all_entity_col.values()),
                 )
-            df = df[list(all_entity_col.values()) + [TIME_COL]]
             # sort by event_time, decending
             df.sort_values(by=TIME_COL, ascending=False, inplace=True, ignore_index=True)
             # due to `ascending=False`, keep the `first` record means the latest one
@@ -455,30 +439,12 @@ class FeatureStore:
         all_entity_col = {self.entity[en].entity: en for en in entity}
         entity_name = entity_df.columns[0]  # entity column name in table
         if isinstance(views, (FeatureViews, LabelViews)):  # read from single view
-            df = read_file(
-                os.path.join(self.project_folder, self.sources[views.batch_source].file_path),
-                self.sources[views.batch_source].file_format,
-                [
-                    self.sources[views.batch_source].event_time,
-                    self.sources[views.batch_source].create_time,
-                ],
-                list(all_entity_col.keys()),
-            )
-            # rename time columns
-            df.rename(
-                columns={
-                    self.sources[views.batch_source].event_time: TIME_COL,
-                    self.sources[views.batch_source].create_time: CREATE_COL,
-                },
-                inplace=True,
-            )
-            df.rename(columns=all_entity_col, inplace=True)
-            df = df[[col for col in list(all_entity_col.values()) + features + [TIME_COL, CREATE_COL]]]
+            df = self._read_local_file(views, features, all_entity_col)
             # rename entity columns
             df = df.merge(entity_df, on=entity_name, how="inner")
             if self.sources[views.batch_source].event_time:  #  time-relavent features
                 # match time_limit
-                df = self._fil_timelimit(include, views, df)
+                df = self._fil_timelimit(include, views.ttl, df)
                 # newest record
                 df = get_newest_record(df, TIME_COL, entity_name, CREATE_COL)
         else:  # `Service`, read from materialized table
@@ -491,22 +457,22 @@ class FeatureStore:
             df = df[[col for col in list(all_entity_col.values()) + features + [TIME_COL, MATERIALIZE_TIME]]]
             df = df.merge(entity_df, on=entity_name, how="inner")
             # match time_limit
-            df = self._fil_timelimit(include, views, df)
+            df = self._fil_timelimit(include, views.ttl, df)
             # newest record
             df = get_newest_record(df, TIME_COL, entity_name, CREATE_COL)
         return df
 
-    def _fil_timelimit(self, include, cfg, df):
+    def _fil_timelimit(self, include, ttl, df):
         if include:
             return (
                 df[  # latest time
                     (df[TIME_COL + "_y"] >= df[TIME_COL + "_x"])
                     & (  # earliest time
                         df[TIME_COL + "_x"]
-                        > df[TIME_COL + "_y"].map(lambda x: x - relativedelta(**parse_date(cfg.ttl)))
+                        > df[TIME_COL + "_y"].map(lambda x: x - relativedelta(**parse_date(ttl)))
                     )
                 ]
-                if cfg.ttl
+                if ttl
                 else df[df[TIME_COL + "_y"] >= df[TIME_COL + "_x"]]
             )  # latest time
 
@@ -516,10 +482,10 @@ class FeatureStore:
                     (df[TIME_COL + "_y"] > df[TIME_COL + "_x"])
                     & (  # earliest time
                         df[TIME_COL + "_x"]
-                        >= df[TIME_COL + "_y"].map(lambda x: x - relativedelta(**parse_date(cfg.ttl)))
+                        >= df[TIME_COL + "_y"].map(lambda x: x - relativedelta(**parse_date(ttl)))
                     )
                 ]
-                if cfg.ttl
+                if ttl
                 else df[df[TIME_COL + "_y"] > df[TIME_COL + "_x"]]
             )  # latest time
 
@@ -544,85 +510,90 @@ class FeatureStore:
             is_label (bool, optional): LabelViews of not. Defaults to False.
         """
         entity_name = entity_df.columns[0]  # entity column name in table
+        entity = self._get_avaliable_entity(views)
+        all_entity_col = {self.entity[en].entity: en for en in entity}
 
-        result = {}
-        for name, cfg in views.items():
-            if entity_name in cfg.entity and self.sources[cfg.batch_source].event_time:
-                df = self._read_and_filter(cfg, is_label)
-                df_for_period = df
+        if isinstance(views, (FeatureViews, LabelViews)):
+            if self.sources[views.batch_source].event_time:  # period features make sense
+                df_period = self._read_local_file(views, features, all_entity_col)
                 # merge according to `entity`
-                df = df.merge(entity_df, on=entity_name, how="inner")
-                # filter time condition
-                fil = self._fil_timelimit(include, cfg, df)
-                newest_record = get_period_grouped_record(fil, TIME_COL, entity_name, CREATE_COL)
-                df_for_period = pd.merge(
-                    df_for_period, newest_record[entity_name].drop_duplicates(), on=entity_name, how="inner"
-                )
-                df = self._get_time_window_record(
-                    entity_name, TIME_COL, df_for_period, newest_record, period, is_label
-                )
-                df.sort_values(by=[entity_name, QUERY_COL, TIME_COL], inplace=True)
-                df.drop_duplicates()
-                df.reset_index(inplace=True, drop=True)
-                result.update({name: df})
-        return result
-
-    def _get_time_window_record(self, entity_name, TIME_COL, df_for_period, newest_record, period, is_label):
-        period_df = []
-        for info in newest_record[[entity_name, TIME_COL]].values:
-            if is_label:
-                df = df_for_period[
-                    (df_for_period[entity_name] == info[0])
-                    & (df_for_period[TIME_COL] < (info[1] + relativedelta(**parse_date(period))))
-                    & (df_for_period[TIME_COL] >= info[1])
-                ]
+                df_period = df_period.merge(entity_df, on=entity_name, how="inner")
+                # # match time_limit
+                df_period = self._get_time_window_record(df_period, period, is_label, include)
+                if CREATE_COL in df_period.columns:  # use`create_timestamp` to remove duplicates
+                    df_period.sort_values(by=[CREATE_COL], ascending=False, inplace=True, ignore_index=True)
+                    df_period.drop_duplicates(subset=[entity_name, QUERY_COL, TIME_COL], keep="first")
+                df_period.sort_values(by=[entity_name, QUERY_COL, TIME_COL], inplace=True, ignore_index=True)
             else:
-                df = df_for_period[
-                    (df_for_period[entity_name] == info[0])
-                    & (df_for_period[TIME_COL] > (info[1] - relativedelta(**parse_date(period))))
-                    & (df_for_period[TIME_COL] <= info[1])
-                ]
+                raise TypeError("View you give is not time-relevant, no period features/labels to get")
+        else:
+            df_period = read_file(
+                os.path.join(self.project_folder, views.materialize_path + ".parquet"),
+                "parquet",
+                [TIME_COL, MATERIALIZE_TIME],
+                list(all_entity_col.values()),
+            )
+            df_period = df_period[
+                [col for col in list(all_entity_col.values()) + features + [TIME_COL, MATERIALIZE_TIME]]
+            ]
+            df_period = df_period.merge(entity_df, on=entity_name, how="inner")
+            df_period = self._get_time_window_record(df_period, period, is_label, include)
+            df_period.sort_values(by=[MATERIALIZE_TIME], ascending=False, inplace=True, ignore_index=True)
+            df_period.drop_duplicates(subset=[entity_name, QUERY_COL, TIME_COL], keep="first")
+            df_period.sort_values(by=[entity_name, QUERY_COL, TIME_COL], inplace=True, ignore_index=True)
 
-            df[QUERY_COL] = info[1]
-            period_df.append(df)
-        return pd.concat(period_df)
-
-    def _read_and_filter(self, cfg, is_label):
-        all_entity_col = {self.entity[en].entity: en for en in cfg.entity}
-        df = read_file(
-            os.path.join(self.project_folder, self.sources[cfg.batch_source].file_path),
-            self.sources[cfg.batch_source].file_format,
-            [self.sources[cfg.batch_source].event_time, self.sources[cfg.batch_source].create_time],
+    def _read_local_file(self, views, features, all_entity_col):
+        df = df = read_file(
+            os.path.join(self.project_folder, self.sources[views.batch_source].file_path),
+            self.sources[views.batch_source].file_format,
+            [
+                self.sources[views.batch_source].event_time,
+                self.sources[views.batch_source].create_time,
+            ],
             list(all_entity_col.keys()),
         )
         df.rename(
             columns={
-                self.sources[cfg.batch_source].event_time: TIME_COL,
-                self.sources[cfg.batch_source].create_time: CREATE_COL,
+                self.sources[views.batch_source].event_time: TIME_COL,
+                self.sources[views.batch_source].create_time: CREATE_COL,
             },
             inplace=True,
         )
-
-        if is_label:
-            df = df[
-                [
-                    col
-                    for col in list(all_entity_col.keys()) + list(cfg.labels.keys()) + [TIME_COL, CREATE_COL]
-                    if col in df.columns
-                ]
-            ]
-        else:
-            df = df[
-                [
-                    col
-                    for col in list(all_entity_col.keys())
-                    + list(cfg.features.keys())
-                    + [TIME_COL, CREATE_COL]
-                    if col in df.columns
-                ]
-            ]
         df.rename(columns=all_entity_col, inplace=True)
+        df = df[
+            [
+                col
+                for col in list(all_entity_col.values()) + features + [TIME_COL, CREATE_COL]
+                if col in df.columns
+            ]
+        ]
         return df
+
+    def _get_time_window_record(self, df_period, period, is_label, include):
+        if is_label:
+            if include:
+                df_period = df_period[  # latest time
+                    (df_period[TIME_COL + "_y"] <= df_period[TIME_COL + "_x"])
+                    & (  # earliest time
+                        df_period[TIME_COL + "_x"]
+                        < df_period[TIME_COL + "_y"].map(lambda x: x + relativedelta(**parse_date(period)))
+                    )
+                ]
+            else:
+                df_period = df_period[  # latest time
+                    (df_period[TIME_COL + "_y"] < df_period[TIME_COL + "_x"])
+                    & (  # earliest time
+                        df_period[TIME_COL + "_x"]
+                        <= df_period[TIME_COL + "_y"].map(lambda x: x + relativedelta(**parse_date(period)))
+                    )
+                ]
+        else:
+            df_period = self._fil_timelimit(include, period, df_period)
+        # rename action timestamp based on labelviews
+        df_period.rename(columns={TIME_COL + "_x": TIME_COL}, inplace=True)
+        # time defined in `entity_df`
+        df_period.rename(columns={TIME_COL + "_y": QUERY_COL}, inplace=True)
+        return df_period
 
     def offline_file_materialize(self, service: Service):
         """materialize offline file

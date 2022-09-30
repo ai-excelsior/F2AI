@@ -45,11 +45,11 @@ def read_file(path, type, time_col=None, entity_cols=None):
     if type.startswith("parq"):
         df = pd.read_parquet(path)
     elif type.startswith("tsv"):
-        df = pd.read_csv(path, sep="\t", parse_dates=[time_col] if time_col else [])
+        df = pd.read_csv(path, sep="\t", parse_dates=time_col if time_col else [])
     elif type.startswith("txt"):
-        df = pd.read_csv(path, sep=" ", parse_dates=[time_col] if time_col else [])
+        df = pd.read_csv(path, sep=" ", parse_dates=time_col if time_col else [])
     else:
-        df = pd.read_csv(path, parse_dates=[time_col] if time_col else [])
+        df = pd.read_csv(path, parse_dates=time_col if time_col else [])
     for col in time_col:
         df[col] = pd.to_datetime(df[col], utc=True)
     if entity_cols:
@@ -71,10 +71,6 @@ def parse_date(dt):
 
 
 def get_newest_record(df, time_col, entity_id, create_time):
-    return df.groupby(entity_id).apply(get_latest_record, time_col, create_time).reset_index(drop=True)
-
-
-def get_period_grouped_record(df, time_col, entity_id, create_time):
     return (
         df.groupby([entity_id, time_col + "_y"])
         .apply(get_latest_record, time_col, create_time)
