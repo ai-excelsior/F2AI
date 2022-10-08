@@ -466,11 +466,16 @@ class FeatureStore:
         df_period.rename(columns={TIME_COL + "_y": QUERY_COL}, inplace=True)
         return df_period
 
-    def materialize(self, service: Service):
+    def materialize(self, service: Service, incremental_begin: str):
         """incrementally join `views` to generate tables
 
         Args:
-            views (List): _description_
+            views (List): config to materialize
+            incremental_begin (str): begin of materialization, only works when type!=file
+                `None`: last materialzation time
+                date-like str: corresponding date, e.g.: `2020-01-03 00:09:08`
+                int-like + fre str:  latest int freq, e.g.: `30 days`
+
         """
         if self.connection.type == "file":
             self._offline_file_materialize(service)

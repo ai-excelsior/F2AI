@@ -100,15 +100,15 @@ if __name__ == "__main__":
             }
         )
 
-        fs.get_features(fs.features["loan_features"], entity_dobssn_period)
-        fs.get_labels(fs.service["credit_scoring_v1"], entity_dobssn_period)
+        fs.get_features(fs.features["loan_features"], entity_link)
+        fs.get_labels(fs.service["credit_scoring_v1"], entity_link)
 
-    # get_features()
+    get_features()
 
     def do_materailize():
         fs.materialize(fs.service["credit_scoring_v1"])
 
-    do_materailize()
+    # do_materailize()
 
     def get_period_features_and_labels():
         period = "5 hours"
@@ -139,4 +139,4 @@ if __name__ == "__main__":
             )
         )
 
-    #stats()
+    # stats()
