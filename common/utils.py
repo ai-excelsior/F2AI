@@ -67,7 +67,7 @@ def transform_freq(dt):
 
 
 def parse_date(dt):
-    return {**transform_freq(dt)} if dt else None
+    return {**transform_freq(dt)} if dt else 0
 
 
 def get_newest_record(df, time_col, entity_id, create_time):

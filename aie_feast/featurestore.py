@@ -1,5 +1,6 @@
 from datetime import datetime
-from typing import List, Dict, cast
+from typing import List
+from parser import ParserError
 import pandas as pd
 import os
 from functools import reduce
@@ -466,26 +467,34 @@ class FeatureStore:
         df_period.rename(columns={TIME_COL + "_y": QUERY_COL}, inplace=True)
         return df_period
 
-    def materialize(self, service: Service, incremental_begin: str):
+    def materialize(self, service: Service, incremental_begin: str = None):
         """incrementally join `views` to generate tables
 
         Args:
             views (List): config to materialize
-            incremental_begin (str): begin of materialization, only works when type!=file
-                `None`: last materialzation time
+            incremental_begin (str): begin of materialization
+                `None`: all-data for type=file, otherwise last materialzation time
                 date-like str: corresponding date, e.g.: `2020-01-03 00:09:08`
                 int-like + fre str:  latest int freq, e.g.: `30 days`
 
         """
-        if self.connection.type == "file":
-            self._offline_file_materialize(service)
 
-    def _offline_file_materialize(self, service: Service):
+        if self.connection.type == "file":
+            self._offline_file_materialize(service, incremental_begin)
+
+    def _offline_file_materialize(self, service: Service, incremental_begin):
         """materialize offline file
 
         Args:
             service (Service): service entity
         """
+        try:
+            incremental_begin = pd.to_datetime(incremental_begin if incremental_begin else 0, utc=True)
+        except ParserError:
+            incremental_begin = parse_date(incremental_begin)
+        except:
+            raise TypeError("please check your `incremental_begin` type")
+
         all_features_use = self._get_avaliable_features(service)
         for label_key in service.labels.keys():
             labels = self._get_available_labels(service)
@@ -493,6 +502,11 @@ class FeatureStore:
             all_entity_col = {self.entity[en].entity: en for en in all_entities}
             joined_frame = self._read_local_file(self.labels[label_key], labels, all_entity_col)
             joined_frame.drop(columns=[CREATE_COL], inplace=True)  # create timestamp makes no sense to labels
+            if isinstance(incremental_begin, dict):
+                incremental_begin = joined_frame[TIME_COL].max() - relativedelta(**incremental_begin)
+                joined_frame = joined_frame[joined_frame[TIME_COL] >= incremental_begin]
+            else:
+                joined_frame = joined_frame[joined_frame[TIME_COL] >= incremental_begin]
         # join features dataframe
         for feature_key in service.features.keys():
             feature_view: FeatureViews = self.features[feature_key]
