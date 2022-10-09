@@ -130,7 +130,7 @@ class FeatureStore:
             raise TypeError("must be LabelViews or Service")
         return labels
 
-    def _get_avaliable_entity(self, view, check_type: bool = False):
+    def _get_avaliable_entity(self, view):
         entity = []
         if isinstance(view, (FeatureViews, LabelViews)):
             entity = list(view.entity)
@@ -141,7 +141,7 @@ class FeatureStore:
                 entity += self.labels[table].entity
             entity = list(set(entity))
         else:
-            raise TypeError("must be FeatureViews,LabelViews or Service")
+            raise TypeError("must be FeatureViews, LabelViews or Service")
         return entity
 
     def get_features(
@@ -273,8 +273,8 @@ class FeatureStore:
         entity = self._get_avaliable_entity(views)
         entity_name = [en for en in entity if en in list(entity_df.columns[:-1])]
         all_entity_col = [self.entity[en].entity + " as " + en for en in entity_name]
-
-        # entity column name in table
+        assert all_entity_col, "cannot find any entities in view, please check"
+        # connect to pgsql db
         conn = psy_conn(**self.connection.__dict__)
         to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
         period = transform_pgsql_period(period, is_label)
@@ -293,9 +293,9 @@ class FeatureStore:
             create_time = CREATE_COL
         else:
             entity_df, df = Tables(f"{TMP_TBL}", f"{views.materialize_path}")
-            all_time_col = [{TIME_COL} + " as " + f"{TIME_COL}_tmp", {MATERIALIZE_TIME}]
+            all_time_col = [f"{TIME_COL} as {TIME_COL}_tmp", MATERIALIZE_TIME]
             create_time = MATERIALIZE_TIME
-        df = (  # feature_view table
+        df = (  # data table
             Query.from_(df)
             .select(
                 Parameter(",".join(all_time_col)),
@@ -334,6 +334,7 @@ class FeatureStore:
         result = pd.DataFrame(
             sql_df(sql_result.get_sql(), conn), columns=entity_name + [QUERY_COL, TIME_COL] + features
         )
+        # remove entity_df and close connection
         remove_table(TMP_TBL, conn)
         close_conn(conn)
         return result

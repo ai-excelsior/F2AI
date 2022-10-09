@@ -54,8 +54,6 @@ if __name__ == "__main__":
             fs.get_period_features(fs.features, entity_dobssn_period, period, features=None, include=True)
         )  # TODO include设置再确定一下
 
-    # get_period_data(period="25 days")  # period = "2 days"
-
     def get_latest_entity():
         fs.get_latest_entities(fs.features["loan_features"])
 
@@ -101,12 +99,11 @@ if __name__ == "__main__":
             }
         )  # 19991113_3598 has duplicates, due to the original data
 
-        # fs.get_features(fs.features["gy_link_topo_features"], entity_link)
-       # fs.get_features(fs.features["loan_features"], entity_dobssn_period)
-        fs.get_labels(fs.service["credit_scoring_v1"], entity_dobssn_period)
+        #  fs.get_period_features(fs.service["credit_scoring_v1"], entity_dobssn_period, period="365 days")
+        fs.get_features(fs.features["loan_features"], entity_dobssn_period)
+        # fs.get_labels(fs.service["credit_scoring_v1"], entity_dobssn_period)
 
     get_features()
-    # get_features()
 
     def do_materailize():
         fs.materialize(fs.service["credit_scoring_v1"])
@@ -157,4 +154,4 @@ if __name__ == "__main__":
     def dataset():
         fs.get_dataset(fs.service["credit_scoring_v1"])
 
-    dataset
+    # dataset
