@@ -21,6 +21,7 @@ from common.utils import (
     parse_date,
     get_newest_record,
     get_stats_result,
+    transform_pgsql_period,
 )
 from common.psl_utils import execute_sql, psy_conn, to_pgsql, remove_table, close_conn, sql_df
 from dateutil.relativedelta import relativedelta
@@ -186,64 +187,124 @@ class FeatureStore:
         if self.connection.type == "file":
             return self._get_period_record(feature_view, entity_df, period, features, include, is_label=False)
         elif self.connection.type == "pgsql":
-            conn = psy_conn(**self.connection.__dict__)
-            to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
-            entity = self._get_avaliable_entity(feature_view)
-            entity_name = entity_df.columns[0]
-            all_entity_col = [self.entity[en].entity + " as " + en for en in entity]
-            entity_df, df = Tables(f"{TMP_TBL}", f"{feature_view.batch_source}")
-            if (
-                not self.sources[feature_view.batch_source].event_time
-                and not self.sources[feature_view.batch_source].create_time
-            ):
-                df = (
-                    Query.from_(df)
-                    .select(Parameter(",".join(all_entity_col)), Parameter(",".join(features)))
-                    .as_("df")
-                )
-                sql_query = Query.from_(entity_df).inner_join(df).using(entity_name).select(TIME_COL, df.star)
+            return self._get_period_pgsql(feature_view, entity_df, period, features, include, is_label=False)
 
-            elif not self.sources[feature_view.batch_source].create_time:
-                df = (
-                    Query.from_(df)
-                    .select(
-                        Parameter(
-                            self.sources[feature_view.batch_source].event_time + " as " + f"{TIME_COL}_tmp"
-                        ),
-                        Parameter(",".join(all_entity_col)),
-                        Parameter(",".join(features)),
-                    )
-                    .as_("df")
-                )
-                joined = (
-                    (Query.from_(entity_df).inner_join(df).using(entity_name))
-                    .select(
-                        df.star,
-                        TIME_COL,
-                        Parameter(
-                            f"row_number() over (partition by {','.join(entity)} order by {TIME_COL}_tmp DESC)"
-                        ),
-                    )
-                    .where(
-                        Parameter(f"cast (df.{TIME_COL}_tmp as date) <= cast (entity_df.{TIME_COL} as date)")
-                    )
-                ).as_("joined")
-                sql_query = (
-                    Query.from_(joined)
-                    .select(Parameter(",".join(entity)), TIME_COL, Parameter(",".join(features)))
-                    .where(joined.row_number == 1)
-                )
+    def _get_period_pgsql(
+        self,
+        views,
+        entity_df: pd.DataFrame,
+        period: str,
+        features: list,
+        include: bool = True,
+        is_label: bool = False,
+    ):
+        entity = self._get_avaliable_entity(views)
+        entity_name = [en for en in entity if en in list(entity_df.columns[:-1])]
+        all_entity_col = [self.entity[en].entity + " as " + en for en in entity_name]
 
-            elif not self.sources[feature_view.batch_source].event_time:
-                pass
-            else:
-                pass
-            result = pd.DataFrame(
-                sql_df(sql_query.get_sql(), conn),
-                columns=entity + [TIME_COL] + features,
+        # entity column name in table
+        conn = psy_conn(**self.connection.__dict__)
+        to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
+        period = transform_pgsql_period(period, is_label)
+
+        if isinstance(views, (FeatureViews, LabelViews)):
+            assert self.sources[views.batch_source].event_time, "View is not time-relevant, no period to get"
+            entity_df, df = Tables(f"{TMP_TBL}", f"{views.batch_source}")
+            all_time_col = (
+                [
+                    f"{self.sources[views.batch_source].event_time} as {TIME_COL}_tmp",
+                    f"{self.sources[views.batch_source].create_time} as {CREATE_COL}",
+                ]
+                if self.sources[views.batch_source].create_time
+                else [f"{self.sources[views.batch_source].event_time} as  {TIME_COL}_tmp"]
+            )
+            create_time = CREATE_COL
+        else:
+            entity_df, df = Tables(f"{TMP_TBL}", f"{views.materialize_path}")
+            all_time_col = [{TIME_COL} + " as " + f"{TIME_COL}_tmp", {MATERIALIZE_TIME}]
+            create_time = MATERIALIZE_TIME
+        df = (  # feature_view table
+            Query.from_(df)
+            .select(
+                Parameter(",".join(all_time_col)),
+                Parameter(",".join(all_entity_col)),
+                Parameter(",".join(features)),
+            )
+            .as_("df")
+        )
+        sql_query = self._get_window_pgsql(df, entity_df, period, include, is_label, entity_name)
+        sql_result = (
+            Query.from_(sql_query).select(
+                Parameter(",".join(entity_name)),
+                Parameter(f"{TIME_COL} as {QUERY_COL}"),
+                Parameter(f"{TIME_COL}_tmp as {TIME_COL}"),
+                Parameter(",".join(features)),
+            )
+            if len(all_time_col) == 1
+            else (
+                Query.from_(
+                    Query.from_(sql_query).select(
+                        sql_query.star,
+                        Parameter(
+                            f"row_number() over (partition by ({','.join(entity_name)},{TIME_COL},{TIME_COL}_tmp) order by {create_time} DESC)"
+                        ),
+                    )
+                )
+                .select(
+                    Parameter(",".join(entity_name)),
+                    Parameter(f"{TIME_COL} as {QUERY_COL}"),
+                    Parameter(f"{TIME_COL}_tmp as {TIME_COL}"),
+                    Parameter(",".join(features)),
+                )
+                .where(Parameter("row_number=1"))
+            )
+        )
+        result = pd.DataFrame(
+            sql_df(sql_result.get_sql(), conn), columns=entity_name + [QUERY_COL, TIME_COL] + features
+        )
+        remove_table(TMP_TBL, conn)
+        close_conn(conn)
+        return result
+
+    def _get_window_pgsql(self, df, entity_df, period, include, is_label, entity_name):
+        if is_label:  # forward
+            sql_query = (
+                Query.from_(entity_df)
+                .inner_join(df)
+                .using(",".join(entity_name))
+                .select(df.star, TIME_COL)
+                .where(
+                    Parameter(
+                        f" (df.{TIME_COL}_tmp::timestamp >= entity_df.{TIME_COL}::timestamp) and (df.{TIME_COL}_tmp::timestamp < entity_df.{TIME_COL}::timestamp + '{period}')  "
+                    )
+                    if include
+                    else Parameter(
+                        f" (df.{TIME_COL}_tmp::timestamp > entity_df.{TIME_COL}::timestamp) and (df.{TIME_COL}_tmp::timestamp <= entity_df.{TIME_COL}::timestamp + '{period}')  "
+                    )
+                )
+                .as_("sql_query")
+            )
+        else:  # backward
+            sql_query = (
+                Query.from_(entity_df)
+                .inner_join(df)
+                .using(",".join(entity_name))
+                .select(df.star, TIME_COL)
+                .where(
+                    Parameter(
+                        f" (df.{TIME_COL}_tmp::timestamp <= entity_df.{TIME_COL}::timestamp) and (df.{TIME_COL}_tmp::timestamp > entity_df.{TIME_COL}::timestamp + '{period}')  "
+                    )
+                    if include
+                    else Parameter(
+                        f" (df.{TIME_COL}_tmp::timestamp < entity_df.{TIME_COL}::timestamp) and (df.{TIME_COL}_tmp::timestamp >= entity_df.{TIME_COL}::timestamp + '{period}')  "
+                    )
+                )
+                .as_("sql_query")
             )
 
-    def get_labels(self, label_views, entity_df: pd.DataFrame, include: bool = False):
+        return sql_query
+
+    def get_labels(self, label_view, entity_df: pd.DataFrame, include: bool = False):
         """non-time series prediction use: get labels of `entity_df` from `label_views`
 
         Args:
@@ -252,10 +313,10 @@ class FeatureStore:
             include (bool, optional): include timestamp defined in `entity_df` or not. Defaults to False.
         """
         self.__check_format(entity_df)
-        labels = self._get_available_labels(label_views)
+        labels = self._get_available_labels(label_view)
 
         if self.connection.type == "file":
-            return self._get_point_record(label_views, entity_df, labels, include)
+            return self._get_point_record(label_view, entity_df, labels, include)
 
     def get_period_labels(
         self,
@@ -277,6 +338,8 @@ class FeatureStore:
 
         if self.connection.type == "file":
             return self._get_period_record(label_view, entity_df, period, labels, include, is_label=True)
+        elif self.connection.type == "pgsql":
+            return self._get_period_pgsql(label_view, entity_df, period, labels, include, is_label=False)
 
     def stats(
         self,
@@ -408,7 +471,7 @@ class FeatureStore:
             self, service_entity.features, service_entity.labels, start, end, sampler, bucket, stride, include
         )
 
-    def _get_point_record(self, views, entity_df: pd.DataFrame, features: list = None, include: bool = True):
+    def _get_point_record(self, views, entity_df: pd.DataFrame, features: list, include: bool = True):
         """non time-series prediction use
 
         Args:
@@ -449,7 +512,7 @@ class FeatureStore:
         views,
         entity_df: pd.DataFrame,
         period: str,
-        features: list = None,
+        features: list,
         include: bool = True,
         is_label: bool = False,
     ):
@@ -470,18 +533,16 @@ class FeatureStore:
         entity_name = list(all_entity_col.values())  # entity column name in table
 
         if isinstance(views, (FeatureViews, LabelViews)):
-            if self.sources[views.batch_source].event_time:  # period features make sense
-                df_period = self._read_local_file(views, features, all_entity_col)
-                # merge according to `entity`
-                df_period = df_period.merge(entity_df, on=entity_name, how="inner")
-                # # match time_limit
-                df_period = self._get_time_window_record(df_period, period, is_label, include)
-                if CREATE_COL in df_period.columns:  # use`create_timestamp` to remove duplicates
-                    df_period.sort_values(by=[CREATE_COL], ascending=False, inplace=True, ignore_index=True)
-                    df_period.drop_duplicates(subset=entity_name + [QUERY_COL, TIME_COL], keep="first")
-                df_period.sort_values(by=entity_name + [QUERY_COL, TIME_COL], inplace=True, ignore_index=True)
-            else:
-                raise TypeError("View you give is not time-relevant, no period features/labels to get")
+            assert self.sources[views.batch_source].event_time, "View is not time-relevant, no period to get"
+            df_period = self._read_local_file(views, features, all_entity_col)
+            # merge according to `entity`
+            df_period = df_period.merge(entity_df, on=entity_name, how="inner")
+            # # match time_limit
+            df_period = self._get_time_window_record(df_period, period, is_label, include)
+            if CREATE_COL in df_period.columns:  # use`create_timestamp` to remove duplicates
+                df_period.sort_values(by=[CREATE_COL], ascending=False, inplace=True, ignore_index=True)
+                df_period.drop_duplicates(subset=entity_name + [QUERY_COL, TIME_COL], keep="first")
+            # df_period.sort_values(by=entity_name + [QUERY_COL, TIME_COL], inplace=True, ignore_index=True)
         else:
             df_period = read_file(
                 os.path.join(self.project_folder, views.materialize_path + ".parquet"),
@@ -496,7 +557,7 @@ class FeatureStore:
             df_period = self._get_time_window_record(df_period, period, is_label, include)
             df_period.sort_values(by=[MATERIALIZE_TIME], ascending=False, inplace=True, ignore_index=True)
             df_period.drop_duplicates(subset=entity_name + [QUERY_COL, TIME_COL], keep="first")
-            df_period.sort_values(by=entity_name + [QUERY_COL, TIME_COL], inplace=True, ignore_index=True)
+        # df_period.sort_values(by=entity_name + [QUERY_COL, TIME_COL], inplace=True, ignore_index=True)
         return df_period
 
     def _get_time_window_record(self, df_period, period, is_label, include):

@@ -126,18 +126,31 @@ if __name__ == "__main__":
                 ],
             }
         )
-     
+        entity_dobssn_period = pd.DataFrame.from_dict(
+            {
+                "dob_ssn": ["19991113_3598", "19960703_3449"],
+                "loan": ["21837", "38637"],
+                TIME_COL: [
+                    datetime(2021, 8, 26, tzinfo=timezone.utc),
+                    datetime(2021, 1, 1, 10, 59, 42, tzinfo=timezone.utc),
+                    #   datetime(2021, 7, 1, 10, 59, 42, tzinfo=timezone.utc),
+                ],
+            }
+        )
+        # fs.get_period_features(fs.features["loan_features"], entity_dobssn_period, period="365 days")
+        # fs.get_period_labels(
+        #     fs.labels["travel_time_label_view"], entity_link_ID_period, period, include=False
+        # )
+
+        # fs.get_period_features(
+        #     fs.features["gy_link_travel_time_features"],
+        #     entity_link_ID_period,
+        #     period,
+        #     features=None,
+        #     include=True,
+        # )
         fs.get_period_labels(
-                fs.labels["travel_time_label_view"], entity_link_ID_period, period, include=False
-            )
-        
-        fs.get_period_features(
-                fs.features["gy_link_travel_time_features"],
-                entity_link_ID_period,
-                period,
-                features=None,
-                include=True,
-            )
-        
+            fs.labels["travel_time_label_view"], entity_link_ID_period, period, include=False
+        )
 
     get_period_features_and_labels()

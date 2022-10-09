@@ -62,8 +62,27 @@ def transform_freq(dt):
     if freq == "quarters":
         freq = "months"
         value = int(value) * 3
+    elif freq == "milliseconds":
+        freq = "microseconds"
+        value = int(value) * 10e3
 
     return {freq: int(value)}
+
+
+def transform_pgsql_period(period, is_label):
+    value, freq = period.split(" ")
+    if freq == "minutes":
+        freq = "mins"
+    elif freq == "quarters":
+        freq = "months"
+        value = int(value) * 3
+    elif freq == "millisecs":
+        freq = "secs"
+        value = int(value) / 10e3
+    elif freq == "microsecs":
+        freq = "secs"
+        value = int(value) / 10e6
+    return value + " " + freq if is_label else "-" + value + " " + freq
 
 
 def parse_date(dt):
