@@ -3,7 +3,8 @@ from typing import List
 from parser import ParserError
 import pandas as pd
 import os
-from functools import reduce
+from pypika import Query, Table, Field, Tables, Parameter
+from sqlalchemy import TIME
 from aie_feast.views import FeatureViews, LabelViews
 from aie_feast.service import Service
 from dataset.dataset import Dataset
@@ -50,7 +51,7 @@ class FeatureStore:
         self.dataset = {}
 
     def __check_format(self, entity_df):
-        if len(entity_df.columns) != 2 or entity_df.columns[1] != TIME_COL:
+        if len(entity_df.columns) < 2 or entity_df.columns[-1] != TIME_COL:
             raise ValueError(
                 "Check entity_df make sure it has 2 columns and event_timestamp at the second column"
             )
@@ -160,8 +161,6 @@ class FeatureStore:
 
         if self.connection.type == "file":
             return self._get_point_record(feature_view, entity_df, features, include)
-        elif self.connection.type == "pgsql":
-            conn = psy_conn(**self.connection.__dict__)
 
     def get_period_features(
         self,
@@ -186,6 +185,63 @@ class FeatureStore:
 
         if self.connection.type == "file":
             return self._get_period_record(feature_view, entity_df, period, features, include, is_label=False)
+        elif self.connection.type == "pgsql":
+            conn = psy_conn(**self.connection.__dict__)
+            to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
+            entity = self._get_avaliable_entity(feature_view)
+            entity_name = entity_df.columns[0]
+            all_entity_col = [self.entity[en].entity + " as " + en for en in entity]
+            entity_df, df = Tables(f"{TMP_TBL}", f"{feature_view.batch_source}")
+            if (
+                not self.sources[feature_view.batch_source].event_time
+                and not self.sources[feature_view.batch_source].create_time
+            ):
+                df = (
+                    Query.from_(df)
+                    .select(Parameter(",".join(all_entity_col)), Parameter(",".join(features)))
+                    .as_("df")
+                )
+                sql_query = Query.from_(entity_df).inner_join(df).using(entity_name).select(TIME_COL, df.star)
+
+            elif not self.sources[feature_view.batch_source].create_time:
+                df = (
+                    Query.from_(df)
+                    .select(
+                        Parameter(
+                            self.sources[feature_view.batch_source].event_time + " as " + f"{TIME_COL}_tmp"
+                        ),
+                        Parameter(",".join(all_entity_col)),
+                        Parameter(",".join(features)),
+                    )
+                    .as_("df")
+                )
+                joined = (
+                    (Query.from_(entity_df).inner_join(df).using(entity_name))
+                    .select(
+                        df.star,
+                        TIME_COL,
+                        Parameter(
+                            f"row_number() over (partition by {','.join(entity)} order by {TIME_COL}_tmp DESC)"
+                        ),
+                    )
+                    .where(
+                        Parameter(f"cast (df.{TIME_COL}_tmp as date) <= cast (entity_df.{TIME_COL} as date)")
+                    )
+                ).as_("joined")
+                sql_query = (
+                    Query.from_(joined)
+                    .select(Parameter(",".join(entity)), TIME_COL, Parameter(",".join(features)))
+                    .where(joined.row_number == 1)
+                )
+
+            elif not self.sources[feature_view.batch_source].event_time:
+                pass
+            else:
+                pass
+            result = pd.DataFrame(
+                sql_df(sql_query.get_sql(), conn),
+                columns=entity + [TIME_COL] + features,
+            )
 
     def get_labels(self, label_views, entity_df: pd.DataFrame, include: bool = False):
         """non-time series prediction use: get labels of `entity_df` from `label_views`
@@ -362,8 +418,8 @@ class FeatureStore:
             include (bool, optional): include timestamp defined in `entity_df` or not. Defaults to True.
         """
         entity = self._get_avaliable_entity(views)
-        all_entity_col = {self.entity[en].entity: en for en in entity}
-        entity_name = entity_df.columns[0]  # entity column name in table
+        all_entity_col = {self.entity[en].entity: en for en in entity if en in list(entity_df.columns[:-1])}
+        entity_name = list(all_entity_col.values())  # entity column name in table
         if isinstance(views, (FeatureViews, LabelViews)):  # read from single view
             df = self._read_local_file(views, features, all_entity_col)
             # rename entity columns
@@ -372,7 +428,7 @@ class FeatureStore:
                 # match time_limit
                 df = self._fil_timelimit(include, views.ttl, df)
                 # newest record
-                df = get_newest_record(df, TIME_COL, [entity_name], CREATE_COL)
+                df = get_newest_record(df, TIME_COL, entity_name, CREATE_COL)
         else:  # `Service`, read from materialized table
             df = read_file(
                 os.path.join(self.project_folder, views.materialize_path + ".parquet"),
@@ -383,9 +439,9 @@ class FeatureStore:
             df = df[[col for col in list(all_entity_col.values()) + features + [TIME_COL, MATERIALIZE_TIME]]]
             df = df.merge(entity_df, on=entity_name, how="inner")
             # match time_limit
-            df = self._fil_timelimit(include, views.ttl, df)
+            df = self._fil_timelimit(include, None, df)
             # newest record
-            df = get_newest_record(df, TIME_COL, [entity_name], CREATE_COL)
+            df = get_newest_record(df, TIME_COL, entity_name, CREATE_COL)
         return df
 
     def _get_period_record(
@@ -408,9 +464,10 @@ class FeatureStore:
             include (bool, optional): include timestamp defined in `entity_df` or not. Defaults to True.
             is_label (bool, optional): LabelViews of not. Defaults to False.
         """
-        entity_name = entity_df.columns[0]  # entity column name in table
+
         entity = self._get_avaliable_entity(views)
-        all_entity_col = {self.entity[en].entity: en for en in entity}
+        all_entity_col = {self.entity[en].entity: en for en in entity if en in list(entity_df.columns[:-1])}
+        entity_name = list(all_entity_col.values())  # entity column name in table
 
         if isinstance(views, (FeatureViews, LabelViews)):
             if self.sources[views.batch_source].event_time:  # period features make sense
@@ -421,8 +478,8 @@ class FeatureStore:
                 df_period = self._get_time_window_record(df_period, period, is_label, include)
                 if CREATE_COL in df_period.columns:  # use`create_timestamp` to remove duplicates
                     df_period.sort_values(by=[CREATE_COL], ascending=False, inplace=True, ignore_index=True)
-                    df_period.drop_duplicates(subset=[entity_name, QUERY_COL, TIME_COL], keep="first")
-                df_period.sort_values(by=[entity_name, QUERY_COL, TIME_COL], inplace=True, ignore_index=True)
+                    df_period.drop_duplicates(subset=entity_name + [QUERY_COL, TIME_COL], keep="first")
+                df_period.sort_values(by=entity_name + [QUERY_COL, TIME_COL], inplace=True, ignore_index=True)
             else:
                 raise TypeError("View you give is not time-relevant, no period features/labels to get")
         else:
@@ -438,8 +495,9 @@ class FeatureStore:
             df_period = df_period.merge(entity_df, on=entity_name, how="inner")
             df_period = self._get_time_window_record(df_period, period, is_label, include)
             df_period.sort_values(by=[MATERIALIZE_TIME], ascending=False, inplace=True, ignore_index=True)
-            df_period.drop_duplicates(subset=[entity_name, QUERY_COL, TIME_COL], keep="first")
-            df_period.sort_values(by=[entity_name, QUERY_COL, TIME_COL], inplace=True, ignore_index=True)
+            df_period.drop_duplicates(subset=entity_name + [QUERY_COL, TIME_COL], keep="first")
+            df_period.sort_values(by=entity_name + [QUERY_COL, TIME_COL], inplace=True, ignore_index=True)
+        return df_period
 
     def _get_time_window_record(self, df_period, period, is_label, include):
         if is_label:

@@ -46,7 +46,7 @@ if __name__ == "__main__":
                 ],
             }
         )
-        # print(fs.get_labels(fs.labels, entity_dobssn))
+        print(fs.get_labels(fs.labels, entity_dobssn))
         # print(fs.get_features(fs.features, entity_dobssn, None))
 
         print(fs.get_period_labels(fs.labels, entity_dobssn_period, period, include=False))
@@ -91,22 +91,26 @@ if __name__ == "__main__":
         )
         entity_dobssn_period = pd.DataFrame.from_dict(
             {
-                "dob_ssn": ["19991113_3598", "19991113_3598", "19991113_3598"],
+                "dob_ssn": ["19991113_3598", "19960703_3449"],
+                "loan": ["21837", "38637"],
                 TIME_COL: [
                     datetime(2021, 8, 26, tzinfo=timezone.utc),
-                    datetime(2021, 2, 1, 10, 59, 42, tzinfo=timezone.utc),
-                    datetime(2021, 7, 1, 10, 59, 42, tzinfo=timezone.utc),
+                    datetime(2021, 1, 1, 10, 59, 42, tzinfo=timezone.utc),
+                    #   datetime(2021, 7, 1, 10, 59, 42, tzinfo=timezone.utc),
                 ],
             }
-        )
+        )  # 19991113_3598 has duplicates, due to the original data
 
-        fs.get_features(fs.features["loan_features"], entity_link)
-        fs.get_labels(fs.service["credit_scoring_v1"], entity_link)
+        # fs.get_features(fs.features["gy_link_topo_features"], entity_link)
+        fs.get_features(fs.features["loan_features"], entity_dobssn_period)
+        fs.get_labels(fs.service["credit_scoring_v1"], entity_dobssn_period)
+
+    # get_features()
 
     def do_materailize():
         fs.materialize(fs.service["credit_scoring_v1"])
 
-    do_materailize()
+    # do_materailize()
 
     def get_period_features_and_labels():
         period = "5 hours"
@@ -122,19 +126,18 @@ if __name__ == "__main__":
                 ],
             }
         )
-        print(
-            fs.get_period_labels(
+     
+        fs.get_period_labels(
                 fs.labels["travel_time_label_view"], entity_link_ID_period, period, include=False
             )
-        )
-        print(
-            fs.get_period_features(
+        
+        fs.get_period_features(
                 fs.features["gy_link_travel_time_features"],
                 entity_link_ID_period,
                 period,
                 features=None,
                 include=True,
             )
-        )
+        
 
-    # stats()
+    get_period_features_and_labels()
