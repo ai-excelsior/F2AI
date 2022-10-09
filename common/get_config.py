@@ -123,7 +123,7 @@ def get_source_cfg(url: str):
     """
     source_dict = {}
     for filename in os.listdir(remove_prefix(url, "file://")):
-        if filename.endswith(".yml") or cfg.endswith(".yaml"):
+        if filename.endswith(".yml"):
             cfg = read_yml(os.path.join(url, filename))
             cfg["file_path"] = cfg.pop("path", None)
             cfg["event_time"] = cfg.pop("timestamp_field", None)

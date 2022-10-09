@@ -6,3 +6,4 @@ torch==1.11.0
 pyarrow
 fsspec
 SQLAlchemy==1.4.31
+pypika
