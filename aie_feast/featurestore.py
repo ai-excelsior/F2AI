@@ -446,7 +446,7 @@ class FeatureStore:
 
     def get_dataset(
         self,
-        service,
+        service: Service,
         start: str = None,
         end: str = None,
         sampler: callable = None,
@@ -466,9 +466,10 @@ class FeatureStore:
             include(str,optional): whether to include `start` or `end` timestamp
         """
 
-        service_entity: Service = service
+        # service_entity: Service = self.service[service]
+        materialize_path = os.path.join(self.project_folder, service.materialize_path) 
         return Dataset(
-            self, service_entity.features, service_entity.labels, start, end, sampler, bucket, stride, include
+            self, service, start, end, sampler, bucket, stride, include, materialize_path
         )
 
     def _get_point_record(self, views, entity_df: pd.DataFrame, features: list, include: bool = True):
