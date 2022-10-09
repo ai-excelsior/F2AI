@@ -237,6 +237,7 @@ class FeatureStore:
         entity = self._get_avaliable_entity(views)
         all_entity_col = {self.entity[en].entity: en for en in entity if en in list(entity_df.columns[:-1])}
         entity_name = list(all_entity_col.values())  # entity column name in table
+        assert all_entity_col, "cannot find any entities in view, please check"
         if isinstance(views, (FeatureViews, LabelViews)):  # read from single view
             df = self._read_local_file(views, features, all_entity_col)
             # rename entity columns
@@ -363,7 +364,7 @@ class FeatureStore:
         entity = self._get_avaliable_entity(views)
         all_entity_col = {self.entity[en].entity: en for en in entity if en in list(entity_df.columns[:-1])}
         entity_name = list(all_entity_col.values())  # entity column name in table
-
+        assert all_entity_col, "cannot find any entities in view, please check"
         if isinstance(views, (FeatureViews, LabelViews)):
             assert self.sources[views.batch_source].event_time, "View is not time-relevant, no period to get"
             df_period = self._read_local_file(views, features, all_entity_col)
