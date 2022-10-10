@@ -301,37 +301,23 @@ class FeatureStore:
             entity_df, df = Tables(f"{TMP_TBL}", f"{views.materialize_path}")
             all_time_col = [f"{TIME_COL} as {TIME_COL}_tmp", MATERIALIZE_TIME]
             create_time = MATERIALIZE_TIME
-
+        df = Query.from_(df).select(Parameter(",".join(all_entity_col + all_time_col + features))).as_("df")
         if all_entity_col:
             sql_join = (
                 Query.from_(entity_df)
-                .inner_join(
-                    (  # data table
-                        Query.from_(df)
-                        .select(
-                            Parameter(",".join(all_time_col + all_entity_col + features)),
-                        )
-                        .as_("df")
-                    )
-                )
+                .inner_join(df)
                 .using(",".join(entity_name))
                 .select(Parameter(f"df.*, {TIME_COL}"))
-            ).as_("sql_join")
+                .as_("sql_join")
+            )
         else:
             sql_join = (
                 Query.from_(entity_df)
-                .cross_join(
-                    (  # data table
-                        Query.from_(df)
-                        .select(
-                            Parameter(",".join(all_time_col + all_entity_col + features)),
-                        )
-                        .as_("df")
-                    )
-                )
+                .cross_join(df)
                 .cross()
                 .select(Parameter(f"df.*, {TIME_COL}"))
-            ).as_("sql_join")
+                .as_("sql_join")
+            )
         sql_query = self._get_window_pgsql(sql_join, period, include, is_label)
         sql_result = (
             Query.from_(sql_query).select(

@@ -73,7 +73,7 @@ if __name__ == "__main__":
     def get_features():
         entity_link = pd.DataFrame.from_dict(
             {
-                "link": ["3377906280028510514"],
+                #  "link": ["3377906280028510514"],
                 TIME_COL: [
                     datetime(2016, 6, 1, 0, 0, 0, tzinfo=timezone.utc),
                 ],
