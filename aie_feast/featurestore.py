@@ -500,6 +500,9 @@ class FeatureStore:
         elif self.connection.type == "pgsql":
             self._offline_pgsql_materialize(service, incremental_begin)
 
+    def _offline_pgsql_materialize(self, service, incremental_begin):
+        dbt_path = os.path.join(self.project_folder, f"{service.dbt_path}")  # dir to store dbt project
+
     def _offline_record_materialize(self, service: Service, incremental_begin):
         """materialize offline file
 
@@ -634,7 +637,7 @@ class FeatureStore:
 
         if entity_df is not None:
             self.__check_format(entity_df)
-            entities = [entity_df.columns[0]]
+            entities = entity_df.columns[:-1]
             start = pd.to_datetime(0, utc=True)
         else:
             entities = group_key if group_key else self._get_avaliable_entity(views)
@@ -653,8 +656,10 @@ class FeatureStore:
                     list(all_entity_col.values()),
                 )
                 df = df[[col for col in features + list(all_entity_col.values()) + [TIME_COL]]]
-            if entity_df is not None:
+            if entity_df is not None and entities:
                 df = df.merge(entity_df, how="right", on=entities)
+            elif entity_df is not None:
+                df = df.merge(entity_df, how="cross")
             else:
                 df.rename(columns={TIME_COL: TIME_COL + "_x"}, inplace=True)
                 # end_time limit
