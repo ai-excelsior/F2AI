@@ -1,6 +1,7 @@
 import numpy as np
 import math
 import pandas as pd
+from typing import Union
 
 
 class AbstractSampler:
@@ -48,7 +49,12 @@ class AbstractSampler:
 
 class GroupFixednbrSampler(AbstractSampler):
     def __init__(
-        self, time_bucket: str, stride: int, start: str = None, end: str = None, group_ids: list[str] = []
+        self,
+        time_bucket: str,
+        stride: int,
+        start: str = None,
+        end: str = None,
+        group_ids: Union[tuple[str], list[str]] = None,
     ):
         super().__init__(time_bucket, stride, start, end)
         self._group_ids = group_ids
@@ -59,13 +65,16 @@ class GroupFixednbrSampler(AbstractSampler):
         return list(bucket_mask)
 
     def bucket_random_sample(self, all_date: pd.DataFrame):
+        if len(all_date) > 0:
 
-        basis_index = list(range(0, len(all_date) + 1, self._stride))
-        random_index = np.random.randint(self._stride, size=len(basis_index))
-        sample_index = basis_index + random_index
-        sample_index[-1] = min(sample_index[-1], len(all_date) - 1)  # TODO 这里要判断一下？
+            basis_index = list(range(0, len(all_date) + 1, self._stride))
+            random_index = np.random.randint(self._stride, size=len(basis_index))
+            sample_index = basis_index + random_index
+            sample_index[-1] = min(sample_index[-1], len(all_date) - 1)
 
-        return all_date.iloc[sample_index, :]
+            return all_date.iloc[sample_index, :]
+        else:
+            raise ValueError("No bucket to sample!")
 
     def sample(self, bucket_mask):
         selected_bucket = list(np.where(np.array(bucket_mask) == 1)[0])
@@ -95,13 +104,15 @@ class GroupFixednbrSampler(AbstractSampler):
         all_date = all_date[all_date["bucket_nbr"].isin(selected_bucket)]
 
         if self._group_ids is not None:
-            group_keys = pd.DataFrame(self._group_ids, columns=["group_ids"])
+            group_names = [f"group_{i}" for i in range(len(self._group_ids[0]))]
+            # group_keys = pd.DataFrame(self._group_ids, columns=["group_ids"])
+            group_keys = pd.DataFrame(self._group_ids, columns=group_names)
             all_date = pd.merge(group_keys, all_date, how="cross")
-            result = all_date.groupby(["group_ids", "bucket_nbr"]).apply(
+            result = all_date.groupby(group_names + ["bucket_nbr"]).apply(
                 lambda x: self.bucket_random_sample(x)
             )
-            result = result[["group_ids", "timeIndex"]].droplevel(level=["group_ids", "bucket_nbr"])
-            result.sort_values(by=["group_ids", "timeIndex"], inplace=True)
+            result = result[group_names + ["timeIndex"]].droplevel(level=group_names + ["bucket_nbr"])
+            result.sort_values(by=group_names + ["timeIndex"], inplace=True)
 
         else:
             result = all_date.groupby(["bucket_nbr"]).apply(lambda x: self.bucket_random_sample(x))
@@ -177,7 +188,11 @@ if __name__ == "__main__":
     stride = 3
     start = "2010-01-01 00:00:00"
     end = "2010-01-30 00:00:00"
-    group_ids = ["A", "B"]
+    group_ids = (["A", 10], ["A", 11], ["B", 10], ["B", 11])
+    # group_ids = (("A", 10), ("A", 11), ("B", 10), ("B", 11))
+    # group_ids = ("A", "B")
+    # group_ids = ["A", "B"]
+
     ratio = 0.7
     n_groups = 2
     avg_nbr = 2
