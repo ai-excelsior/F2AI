@@ -52,6 +52,7 @@ def get_service_cfg(url: str):
                 features=service_to_dict(cfg["features"]),
                 labels=service_to_dict(cfg["labels"]),
                 materialize_path=cfg.get("materialize", "materialize_table"),
+                dbt_path=cfg.get("dbt", "dbt_path"),
             )
             service_cfg.update({cfg["name"]: service})
     return service_cfg
