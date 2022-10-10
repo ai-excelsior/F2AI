@@ -732,4 +732,5 @@ class FeatureStore:
         Args:
             query (str, optional): _description_. Defaults to None.
         """
-        pass
+        conn = psy_conn(**self.connection.__dict__)
+        return execute_sql(query,conn)
