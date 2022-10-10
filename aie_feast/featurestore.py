@@ -496,9 +496,11 @@ class FeatureStore:
         """
 
         if self.connection.type == "file":
-            self._offline_file_materialize(service, incremental_begin)
+            self._offline_record_materialize(service, incremental_begin)
+        elif self.connection.type == "pgsql":
+            self._offline_pgsql_materialize(service, incremental_begin)
 
-    def _offline_file_materialize(self, service: Service, incremental_begin):
+    def _offline_record_materialize(self, service: Service, incremental_begin):
         """materialize offline file
 
         Args:
