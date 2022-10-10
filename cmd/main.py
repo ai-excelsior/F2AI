@@ -81,9 +81,10 @@ if __name__ == "__main__":
         )
         entity_loan = pd.DataFrame.from_dict(
             {
-                "loan": [38633],
+                # "loan": ["38633", "38633"],
                 TIME_COL: [
                     datetime(2020, 12, 12, 10, 59, 42, tzinfo=timezone.utc),
+                    datetime(2021, 12, 12, 10, 59, 42, tzinfo=timezone.utc),
                 ],
             }
         )
@@ -99,8 +100,8 @@ if __name__ == "__main__":
             }
         )  # 19991113_3598 has duplicates, due to the original data
 
-        #  fs.get_period_features(fs.service["credit_scoring_v1"], entity_dobssn_period, period="365 days")
-        fs.get_features(fs.features["loan_features"], entity_dobssn_period)
+        fs.get_period_features(fs.features["gy_link_travel_time_features"], entity_link, period="5 hours")
+        fs.get_features(fs.features["credit_scoring_v1"], entity_loan)
         # fs.get_labels(fs.service["credit_scoring_v1"], entity_dobssn_period)
 
     get_features()

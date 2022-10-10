@@ -53,8 +53,8 @@ class FeatureStore:
 
     def __check_format(self, entity_df):
         assert (
-            len(entity_df.columns) >= 2 and entity_df.columns[-1] == TIME_COL
-        ), "Check entity_df make sure it has at least 2 columns and event_timestamp at the last column"
+            len(entity_df.columns) >= 1 and entity_df.columns[-1] == TIME_COL
+        ), "Check entity_df make sure it has at least 1 columns and event_timestamp at the last column"
 
     def __check_fns(self, fn):
         assert fn in [
@@ -237,11 +237,14 @@ class FeatureStore:
         entity = self._get_avaliable_entity(views)
         all_entity_col = {self.entity[en].entity: en for en in entity if en in list(entity_df.columns[:-1])}
         entity_name = list(all_entity_col.values())  # entity column name in table
-        assert all_entity_col, "cannot find any entities in view, please check"
+
         if isinstance(views, (FeatureViews, LabelViews)):  # read from single view
             df = self._read_local_file(views, features, all_entity_col)
             # rename entity columns
-            df = df.merge(entity_df, on=entity_name, how="inner")
+            if all_entity_col:
+                df = df.merge(entity_df, on=entity_name, how="inner")
+            else:
+                df = df.merge(entity_df, how="cross")
             if self.sources[views.batch_source].event_time:  #  time-relavent features
                 # match time_limit
                 df = self._fil_timelimit(include, views.ttl, df)
@@ -255,7 +258,10 @@ class FeatureStore:
                 list(all_entity_col.values()),
             )
             df = df[[col for col in list(all_entity_col.values()) + features + [TIME_COL, MATERIALIZE_TIME]]]
-            df = df.merge(entity_df, on=entity_name, how="inner")
+            if all_entity_col:
+                df = df.merge(entity_df, on=entity_name, how="inner")
+            else:
+                df = df.merge(entity_df, how="cross")
             # match time_limit
             df = self._fil_timelimit(include, None, df)
             # newest record
@@ -274,7 +280,6 @@ class FeatureStore:
         entity = self._get_avaliable_entity(views)
         entity_name = [en for en in entity if en in list(entity_df.columns[:-1])]
         all_entity_col = [self.entity[en].entity + " as " + en for en in entity_name]
-        assert all_entity_col, "cannot find any entities in view, please check"
         # connect to pgsql db
         conn = psy_conn(**self.connection.__dict__)
         to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
@@ -296,22 +301,47 @@ class FeatureStore:
             entity_df, df = Tables(f"{TMP_TBL}", f"{views.materialize_path}")
             all_time_col = [f"{TIME_COL} as {TIME_COL}_tmp", MATERIALIZE_TIME]
             create_time = MATERIALIZE_TIME
-        df = (  # data table
-            Query.from_(df)
-            .select(
-                Parameter(",".join(all_time_col)),
-                Parameter(",".join(all_entity_col)),
-                Parameter(",".join(features)),
-            )
-            .as_("df")
-        )
-        sql_query = self._get_window_pgsql(df, entity_df, period, include, is_label, entity_name)
+
+        if all_entity_col:
+            sql_join = (
+                Query.from_(entity_df)
+                .inner_join(
+                    (  # data table
+                        Query.from_(df)
+                        .select(
+                            Parameter(",".join(all_time_col + all_entity_col + features)),
+                        )
+                        .as_("df")
+                    )
+                )
+                .using(",".join(entity_name))
+                .select(Parameter(f"df.*, {TIME_COL}"))
+            ).as_("sql_join")
+        else:
+            sql_join = (
+                Query.from_(entity_df)
+                .cross_join(
+                    (  # data table
+                        Query.from_(df)
+                        .select(
+                            Parameter(",".join(all_time_col + all_entity_col + features)),
+                        )
+                        .as_("df")
+                    )
+                )
+                .cross()
+                .select(Parameter(f"df.*, {TIME_COL}"))
+            ).as_("sql_join")
+        sql_query = self._get_window_pgsql(sql_join, period, include, is_label)
         sql_result = (
             Query.from_(sql_query).select(
-                Parameter(",".join(entity_name)),
-                Parameter(f"{TIME_COL} as {QUERY_COL}"),
-                Parameter(f"{TIME_COL}_tmp as {TIME_COL}"),
-                Parameter(",".join(features)),
+                Parameter(
+                    ",".join(
+                        entity_name
+                        + [f"{TIME_COL} as {QUERY_COL}", f"{TIME_COL}_tmp as {TIME_COL}"]
+                        + features
+                    )
+                ),
             )
             if len(all_time_col) == 1
             else (
@@ -324,10 +354,13 @@ class FeatureStore:
                     )
                 )
                 .select(
-                    Parameter(",".join(entity_name)),
-                    Parameter(f"{TIME_COL} as {QUERY_COL}"),
-                    Parameter(f"{TIME_COL}_tmp as {TIME_COL}"),
-                    Parameter(",".join(features)),
+                    Parameter(
+                        ",".join(
+                            entity_name
+                            + [f"{TIME_COL} as {QUERY_COL}", f"{TIME_COL}_tmp as {TIME_COL}"]
+                            + features
+                        )
+                    )
                 )
                 .where(Parameter("row_number=1"))
             )
@@ -364,12 +397,14 @@ class FeatureStore:
         entity = self._get_avaliable_entity(views)
         all_entity_col = {self.entity[en].entity: en for en in entity if en in list(entity_df.columns[:-1])}
         entity_name = list(all_entity_col.values())  # entity column name in table
-        assert all_entity_col, "cannot find any entities in view, please check"
         if isinstance(views, (FeatureViews, LabelViews)):
             assert self.sources[views.batch_source].event_time, "View is not time-relevant, no period to get"
             df_period = self._read_local_file(views, features, all_entity_col)
             # merge according to `entity`
-            df_period = df_period.merge(entity_df, on=entity_name, how="inner")
+            if all_entity_col:
+                df_period = df_period.merge(entity_df, on=entity_name, how="inner")
+            else:
+                df_period = df_period.merge(entity_df, how="cross")
             # # match time_limit
             df_period = self._get_window_record(df_period, period, is_label, include)
             if CREATE_COL in df_period.columns:  # use`create_timestamp` to remove duplicates
@@ -386,7 +421,10 @@ class FeatureStore:
             df_period = df_period[
                 [col for col in list(all_entity_col.values()) + features + [TIME_COL, MATERIALIZE_TIME]]
             ]
-            df_period = df_period.merge(entity_df, on=entity_name, how="inner")
+            if all_entity_col:
+                df_period = df_period.merge(entity_df, on=entity_name, how="inner")
+            else:
+                df_period = df_period.merge(entity_df, how="cross")
             df_period = self._get_window_record(df_period, period, is_label, include)
             df_period.sort_values(by=[MATERIALIZE_TIME], ascending=False, inplace=True, ignore_index=True)
             df_period.drop_duplicates(subset=entity_name + [QUERY_COL, TIME_COL], keep="first")
@@ -395,43 +433,37 @@ class FeatureStore:
 
     def _get_window_pgsql(
         self,
-        df,
-        entity_df,
+        join,
         period: str,
         include: bool = True,
         is_label: bool = False,
-        entity_name: list = None,
     ):
         if is_label:  # forward
             sql_query = (
-                Query.from_(entity_df)
-                .inner_join(df)
-                .using(",".join(entity_name))
-                .select(df.star, TIME_COL)
+                Query.from_(join)
+                .select(join.star)
                 .where(
                     Parameter(
-                        f" (df.{TIME_COL}_tmp::timestamp >= entity_df.{TIME_COL}::timestamp) and (df.{TIME_COL}_tmp::timestamp < entity_df.{TIME_COL}::timestamp + '{period}')  "
+                        f" ({TIME_COL}_tmp::timestamp >= {TIME_COL}::timestamp) and ({TIME_COL}_tmp::timestamp < {TIME_COL}::timestamp + '{period}')  "
                     )
                     if include
                     else Parameter(
-                        f" (df.{TIME_COL}_tmp::timestamp > entity_df.{TIME_COL}::timestamp) and (df.{TIME_COL}_tmp::timestamp <= entity_df.{TIME_COL}::timestamp + '{period}')  "
+                        f" ({TIME_COL}_tmp::timestamp > {TIME_COL}::timestamp) and ({TIME_COL}_tmp::timestamp <= {TIME_COL}::timestamp + '{period}')  "
                     )
                 )
                 .as_("sql_query")
             )
         else:  # backward
             sql_query = (
-                Query.from_(entity_df)
-                .inner_join(df)
-                .using(",".join(entity_name))
-                .select(df.star, TIME_COL)
+                Query.from_(join)
+                .select(join.star)
                 .where(
                     Parameter(
-                        f" (df.{TIME_COL}_tmp::timestamp <= entity_df.{TIME_COL}::timestamp) and (df.{TIME_COL}_tmp::timestamp > entity_df.{TIME_COL}::timestamp + '{period}')  "
+                        f" ({TIME_COL}_tmp::timestamp <= {TIME_COL}::timestamp) and ({TIME_COL}_tmp::timestamp > {TIME_COL}::timestamp + '{period}')  "
                     )
                     if include
                     else Parameter(
-                        f" (df.{TIME_COL}_tmp::timestamp < entity_df.{TIME_COL}::timestamp) and (df.{TIME_COL}_tmp::timestamp >= entity_df.{TIME_COL}::timestamp + '{period}')  "
+                        f" ({TIME_COL}_tmp::timestamp < {TIME_COL}::timestamp) and ({TIME_COL}_tmp::timestamp >= {TIME_COL}::timestamp + '{period}')  "
                     )
                 )
                 .as_("sql_query")
