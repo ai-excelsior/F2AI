@@ -18,6 +18,7 @@ from common.get_config import (
 )
 from common.utils import (
     read_file,
+    to_file,
     parse_date,
     get_newest_record,
     get_stats_result,
@@ -26,6 +27,7 @@ from common.utils import (
 from common.psl_utils import execute_sql, psy_conn, to_pgsql, remove_table, close_conn, sql_df
 from dateutil.relativedelta import relativedelta
 
+pd.DataFrame.to_csv
 
 TIME_COL = "event_timestamp"  # timestamp of action taken in original tables or period-query result, or query time in single-query result table
 CREATE_COL = "created_timestamp"  # timestamp of record of the action taken in original tables, or timestamp of action taken in single-query result table
@@ -585,9 +587,25 @@ class FeatureStore:
         """
 
         if self.connection.type == "file":
-            self._offline_file_materialize(service, incremental_begin)
+            self._offline_record_materialize(service, incremental_begin)
+        elif self.connection.type == "pgsql":
+            self._offline_pgsql_materialize(service, incremental_begin)
 
-    def _offline_file_materialize(self, service: Service, incremental_begin):
+    def _offline_pgsql_materialize(self, service, incremental_begin):
+        try:
+            incremental_begin = pd.to_datetime(incremental_begin, utc=True) if incremental_begin else None
+        except ParserError:
+            incremental_begin = parse_date(incremental_begin)
+        except:
+            raise TypeError("please check your `incremental_begin` type")
+
+        # dir to store dbt project
+        dbt_path = os.path.join(self.project_folder.lstrip("file://"), f"{service.dbt_path}")
+        os.system(
+            f"cd {dbt_path} && dbt run --profiles-dir {dbt_path} --vars {{begin_point:{incremental_begin} }}"
+        )
+
+    def _offline_record_materialize(self, service: Service, incremental_begin):
         """materialize offline file
 
         Args:
@@ -631,7 +649,11 @@ class FeatureStore:
                 joined_frame.drop(columns=[CREATE_COL], inplace=True)
 
         joined_frame[MATERIALIZE_TIME] = pd.to_datetime(datetime.now(), utc=True)
-        joined_frame.to_parquet(os.path.join(self.project_folder, f"{service.materialize_path}.parquet"))
+        to_file(
+            joined_frame,
+            os.path.join(self.project_folder, f"{service.materialize_path}"),
+            self.sources[self.labels[label_key].batch_source].file_format,
+        )
 
     def _read_local_file(self, views, features, all_entity_col):
         df = df = read_file(
@@ -721,7 +743,7 @@ class FeatureStore:
 
         if entity_df is not None:
             self.__check_format(entity_df)
-            entities = [entity_df.columns[0]]
+            entities = entity_df.columns[:-1]
             start = pd.to_datetime(0, utc=True)
         else:
             entities = group_key if group_key else self._get_avaliable_entity(views)
@@ -740,8 +762,10 @@ class FeatureStore:
                     list(all_entity_col.values()),
                 )
                 df = df[[col for col in features + list(all_entity_col.values()) + [TIME_COL]]]
-            if entity_df is not None:
+            if entity_df is not None and entities:
                 df = df.merge(entity_df, how="right", on=entities)
+            elif entity_df is not None:
+                df = df.merge(entity_df, how="cross")
             else:
                 df.rename(columns={TIME_COL: TIME_COL + "_x"}, inplace=True)
                 # end_time limit
@@ -814,4 +838,5 @@ class FeatureStore:
         Args:
             query (str, optional): _description_. Defaults to None.
         """
-        pass
+        conn = psy_conn(**self.connection.__dict__)
+        return execute_sql(query, conn)

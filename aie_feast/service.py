@@ -10,6 +10,7 @@ class Service:
     features: Dict
     labels: Dict
     materialize_path: str = field(default_factory=get_default_value)
+    dbt_path: str = field(default_factory=get_default_value)
 
 
 @dataclass

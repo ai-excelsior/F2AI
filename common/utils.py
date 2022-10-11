@@ -57,6 +57,18 @@ def read_file(path, type, time_col=None, entity_cols=None):
     return df
 
 
+def to_file(file, path, type):
+    path = remove_prefix(path, "file://")
+    if type.startswith("parq"):
+        file.to_parquet(path + ".parquet")
+    elif type.startswith("tsv"):
+        file.to_csv(path + ".tsv", sep="\t")
+    elif type.startswith("txt"):
+        file.to_csv(path + ".txt", sep=" ")
+    else:
+        file.to_csv(path + ".csv")
+
+
 def transform_freq(dt):
     value, freq = dt.split(" ")
     if freq == "quarters":

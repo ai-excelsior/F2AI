@@ -1,9 +1,8 @@
+# from operator import le
 import numpy as np
 import math
 import pandas as pd
-from dateutil.relativedelta import relativedelta
-from typing import List
-from common.utils import parse_date
+from typing import Union
 
 
 class AbstractSampler:
@@ -26,7 +25,7 @@ class AbstractSampler:
             self._time_bucket.split(" ", 1)[0]
         ), "time_bucket should be grater than stride!"
 
-    def time_bucket_num(self, start: str, end: str, is_stride: bool = False):
+    def time_bucket_num(self, start: str, end: str):
         if start and end:  # TODO from和to如果是None要如何处理
             delta = pd.to_datetime(end, utc=True) - pd.to_datetime(start, utc=True)
             delta_days = delta.components.days
@@ -39,12 +38,7 @@ class AbstractSampler:
 
             time_freq = self._time_bucket.split(" ", 1)[1]
 
-            if is_stride:
-                bucket_num = math.ceil(locals()[f"delta_{time_freq}"] / self._stride)
-            else:
-                bucket_num = math.ceil(
-                    locals()[f"delta_{time_freq}"] / int(self._time_bucket.split(" ", 1)[0])
-                )
+            bucket_num = math.ceil(locals()[f"delta_{time_freq}"] / int(self._time_bucket.split(" ", 1)[0]))
         else:
             raise ValueError("data start and end can not be None!")
 
@@ -56,71 +50,81 @@ class AbstractSampler:
 
 class GroupFixednbrSampler(AbstractSampler):
     def __init__(
-        self, time_bucket: str, stride: int, start: str = None, end: str = None, group_ids: list[str] = []
+        self,
+        time_bucket: str,
+        stride: int,
+        start: str = None,
+        end: str = None,
+        group_ids: Union[tuple[str], list[str]] = None,
     ):
         super().__init__(time_bucket, stride, start, end)
         self._group_ids = group_ids
 
     def random_bucket(self):
-        bucket_num = self.time_bucket_num(start=self._start, end=self._end, is_stride=False)
+        bucket_num = self.time_bucket_num(start=self._start, end=self._end)
         bucket_mask = np.ones(bucket_num)
         return list(bucket_mask)
 
-    def bucket_random_sample(self):
-        bucket_mask = self.random_bucket()
+    def bucket_random_sample(self, all_date: pd.DataFrame):
+        if len(all_date) > 0:
+            basis_index = list(range(0, len(all_date) + 1, self._stride))
+            random_index = np.random.randint(self._stride, size=len(basis_index))
+            sample_index = basis_index + random_index
+            sample_index[-1] = min(sample_index[-1], len(all_date) - 1)
 
-        bucket_num = len(bucket_mask)
+            return all_date.iloc[sample_index, :]
+        else:
+            raise ValueError("No bucket to sample!")  # TODO warning
+
+    def sample(self, bucket_mask):
+        bucket_num = self.time_bucket_num(start=self._start, end=self._end)
         bucket_size = int(self._time_bucket.split(" ", 1)[0])
         time_bucket_unit = self._time_bucket.split(" ", 1)[1]
-        sample_list = []
+        freq_dict = {
+            "months": "MS",
+            "weeks": "W",
+            "days": "D",
+            "hours": "H",
+            "minutes": "min",
+            "seconds": "S",
+            "milliseconds": "ms",
+        }
 
-        for i in range(bucket_num):  # TODO 最后一个桶的sample方法可能不同min(time_bucket_end,time_bucket_start)
-            if bucket_mask[i] == 1:
+        all_date = pd.DataFrame(
+            pd.date_range(start=self._start, end=self._end, freq=freq_dict[time_bucket_unit]).values,
+            columns=["timeIndex"],
+        )
 
-                time_bucket_start = pd.to_datetime(self._start, utc=True) + relativedelta(
-                    **parse_date(f"{i * bucket_size} {time_bucket_unit}")
-                )
+        all_date["bucket_nbr"] = pd.merge(
+            pd.DataFrame(range(bucket_num)), pd.DataFrame(range(bucket_size)), how="cross"
+        ).loc[0 : len(all_date), "0_x"]
 
-                time_bucket_end = (
-                    time_bucket_start + relativedelta(**parse_date(f"{bucket_size} {time_bucket_unit}"))
-                    if i < (bucket_num - 1)
-                    else pd.to_datetime(self._end, utc=True)
-                )
-                # time_bucket in time_bucket
-                bucket_stride_num = self.time_bucket_num(
-                    start=time_bucket_start, end=time_bucket_end, is_stride=True
-                )
-                stride_random = np.random.randint(self._stride, size=bucket_stride_num)
-
-                sample_list.append(
-                    [
-                        time_bucket_start
-                        + relativedelta(**parse_date(f"{j * self._stride} {time_bucket_unit}"))
-                        + relativedelta(**parse_date(f"{stride_random[j]} {time_bucket_unit}"))
-                        if j < bucket_stride_num - 1
-                        else time_bucket_end
-                        for j in range(bucket_stride_num)
-                    ]
-                )
-
-        return sample_list
-
-    def __call__(self):
         if self._group_ids is not None:
-            sample = []
-            for group_key in self._group_ids:
-                group_sample = self.bucket_random_sample()
-                group_sample = pd.DataFrame(group_sample)
-                group_sample["group_key"] = group_key
-                sample.append(group_sample, column="event_timestamp")
-            result = pd.concat(sample)
-            result.sort_values(by=["group_key", "event_timestamp"], inplace=True)
+            group_names = [f"group_{i}" for i in range(len(self._group_ids[0]))]
+            group_keys = pd.DataFrame(self._group_ids, columns=group_names)
+            all_date = pd.merge(group_keys, all_date, how="cross")
+            all_date = (
+                all_date.groupby(group_names)
+                .apply(lambda x: x[x["bucket_nbr"].isin(list(np.where(np.array(bucket_mask()) == 1)[0]))])
+                .reset_index(drop=True)
+            )
+            result = all_date.groupby(group_names + ["bucket_nbr"]).apply(
+                lambda x: self.bucket_random_sample(x)
+            )
+            result = result[group_names + ["timeIndex"]].droplevel(level=group_names + ["bucket_nbr"])
+            result.sort_values(by=group_names + ["timeIndex"], inplace=True)
+
         else:
-            random_sample = self.bucket_random_sample()
-            result = pd.DataFrame(random_sample, columns=["event_timestamp"])
-            result.sort_values(by=["event_timestamp"], inplace=True)
+            result = all_date.groupby(["bucket_nbr"]).apply(lambda x: self.bucket_random_sample(x))
+            result = result["timeIndex"].droplevel(level="bucket_nbr")
+            result.sort_values(inplace=True)
+        result.reset_index(inplace=True, drop=True)
 
         return result.drop_duplicates()
+
+    def __call__(self):
+        bucket_mask = self.random_bucket
+        return self.sample(bucket_mask)
 
 
 class GroupRandomSampler(GroupFixednbrSampler):
@@ -133,15 +137,19 @@ class GroupRandomSampler(GroupFixednbrSampler):
         end: str = None,
         group_ids: list[str] = None,
     ):
-        super.__init__(time_bucket, stride, start, end)
+        super().__init__(time_bucket, stride, start, end)
         self._group_ids = group_ids
         self._ratio = ratio
 
     def random_bucket(self):
-        bucket_num = self.time_bucket_num(start=self._start, end=self._end, is_stride=False)
+        bucket_num = self.time_bucket_num(start=self._start, end=self._end)
         bucket_mask = np.zeros(bucket_num)
         bucket_mask[np.where(np.random.random_sample(bucket_num) < self._ratio)[0]] = 1
         return list(bucket_mask)
+
+    def __call__(self):
+        bucket_mask = self.random_bucket
+        return self.sample(bucket_mask)
 
 
 class UniformNPerGroupSampler(GroupFixednbrSampler):
@@ -155,13 +163,13 @@ class UniformNPerGroupSampler(GroupFixednbrSampler):
         end: str = None,
         group_ids: list[str] = None,
     ):
-        super.__init__(time_bucket, stride, start, end)
+        super().__init__(time_bucket, stride, start, end)
         self._group_ids = group_ids
         self._n_groups = n_groups
         self._avg_nbr = avg_nbr
 
     def random_bucket(self):
-        bucket_num = self.time_bucket_num(start=self._start, end=self._end, is_stride=False)
+        bucket_num = self.time_bucket_num(start=self._start, end=self._end)
         bucket_mask = np.zeros(bucket_num)
         avg_length = bucket_num // self._n_groups
         assert avg_length > 0, "time_bucket should be smaller to ensure every group have at least one bucket."
@@ -170,12 +178,28 @@ class UniformNPerGroupSampler(GroupFixednbrSampler):
         bucket_mask[np.where(np.random.random_sample(self._n_groups) < p)[0]] = 1
         return list(bucket_mask)
 
+    def __call__(self):
+        bucket_mask = self.random_bucket
+        return self.sample(bucket_mask)
+
 
 if __name__ == "__main__":
-    time_bucket = "10 days"
+    time_bucket = "4 days"
     stride = 3
     start = "2010-01-01 00:00:00"
     end = "2010-01-30 00:00:00"
+    # group_ids = (["A", 10], ["A", 11], ["B", 10], ["B", 11])
+    group_ids = (("A", 10), ("A", 11), ("B", 10), ("B", 11))
+    # group_ids = ("A", "B")
+    # group_ids = ["A", "B"]
 
-    sample1 = GroupFixednbrSampler(time_bucket, stride, start, end, group_ids=None)()
+    ratio = 0.5
+    n_groups = 2
+    avg_nbr = 2
+
+    sample1 = GroupFixednbrSampler(time_bucket, stride, start, end, group_ids=group_ids)()
+    sample2 = GroupRandomSampler(time_bucket, stride, ratio, start, end, group_ids=group_ids)()
+    sample3 = UniformNPerGroupSampler(time_bucket, stride, n_groups, avg_nbr, start, end, group_ids)()
     print(sample1)
+    print(sample2)
+    print(sample3)
