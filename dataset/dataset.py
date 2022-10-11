@@ -1,10 +1,10 @@
 import pandas as pd
 from typing import Dict, List, Tuple
 from typing import TYPE_CHECKING
-from aie_feast.service import Service
 from aie_feast.views import FeatureViews, LabelViews
 from common.utils import read_file
-
+from common.psl_utils import psy_conn
+import os
 
 if TYPE_CHECKING:
     from aie_feast.featurestore import FeatureStore
@@ -19,9 +19,12 @@ class IterableDataset:
         self.materialize_pd = materialize_pd
 
     def __iter__(self):
-        entity = self.dataset.entity
-        for i in range(entity.last_valid_index() + 1):
-            yield self.get_context(entity[i : i + 1])
+        return iter(
+            [
+                self.get_context(self.dataset.entity_index[i : i + 1])
+                for i in range(self.dataset.entity_index.last_valid_index() + 1)
+            ]
+        )
 
     def get_context(self, entity: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
         fs = self.dataset.fs
@@ -31,9 +34,9 @@ class IterableDataset:
             cols = fs._get_avaliable_features(feature_view)
             period = self.get_period(col_name_and_period)
             feature_views_pd.merge(
-                fs.get_period_features(feature_view, entity, period, cols, include=self.dataset.include)
+                fs.get_period_features(feature_view, entity, period, cols)
                 if period
-                else fs.get_features(feature_view, entity, cols, include=self.dataset.include)
+                else fs.get_features(feature_view, entity, cols)
             )
 
         for label_view_key, col_name_and_period in self.dataset.service.labels.items():
@@ -41,9 +44,9 @@ class IterableDataset:
             cols = fs._get_available_labels(label_view)
             period = self.get_period(col_name_and_period)
             label_views_pd.merge(
-                fs.get_period_labels(label_view, entity, period, cols, include=self.dataset.include)
+                fs.get_period_labels(label_view, entity, period, cols)
                 if period
-                else fs.get_labels(label_view, entity, cols, include=self.dataset.include)
+                else fs.get_labels(label_view, entity, cols)
             )
 
         return feature_views_pd, label_views_pd
@@ -58,31 +61,36 @@ class Dataset:
     def __init__(
         self,
         fs: "FeatureStore",
-        service: Service,
+        service_name: str,
         start: str,
         end: str,
-        sampler: callable,
         time_bucket: int,
         stride: int,
-        include: str,
+        sampler: callable = None,
+        include: str = "both",
     ):
         self.fs = fs
-        self.service = service
+        self.service_name = service_name
         self.start = start
         self.end = end
-        self.sampler = sampler
         self.bucket = time_bucket
         self.stride = stride
-        self.include = include
-        # TODO
-
-    #  self.entity: pd.DataFrame = self.sampler()
+        self.entity_index = sampler(
+            start=start, end=end, time_bucket=time_bucket, stride=stride, include=include
+        )
 
     def to_pytorch(self) -> IterableDataset:
         """convert to iterablt pytorch dataset"""
-        if self.service.materialize_path.endswith(".parquet"):
+
+        if self.fs.service[self.service_name].materialize_type == "file":  # file-record
             materialize_pd = read_file(
-                self.service.materialize_path, type="parquet", time_col=[TIME_COL, MATERIALIZE_TIME]
+                os.path.join(
+                    self.fs.project_folder, f"{self.fs.service[self.service_name].materialize_path}"
+                ),
+                type=self.fs.service[self.service_name].materialize_path.split(".")[-1],
+                time_col=[TIME_COL, MATERIALIZE_TIME],
             )
+        elif self.fs.service[self.service_name].materialize_type == "pgsql":
+            conn = psy_conn(**self.fs.connection.__dict__)
 
         return IterableDataset(self, materialize_pd)

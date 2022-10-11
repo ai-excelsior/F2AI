@@ -109,7 +109,9 @@ if __name__ == "__main__":
     # get_features()
 
     def do_materailize():
-        fs.materialize(fs.service["credit_scoring_v1"])
+        fs.materialize(
+            "credit_scoring_v1",
+        )
 
     do_materailize()
 
@@ -147,8 +149,9 @@ if __name__ == "__main__":
     # get_period_features_and_labels()
 
     def dataset():
-        ds = fs.get_dataset(fs.service["credit_scoring_v1"])
-        ds.to_pytorch()
+        ds = fs.get_dataset(service_name="credit_scoring_v1")
+        i_ds = ds.to_pytorch()
+        iter(i_ds)
 
     # dataset
 

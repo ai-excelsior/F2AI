@@ -1,6 +1,5 @@
 from datetime import datetime
 from typing import List
-from parser import ParserError
 import pandas as pd
 import os
 from pypika import Query, Table, Field, Tables, Parameter
@@ -574,11 +573,11 @@ class FeatureStore:
         df_period.rename(columns={TIME_COL + "_y": QUERY_COL}, inplace=True)
         return df_period
 
-    def materialize(self, service: Service, incremental_begin: str = None):
+    def materialize(self, service_name: str, incremental_begin: str = None):
         """incrementally join `views` to generate tables
 
         Args:
-            views (List): config to materialize
+            service_name (str): name of service to materialize
             incremental_begin (str): begin of materialization
                 `None`: all-data for type=file, otherwise last materialzation time
                 date-like str: corresponding date, e.g.: `2020-01-03 00:09:08`
@@ -587,14 +586,14 @@ class FeatureStore:
         """
 
         if self.connection.type == "file":
-            self._offline_record_materialize(service, incremental_begin)
+            self._offline_record_materialize(self.service[service_name], incremental_begin)
         elif self.connection.type == "pgsql":
-            self._offline_pgsql_materialize(service, incremental_begin)
+            self._offline_pgsql_materialize(self.service[service_name], incremental_begin)
 
     def _offline_pgsql_materialize(self, service, incremental_begin):
         try:
             incremental_begin = pd.to_datetime(incremental_begin, utc=True) if incremental_begin else None
-        except ParserError:
+        except Exception:
             incremental_begin = parse_date(incremental_begin)
         except:
             raise TypeError("please check your `incremental_begin` type")
@@ -613,7 +612,7 @@ class FeatureStore:
         """
         try:
             incremental_begin = pd.to_datetime(incremental_begin if incremental_begin else 0, utc=True)
-        except ParserError:
+        except Exception:
             incremental_begin = parse_date(incremental_begin)
         except:
             raise TypeError("please check your `incremental_begin` type")
@@ -808,7 +807,7 @@ class FeatureStore:
 
     def get_dataset(
         self,
-        service: Service,
+        service_name: str,
         start: str = None,
         end: str = None,
         sampler: callable = None,
@@ -819,7 +818,7 @@ class FeatureStore:
         """get from `start` to `end` length data for training from `views`
 
         Args:
-            service: `SERVICE` to use
+            service_name(str): name of `SERVICE` to use
             start (str, optional): _description_. Defaults to None.
             end (str, optional): _description_. Defaults to None.
             sampler (callable, optional): _description_. Defaults to None.
@@ -827,17 +826,14 @@ class FeatureStore:
             stride (int, optional): stride to sample, Defaults to 1 means no stride
             include(str,optional): whether to include `start` or `end` timestamp
         """
-
-        # service_entity: Service = self.service[service]
-        materialize_path = os.path.join(self.project_folder, service.materialize_path)
         return Dataset(
-            self,
-            service=service,
+            fs=self,
+            service_name=service_name,
             start=start,
             end=end,
-            sampler=sampler,
             time_bucket=bucket,
             stride=stride,
+            sampler=sampler,
             include=include,
         )
 

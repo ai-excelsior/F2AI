@@ -62,9 +62,9 @@ def to_file(file, path, type):
     if type.startswith("parq"):
         file.to_parquet(path)
     elif type.startswith("tsv"):
-        file.to_csv(path , sep="\t")
+        file.to_csv(path, sep="\t")
     elif type.startswith("txt"):
-        file.to_csv(path , sep=" ")
+        file.to_csv(path, sep=" ")
     else:
         file.to_csv(path)
 
