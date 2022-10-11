@@ -3,6 +3,7 @@ import numpy as np
 import math
 import pandas as pd
 from typing import Union
+import warnings
 
 
 class AbstractSampler:
@@ -74,7 +75,11 @@ class GroupFixednbrSampler(AbstractSampler):
 
             return all_date.iloc[sample_index, :]
         else:
-            raise ValueError("No bucket to sample!")  # TODO warning
+            warnings.warn(
+                "please reset input parameters to ensure you have at least one bucket to be sampled!",
+                UserWarning,
+            )
+            return pd.DataFrame()
 
     def sample(self, bucket_mask):
         bucket_num = self.time_bucket_num(start=self._start, end=self._end)
@@ -111,14 +116,16 @@ class GroupFixednbrSampler(AbstractSampler):
             result = all_date.groupby(group_names + ["bucket_nbr"]).apply(
                 lambda x: self.bucket_random_sample(x)
             )
-            result = result[group_names + ["timeIndex"]].droplevel(level=group_names + ["bucket_nbr"])
-            result.sort_values(by=group_names + ["timeIndex"], inplace=True)
+            if len(result) > 0:
+                result = result[group_names + ["timeIndex"]].droplevel(level=group_names + ["bucket_nbr"])
+                result.sort_values(by=group_names + ["timeIndex"], inplace=True)
 
         else:
             all_date = all_date[all_date["bucket_nbr"].isin(list(np.where(np.array(bucket_mask()) == 1)[0]))]
             result = all_date.groupby(["bucket_nbr"]).apply(lambda x: self.bucket_random_sample(x))
-            result = result["timeIndex"].droplevel(level="bucket_nbr")
-            result.sort_values(inplace=True)
+            if len(result) > 0:
+                result = result["timeIndex"].droplevel(level="bucket_nbr")
+                result.sort_values(inplace=True)
         result.reset_index(inplace=True, drop=True)
 
         return result.drop_duplicates()
@@ -182,25 +189,3 @@ class UniformNPerGroupSampler(GroupFixednbrSampler):
     def __call__(self):
         bucket_mask = self.random_bucket
         return self.sample(bucket_mask)
-
-
-if __name__ == "__main__":
-    time_bucket = "4 days"
-    stride = 3
-    start = "2010-01-01 00:00:00"
-    end = "2010-01-30 00:00:00"
-    # group_ids = (["A", 10], ["A", 11], ["B", 10], ["B", 11])
-    group_ids = (("A", 10), ("A", 11), ("B", 10), ("B", 11))
-    # group_ids = ("A", "B")
-    # group_ids = ["A", "B"]
-
-    ratio = 0.5
-    n_groups = 2
-    avg_nbr = 2
-
-    sample1 = GroupFixednbrSampler(time_bucket, stride, start, end, group_ids=group_ids)()
-    sample2 = GroupRandomSampler(time_bucket, stride, ratio, start, end, group_ids=group_ids)()
-    sample3 = UniformNPerGroupSampler(time_bucket, stride, n_groups, avg_nbr, start, end, group_ids)()
-    print(sample1)
-    print(sample2)
-    print(sample3)

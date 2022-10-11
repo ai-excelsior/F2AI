@@ -160,7 +160,7 @@ if __name__ == "__main__":
         stride = 3
         start = "2010-01-01 00:00:00"
         end = "2010-01-30 00:00:00"
-        # group_ids = (["A", 10], ["A", 11], ["B", 10], ["B", 11])
+        group_ids = (["A", 10], ["A", 11], ["B", 10], ["B", 11])
         # group_ids = (("A", 10), ("A", 11), ("B", 10), ("B", 11))
         # group_ids = ("A", "B")
         # group_ids = ["A", "B"]
@@ -169,14 +169,14 @@ if __name__ == "__main__":
         n_groups = 2
         avg_nbr = 2
 
-        sample1 = GroupFixednbrSampler(time_bucket, stride, start, end)()
-        sample2 = GroupRandomSampler(time_bucket, stride, ratio, start, end)()
-        sample3 = UniformNPerGroupSampler(time_bucket, stride, n_groups, avg_nbr, start, end)()
-        # sample1 = GroupFixednbrSampler(time_bucket, stride, start, end, group_ids=group_ids)()
-        # sample2 = GroupRandomSampler(time_bucket, stride, ratio, start, end, group_ids=group_ids)()
-        # sample3 = UniformNPerGroupSampler(time_bucket, stride, n_groups, avg_nbr, start, end, group_ids)()
+        # sample1 = GroupFixednbrSampler(time_bucket, stride, start, end)()
+        # sample2 = GroupRandomSampler(time_bucket, stride, ratio, start, end)()
+        # sample3 = UniformNPerGroupSampler(time_bucket, stride, n_groups, avg_nbr, start, end)()
+        sample1 = GroupFixednbrSampler(time_bucket, stride, start, end, group_ids=group_ids)()
+        sample2 = GroupRandomSampler(time_bucket, stride, ratio, start, end, group_ids=group_ids)()
+        sample3 = UniformNPerGroupSampler(time_bucket, stride, n_groups, avg_nbr, start, end, group_ids)()
         print(sample1)
         print(sample2)
         print(sample3)
 
-    # sample()
+    sample()
