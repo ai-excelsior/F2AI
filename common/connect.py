@@ -1,5 +1,4 @@
 from dataclasses import dataclass, field
-from .utils import get_default_value
 
 
 @dataclass
@@ -7,9 +6,9 @@ class ConnectConfig:
     """realize the connection config"""
 
     type: str
-    host: str = field(default_factory=get_default_value)
-    port: str = field(default_factory=get_default_value)
-    database: str = field(default_factory=get_default_value)
-    schema: str = field(default_factory=get_default_value)
-    user: str = field(default_factory=get_default_value)
-    passwd: str = field(default_factory=get_default_value)
+    host: str = field(default=None)
+    port: str = field(default=None)
+    database: str = field(default=None)
+    schema: str = field(default=None)
+    user: str = field(default=None)
+    passwd: str = field(default=None)

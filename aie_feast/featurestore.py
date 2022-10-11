@@ -1,11 +1,13 @@
 from datetime import datetime
-from typing import List
+from typing import Dict, List, Union
+from parser import ParserError
 import pandas as pd
 import os
 from pypika import Query, Table, Field, Tables, Parameter
 from sqlalchemy import TIME
 from aie_feast.views import FeatureViews, LabelViews
 from aie_feast.service import Service
+from common.source import SourceConfig
 from dataset.dataset import Dataset
 from common.get_config import (
     get_conn_cfg,
@@ -16,6 +18,7 @@ from common.get_config import (
     get_source_cfg,
 )
 from common.utils import (
+    read_db,
     read_file,
     to_file,
     parse_date,
@@ -684,6 +687,33 @@ class FeatureStore:
         ]
         return df
 
+    def _read_local_db_data(self, views: Union[FeatureViews, LabelViews], features: List, all_entity_col: Dict[str, str]) -> pd.DataFrame:
+        source: SourceConfig = self.sources[views.batch_source]
+        df = read_db(
+            source.name,
+            self.connection,
+            [
+                source.event_time,
+                source.create_time,
+            ],
+            list(all_entity_col.keys()))
+        df.rename(
+            columns={
+                source.event_time: TIME_COL,
+                source.create_time: CREATE_COL,
+            },
+            inplace=True,
+        )
+        df.rename(columns=all_entity_col, inplace=True)
+        df = df[
+            [
+                col
+                for col in list(all_entity_col.values()) + features + [TIME_COL, CREATE_COL]
+                if col in df.columns
+            ]
+        ]
+        return df
+
     def _fil_timelimit(self, include, ttl, df):
         if include:
             return (
@@ -754,9 +784,8 @@ class FeatureStore:
             entities = group_key if group_key else self._get_avaliable_entity(views)
             end = end if end else pd.to_datetime(datetime.now(), utc=True)
             start = start if start else pd.to_datetime(0, utc=True)
-
+        all_entity_col = {self.entity[en].entity: en for en in entities}
         if self.connection.type == "file":
-            all_entity_col = {self.entity[en].entity: en for en in entities}
             if isinstance(views, (FeatureViews, LabelViews)):
                 df = self._read_local_file(views, features, all_entity_col)
             else:
@@ -767,29 +796,41 @@ class FeatureStore:
                     list(all_entity_col.values()),
                 )
                 df = df[[col for col in features + list(all_entity_col.values()) + [TIME_COL]]]
-            if entity_df is not None and entities:
+        elif self.connection.type == "pgsql":
+            if isinstance(views, (FeatureViews, LabelViews)):
+                df = self._read_local_db_data(views, features, all_entity_col)
+            else:
+                df = read_db(
+                    views.materialize_path,
+                    self.connection,
+                    [TIME_COL],
+                    list(all_entity_col.values()),
+                )
+                df = df[[col for col in features + list(all_entity_col.values()) + [TIME_COL]]]
+
+        if entity_df is not None and entities:
                 df = df.merge(entity_df, how="right", on=entities)
-            elif entity_df is not None:
-                df = df.merge(entity_df, how="cross")
-            else:
-                df.rename(columns={TIME_COL: TIME_COL + "_x"}, inplace=True)
-                # end_time limit
-                df = df.assign(**{TIME_COL + "_y": end})
-            if keys_only:
-                assert fn == "unique", "keys_only=True can only be applied when fn==unique"
-                result = list(
-                    df[(df[TIME_COL + "_x"] < df[TIME_COL + "_y"]) & (df[TIME_COL + "_x"] >= start)]
-                    .groupby(entities)
-                    .groups.keys()
-                )
-            else:
-                result = df.groupby(entities).apply(
-                    get_stats_result,
-                    fn,
-                    primary_keys=entities + [TIME_COL + "_x", TIME_COL + "_y"],
-                    include=include,
-                    start=start,
-                )
+        elif entity_df is not None:
+            df = df.merge(entity_df, how="cross")
+        else:
+            df.rename(columns={TIME_COL: TIME_COL + "_x"}, inplace=True)
+            # end_time limit
+            df = df.assign(**{TIME_COL + "_y": end})
+        if keys_only:
+            assert fn == "unique", "keys_only=True can only be applied when fn==unique"
+            result = list(
+                df[(df[TIME_COL + "_x"] < df[TIME_COL + "_y"]) & (df[TIME_COL + "_x"] >= start)]
+                .groupby(entities)
+                .groups.keys()
+            )
+        else:
+            result = df.groupby(entities).apply(
+                get_stats_result,
+                fn,
+                primary_keys=entities + [TIME_COL + "_x", TIME_COL + "_y"],
+                include=include,
+                start=start,
+            )
         return result
 
     def get_latest_entities(self, view, entity: List[str] = []):
@@ -812,10 +853,21 @@ class FeatureStore:
                     [TIME_COL],
                     list(all_entity_col.values()),
                 )
-            # sort by event_time, decending
-            df.sort_values(by=TIME_COL, ascending=False, inplace=True, ignore_index=True)
-            # due to `ascending=False`, keep the `first` record means the latest one
-            df = df.drop_duplicates(subset=entity, keep="first")
+
+        elif self.connection.type == "pgsql":
+            if isinstance(view, (FeatureViews, LabelViews)):
+                df = self._read_local_db_data(view, [], all_entity_col)
+            else:
+                df = read_db(
+                    view.materialize_path,
+                    self.connection,
+                    [TIME_COL],
+                    list(all_entity_col.values()),
+                )
+        # sort by event_time, decending
+        df.sort_values(by=TIME_COL, ascending=False, inplace=True, ignore_index=True)
+        # due to `ascending=False`, keep the `first` record means the latest one
+        df = df.drop_duplicates(subset=entity, keep="first")
         return df
 
     def get_dataset(

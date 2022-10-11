@@ -1,4 +1,8 @@
 import pandas as pd
+from pypika import Query
+from pypika.queries import QueryBuilder
+from common.connect import ConnectConfig
+from common.psl_utils import psy_conn, sql_df
 
 
 FSKEY = "__FS__"
@@ -67,6 +71,19 @@ def to_file(file, path, type):
         file.to_csv(path, sep=" ")
     else:
         file.to_csv(path)
+
+        
+def read_db(table_name: str, connection: ConnectConfig, time_col=None, entity_cols=None) -> pd.DataFrame:
+    time_col = [i for i in time_col if i]
+    if connection.type == "pgsql":
+        conn = psy_conn(**connection.__dict__)
+        q: QueryBuilder = Query.from_(table_name).select("*")
+        df = pd.read_sql(q.get_sql(), conn)
+    for col in time_col:
+        df[col] = pd.to_datetime(df[col], utc=True)
+    if entity_cols:
+        df[entity_cols] = df[entity_cols].astype("str")
+    return df
 
 
 def transform_freq(dt):
