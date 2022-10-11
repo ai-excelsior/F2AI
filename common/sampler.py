@@ -6,6 +6,8 @@ import warnings
 from typing import Union, List, Tuple
 from datetime import datetime
 
+TIME_COL = "event_timestamp"
+
 
 class AbstractSampler:
     def __init__(self, time_bucket: str, stride: int, start: str = None, end: str = None):
@@ -92,7 +94,7 @@ class GroupFixednbrSampler(AbstractSampler):
 
         all_date = pd.DataFrame(
             pd.date_range(start=self._start, end=self._end, freq=freq_dict[time_bucket_unit]),
-            columns=["timeIndex"],
+            columns=[TIME_COL],
         )
 
         all_date["bucket_nbr"] = [x for n in range(bucket_num) for x in [n] * bucket_size][: len(all_date)]

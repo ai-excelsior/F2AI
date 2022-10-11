@@ -248,7 +248,7 @@ class FeatureStore:
             df = self._read_local_file(views, features, all_entity_col)
             # rename entity columns
             if all_entity_col:
-                df = df.merge(entity_df, on=entity_name, how="inner")
+                df = df.merge(entity_df[entity_name + [TIME_COL]], on=entity_name, how="inner")
             else:
                 df = df.merge(entity_df, how="cross")
             if self.sources[views.batch_source].event_time:  #  time-relavent features
@@ -396,7 +396,7 @@ class FeatureStore:
         df = Query.from_(df).select(Parameter(",".join(all_entity_col + all_time_col + features))).as_("df")
         if all_entity_col:
             sql_join = (
-                Query.from_(entity_df)
+                Query.from_(Query.from_(entity_df).select(",".join(entity_name), TIME_COL))
                 .inner_join(df)
                 .using(",".join(entity_name))
                 .select(Parameter(f"df.*, {TIME_COL}"))
@@ -481,7 +481,7 @@ class FeatureStore:
             df_period = self._read_local_file(views, features, all_entity_col)
             # merge according to `entity`
             if all_entity_col:
-                df_period = df_period.merge(entity_df, on=entity_name, how="inner")
+                df_period = df_period.merge([entity_name + [TIME_COL]], on=entity_name, how="inner")
             else:
                 df_period = df_period.merge(entity_df, how="cross")
             # # match time_limit
