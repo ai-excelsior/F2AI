@@ -5,6 +5,7 @@ from common.cmd_parser import get_f2ai_parser
 from aie_feast.featurestore import FeatureStore
 import pandas as pd
 from datetime import datetime, timezone
+from common.sampler import GroupFixednbrSampler, GroupRandomSampler, UniformNPerGroupSampler
 
 TIME_COL = "event_timestamp"
 
@@ -148,3 +149,24 @@ if __name__ == "__main__":
         fs.get_dataset(fs.service["credit_scoring_v1"])
 
     # dataset
+
+    def sample():
+        time_bucket = "4 days"
+        stride = 3
+        start = "2010-01-01 00:00:00"
+        end = "2010-01-30 00:00:00"
+        # group_ids = (["A", 10], ["A", 11], ["B", 10], ["B", 11])
+        group_ids = (("A", 10), ("A", 11), ("B", 10), ("B", 11))
+        # group_ids = ("A", "B")
+        # group_ids = ["A", "B"]
+
+        ratio = 0.5
+        n_groups = 2
+        avg_nbr = 2
+
+        sample1 = GroupFixednbrSampler(time_bucket, stride, start, end, group_ids=group_ids)()
+        sample2 = GroupRandomSampler(time_bucket, stride, ratio, start, end, group_ids=group_ids)()
+        sample3 = UniformNPerGroupSampler(time_bucket, stride, n_groups, avg_nbr, start, end, group_ids)()
+        print(sample1)
+        print(sample2)
+        print(sample3)

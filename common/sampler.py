@@ -1,3 +1,4 @@
+# from operator import le
 import numpy as np
 import math
 import pandas as pd
@@ -66,7 +67,6 @@ class GroupFixednbrSampler(AbstractSampler):
 
     def bucket_random_sample(self, all_date: pd.DataFrame):
         if len(all_date) > 0:
-
             basis_index = list(range(0, len(all_date) + 1, self._stride))
             random_index = np.random.randint(self._stride, size=len(basis_index))
             sample_index = basis_index + random_index
@@ -74,12 +74,10 @@ class GroupFixednbrSampler(AbstractSampler):
 
             return all_date.iloc[sample_index, :]
         else:
-            raise ValueError("No bucket to sample!")
+            raise ValueError("No bucket to sample!")  # TODO warning
 
     def sample(self, bucket_mask):
-        selected_bucket = list(np.where(np.array(bucket_mask) == 1)[0])
-
-        bucket_num = len(bucket_mask)
+        bucket_num = self.time_bucket_num(start=self._start, end=self._end)
         bucket_size = int(self._time_bucket.split(" ", 1)[0])
         time_bucket_unit = self._time_bucket.split(" ", 1)[1]
         freq_dict = {
@@ -101,13 +99,15 @@ class GroupFixednbrSampler(AbstractSampler):
             pd.DataFrame(range(bucket_num)), pd.DataFrame(range(bucket_size)), how="cross"
         ).loc[0 : len(all_date), "0_x"]
 
-        all_date = all_date[all_date["bucket_nbr"].isin(selected_bucket)]
-
         if self._group_ids is not None:
             group_names = [f"group_{i}" for i in range(len(self._group_ids[0]))]
-            # group_keys = pd.DataFrame(self._group_ids, columns=["group_ids"])
             group_keys = pd.DataFrame(self._group_ids, columns=group_names)
             all_date = pd.merge(group_keys, all_date, how="cross")
+            all_date = (
+                all_date.groupby(group_names)
+                .apply(lambda x: x[x["bucket_nbr"].isin(list(np.where(np.array(bucket_mask()) == 1)[0]))])
+                .reset_index(drop=True)
+            )
             result = all_date.groupby(group_names + ["bucket_nbr"]).apply(
                 lambda x: self.bucket_random_sample(x)
             )
@@ -123,7 +123,7 @@ class GroupFixednbrSampler(AbstractSampler):
         return result.drop_duplicates()
 
     def __call__(self):
-        bucket_mask = self.random_bucket()
+        bucket_mask = self.random_bucket
         return self.sample(bucket_mask)
 
 
@@ -148,7 +148,7 @@ class GroupRandomSampler(GroupFixednbrSampler):
         return list(bucket_mask)
 
     def __call__(self):
-        bucket_mask = self.random_bucket()
+        bucket_mask = self.random_bucket
         return self.sample(bucket_mask)
 
 
@@ -179,7 +179,7 @@ class UniformNPerGroupSampler(GroupFixednbrSampler):
         return list(bucket_mask)
 
     def __call__(self):
-        bucket_mask = self.random_bucket()
+        bucket_mask = self.random_bucket
         return self.sample(bucket_mask)
 
 
@@ -188,12 +188,12 @@ if __name__ == "__main__":
     stride = 3
     start = "2010-01-01 00:00:00"
     end = "2010-01-30 00:00:00"
-    group_ids = (["A", 10], ["A", 11], ["B", 10], ["B", 11])
-    # group_ids = (("A", 10), ("A", 11), ("B", 10), ("B", 11))
+    # group_ids = (["A", 10], ["A", 11], ["B", 10], ["B", 11])
+    group_ids = (("A", 10), ("A", 11), ("B", 10), ("B", 11))
     # group_ids = ("A", "B")
     # group_ids = ["A", "B"]
 
-    ratio = 0.7
+    ratio = 0.5
     n_groups = 2
     avg_nbr = 2
 
