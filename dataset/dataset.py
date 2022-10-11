@@ -5,18 +5,23 @@ from aie_feast.views import FeatureViews, LabelViews
 from common.utils import read_file
 from common.psl_utils import psy_conn
 import os
+from copy import deepcopy
 
 if TYPE_CHECKING:
     from aie_feast.featurestore import FeatureStore
 
 TIME_COL = "event_timestamp"
 MATERIALIZE_TIME = "materialize_time"
+CREATE_COL = "created_timestamp"
 
 
 class IterableDataset:
     def __init__(self, dataset: "Dataset", materialize_pd: pd.DataFrame):
         self.dataset = dataset
         self.materialize_pd = materialize_pd
+        self.service = self.dataset.fs.service[self.dataset.service_name]
+        self.all_features = self.dataset.fs._get_avaliable_features(self.service)
+        self.all_labels = self.dataset.fs._get_avaliable_features(self.service)
 
     def __iter__(self):
         return iter(
@@ -28,21 +33,28 @@ class IterableDataset:
 
     def get_context(self, entity: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
         fs = self.dataset.fs
-        feature_views_pd, label_views_pd = pd.DataFrame(), pd.DataFrame()
-        for feature_view_key, col_name_and_period in self.dataset.service.features.items():
-            feature_view: FeatureViews = fs.features[feature_view_key]
-            cols = fs._get_avaliable_features(feature_view)
-            period = self.get_period(col_name_and_period)
-            feature_views_pd.merge(
-                fs.get_period_features(feature_view, entity, period, cols)
-                if period
-                else fs.get_features(feature_view, entity, cols)
-            )
+        feature_views_pd = deepcopy(entity)
+        label_views_pd = deepcopy(entity)
+        for view_fea, fea_name in self.service.features.items():
+            feature_view: FeatureViews = fs.features[view_fea]
+            entities = [e for e in fs._get_avaliable_entity(feature_view) if e in list(entity.columns[:-1])]
 
-        for label_view_key, col_name_and_period in self.dataset.service.labels.items():
-            label_view: LabelViews = fs.labels[label_view_key]
-            cols = fs._get_available_labels(label_view)
-            period = self.get_period(col_name_and_period)
+            cols = [c for c in fs._get_avaliable_features(feature_view) if c in self.all_features]
+            period_dict = self.get_period(fea_name)  # features in the same view may not have the same period
+            for period, features in period_dict.items():
+                features = features if features else cols
+                feature_views_pd = feature_views_pd.merge(
+                    fs.get_period_features(feature_view, entity, period, features).drop(columns=[CREATE_COL])
+                    if period
+                    else fs.get_features(feature_view, entity, features).drop(columns=[CREATE_COL]),
+                    on=entities + [TIME_COL],
+                    how="left",
+                )
+
+        for view_label, label_name in self.service.labels.items():
+            label_view: LabelViews = fs.labels[view_label]
+            cols = [c for c in fs._get_available_labels(feature_view) if c in self.all_labels]
+            period = self.get_period(label_name)
             label_views_pd.merge(
                 fs.get_period_labels(label_view, entity, period, cols)
                 if period
@@ -51,10 +63,16 @@ class IterableDataset:
 
         return feature_views_pd, label_views_pd
 
-    def get_period(self, col_name_and_period: Dict):
-        for _, period in col_name_and_period.items():
-            if period is not None:
-                return period
+    def get_period(self, fea_collect: list):
+        period_dict = {}
+        for fea in fea_collect:
+            for k, v in fea.items():
+                v = v if v else 0
+                if v in period_dict:
+                    period_dict[v].append(k)
+                else:
+                    period_dict[v] = [k] if k != "__all__" else None
+        return period_dict
 
 
 class Dataset:
