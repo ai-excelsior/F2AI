@@ -72,7 +72,7 @@ class FeatureStore:
             "unique",
         ], f"{fn}is not a available function, you can use fs.query() to customize your function"
 
-    def _get_avaliable_features(self, view, check_type: bool = False):
+    def _get_available_features(self, view, check_type: bool = False):
         if isinstance(view, FeatureViews):
             features = (
                 [k for k, v in view.features.items() if v not in ["string", "bool"]]
@@ -135,7 +135,7 @@ class FeatureStore:
             raise TypeError("must be LabelViews or Service")
         return labels
 
-    def _get_avaliable_entity(self, view):
+    def _get_available_entity(self, view):
         entity = []
         if isinstance(view, (FeatureViews, LabelViews)):
             entity = list(view.entity)
@@ -162,7 +162,7 @@ class FeatureStore:
         """
         self.__check_format(entity_df)
         if not features:
-            features = self._get_avaliable_features(feature_view)
+            features = self._get_available_features(feature_view)
 
         if self.connection.type == "file":
             return self._get_point_record(feature_view, entity_df, features, include)
@@ -188,7 +188,7 @@ class FeatureStore:
         """
         self.__check_format(entity_df)
         if not features:
-            features = self._get_avaliable_features(feature_view)
+            features = self._get_available_features(feature_view)
 
         if self.connection.type == "file":
             return self._get_period_record(feature_view, entity_df, period, features, include, is_label=False)
@@ -243,7 +243,7 @@ class FeatureStore:
             features(list):columns to select besides times and entities
             include (bool, optional): include timestamp defined in `entity_df` or not. Defaults to True.
         """
-        entity = self._get_avaliable_entity(views)
+        entity = self._get_available_entity(views)
         all_entity_col = {self.entity[en].entity: en for en in entity if en in list(entity_df.columns[:-1])}
         entity_name = list(all_entity_col.values())  # entity column name in table
 
@@ -280,7 +280,7 @@ class FeatureStore:
     def _get_point_pgsql(
         self, views, entity_df: pd.DataFrame, features: list, include: bool = True, is_label: bool = False
     ):
-        entity = self._get_avaliable_entity(views)
+        entity = self._get_available_entity(views)
         entity_name = [en for en in entity if en in list(entity_df.columns[:-1])]
         all_entity_col = [self.entity[en].entity + " as " + en for en in entity_name]
         # connect to pgsql db
@@ -372,7 +372,7 @@ class FeatureStore:
         include: bool = True,
         is_label: bool = False,
     ):
-        entity = self._get_avaliable_entity(views)
+        entity = self._get_available_entity(views)
         entity_name = [en for en in entity if en in list(entity_df.columns[:-1])]
         all_entity_col = [self.entity[en].entity + " as " + en for en in entity_name]
         # connect to pgsql db
@@ -476,7 +476,7 @@ class FeatureStore:
             is_label (bool, optional): LabelViews of not. Defaults to False.
         """
 
-        entity = self._get_avaliable_entity(views)
+        entity = self._get_available_entity(views)
         all_entity_col = {self.entity[en].entity: en for en in entity if en in list(entity_df.columns[:-1])}
         entity_name = list(all_entity_col.values())  # entity column name in table
         if isinstance(views, (FeatureViews, LabelViews)):
@@ -623,10 +623,10 @@ class FeatureStore:
         except:
             raise TypeError("please check your `incremental_begin` type")
 
-        all_features_use = self._get_avaliable_features(service)
+        all_features_use = self._get_available_features(service)
         for label_key in service.labels.keys():
             labels = self._get_available_labels(service)
-            all_entities = self._get_avaliable_entity(service)
+            all_entities = self._get_available_entity(service)
             all_entity_col = {self.entity[en].entity: en for en in all_entities}
             joined_frame = self._read_local_file(self.labels[label_key], labels, all_entity_col)
             joined_frame.drop(columns=[CREATE_COL], inplace=True)  # create timestamp makes no sense to labels
@@ -639,9 +639,9 @@ class FeatureStore:
         for feature_key in service.features.keys():
             feature_view: FeatureViews = self.features[feature_key]
             feature_cols = [
-                item for item in all_features_use if item in self._get_avaliable_features(feature_view)
+                item for item in all_features_use if item in self._get_available_features(feature_view)
             ]
-            fea_entities = self._get_avaliable_entity(feature_view)
+            fea_entities = self._get_available_entity(feature_view)
             entity_col = {self.entity[en].entity: en for en in fea_entities}
             tmp_fea = self._read_local_file(feature_view, feature_cols, entity_col)
             joined_frame = tmp_fea.merge(joined_frame, how="right", on=fea_entities)
@@ -768,11 +768,11 @@ class FeatureStore:
         check_type = True if fn != "unique" else False
         if not features:
             features = (
-                self._get_avaliable_features(views, check_type)
+                self._get_available_features(views, check_type)
                 if isinstance(views, FeatureViews)
                 else self._get_available_labels(views, check_type)
                 if isinstance(views, LabelViews)
-                else self._get_avaliable_features(views, check_type)
+                else self._get_available_features(views, check_type)
                 + self._get_available_labels(views, check_type)
             )
 
@@ -781,7 +781,7 @@ class FeatureStore:
             entities = entity_df.columns[:-1]
             start = pd.to_datetime(0, utc=True)
         else:
-            entities = group_key if group_key else self._get_avaliable_entity(views)
+            entities = group_key if group_key else self._get_available_entity(views)
             end = end if end else pd.to_datetime(datetime.now(), utc=True)
             start = start if start else pd.to_datetime(0, utc=True)
         all_entity_col = {self.entity[en].entity: en for en in entities}
@@ -840,7 +840,7 @@ class FeatureStore:
             views (List): _description_
         """
         if not entity:
-            entity = self._get_avaliable_entity(view)
+            entity = self._get_available_entity(view)
 
         all_entity_col = {self.entity[en].entity: en for en in entity}
         if self.connection.type == "file":
