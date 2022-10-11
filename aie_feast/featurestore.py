@@ -205,7 +205,7 @@ class FeatureStore:
         if self.connection.type == "file":
             return self._get_point_record(label_view, entity_df, labels, include)
         elif self.connection.type == "pgsql":
-            return self._get_point_pgsql(label_view, entity_df, labels, include, is_label = True)
+            return self._get_point_pgsql(label_view, entity_df, labels, include, is_label=True)
 
     def get_period_labels(
         self,
@@ -273,7 +273,9 @@ class FeatureStore:
             df = get_newest_record(df, TIME_COL, entity_name, CREATE_COL)
         return df
 
-    def _get_point_pgsql(self, views, entity_df: pd.DataFrame, features: list, include: bool = True, is_label: bool = False):
+    def _get_point_pgsql(
+        self, views, entity_df: pd.DataFrame, features: list, include: bool = True, is_label: bool = False
+    ):
         entity = self._get_avaliable_entity(views)
         entity_name = [en for en in entity if en in list(entity_df.columns[:-1])]
         all_entity_col = [self.entity[en].entity + " as " + en for en in entity_name]
@@ -356,7 +358,7 @@ class FeatureStore:
         remove_table(TMP_TBL, conn)
         close_conn(conn)
         return result
-        
+
     def _get_period_pgsql(
         self,
         views,
@@ -811,9 +813,8 @@ class FeatureStore:
         start: str = None,
         end: str = None,
         sampler: callable = None,
-        bucket: int = None,
+        time_bucker: str = None,
         stride: int = 1,
-        include: str = "both",
     ) -> Dataset:
         """get from `start` to `end` length data for training from `views`
 
@@ -822,7 +823,7 @@ class FeatureStore:
             start (str, optional): _description_. Defaults to None.
             end (str, optional): _description_. Defaults to None.
             sampler (callable, optional): _description_. Defaults to None.
-            bucket (int, optional): time_bucket, Defaults to None means all in one bucket
+            time_bucker (str): time_bucket, Defaults to None means all in one bucket
             stride (int, optional): stride to sample, Defaults to 1 means no stride
             include(str,optional): whether to include `start` or `end` timestamp
         """
@@ -831,10 +832,9 @@ class FeatureStore:
             service_name=service_name,
             start=start,
             end=end,
-            time_bucket=bucket,
+            time_bucket=time_bucker,
             stride=stride,
             sampler=sampler,
-            include=include,
         )
 
     def query(self, query: str = None):

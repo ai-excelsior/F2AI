@@ -2,8 +2,9 @@
 import numpy as np
 import math
 import pandas as pd
-from typing import Union
 import warnings
+from typing import Union, List, Tuple
+from datetime import datetime
 
 
 class AbstractSampler:
@@ -17,8 +18,8 @@ class AbstractSampler:
 
         """
         self._time_bucket = time_bucket
-        self._start = start
-        self._end = end
+        self._start = pd.to_datetime(start, utc=True) if start else pd.to_datetime(0, utc=True)
+        self._end = pd.to_datetime(end, utc=True) if start else pd.to_datetime(datetime.now(), utc=True)
         self._stride = stride
 
         assert self._end > self._start, "end should be greater than start!"
@@ -26,23 +27,20 @@ class AbstractSampler:
             self._time_bucket.split(" ", 1)[0]
         ), "time_bucket should be grater than stride!"
 
-    def time_bucket_num(self, start: str, end: str):
-        if start and end:  # TODO from和to如果是None要如何处理
-            delta = pd.to_datetime(end, utc=True) - pd.to_datetime(start, utc=True)
-            delta_days = delta.components.days
-            delta_month = delta_days // 30
-            delta_week = delta_days // 7
-            delta_hours = delta.components.hours + delta_days * 24
-            delta_minutes = delta.components.minutes + delta_hours * 60
-            delta_seconds = delta.components.seconds + delta_minutes * 60
-            delta_milliseconds = delta.components.milliseconds + delta_seconds * 1000
+    def time_bucket_num(self):
 
-            time_freq = self._time_bucket.split(" ", 1)[1]
+        delta = self._end - self._start
+        delta_days = delta.components.days
+        delta_month = delta_days // 30
+        delta_week = delta_days // 7
+        delta_hours = delta.components.hours + delta_days * 24
+        delta_minutes = delta.components.minutes + delta_hours * 60
+        delta_seconds = delta.components.seconds + delta_minutes * 60
+        delta_milliseconds = delta.components.milliseconds + delta_seconds * 1000
 
-            bucket_num = math.ceil(locals()[f"delta_{time_freq}"] / int(self._time_bucket.split(" ", 1)[0]))
-        else:
-            raise ValueError("data start and end can not be None!")
+        time_freq = self._time_bucket.split(" ", 1)[1]
 
+        bucket_num = math.ceil(locals()[f"delta_{time_freq}"] / int(self._time_bucket.split(" ", 1)[0]))
         return bucket_num
 
     def __call__(self):
@@ -56,24 +54,19 @@ class GroupFixednbrSampler(AbstractSampler):
         stride: int,
         start: str = None,
         end: str = None,
-        group_ids: Union[tuple[str], list[str]] = None,
+        group_ids: Union[tuple, list] = None,
     ):
         super().__init__(time_bucket, stride, start, end)
         self._group_ids = group_ids
 
     def random_bucket(self):
-        bucket_num = self.time_bucket_num(start=self._start, end=self._end)
+        bucket_num = self.time_bucket_num()
         bucket_mask = np.ones(bucket_num)
         return list(bucket_mask)
 
     def bucket_random_sample(self, all_date: pd.DataFrame):
         if len(all_date) > 0:
-            basis_index = list(range(0, len(all_date) + 1, self._stride))
-            random_index = np.random.randint(self._stride, size=len(basis_index))
-            sample_index = basis_index + random_index
-            sample_index[-1] = min(sample_index[-1], len(all_date) - 1)
-
-            return all_date.iloc[sample_index, :]
+            return all_date.loc[range(all_date.index[0], all_date.index[-1], self._stride), :]
         else:
             warnings.warn(
                 "please reset input parameters to ensure you have at least one bucket to be sampled!",
@@ -82,7 +75,7 @@ class GroupFixednbrSampler(AbstractSampler):
             return pd.DataFrame()
 
     def sample(self, bucket_mask):
-        bucket_num = self.time_bucket_num(start=self._start, end=self._end)
+        bucket_num = self.time_bucket_num()
         bucket_size = int(self._time_bucket.split(" ", 1)[0])
         time_bucket_unit = self._time_bucket.split(" ", 1)[1]
         freq_dict = {
@@ -96,13 +89,11 @@ class GroupFixednbrSampler(AbstractSampler):
         }
 
         all_date = pd.DataFrame(
-            pd.date_range(start=self._start, end=self._end, freq=freq_dict[time_bucket_unit]).values,
+            pd.date_range(start=self._start, end=self._end, freq=freq_dict[time_bucket_unit]),
             columns=["timeIndex"],
         )
 
-        all_date["bucket_nbr"] = pd.merge(
-            pd.DataFrame(range(bucket_num)), pd.DataFrame(range(bucket_size)), how="cross"
-        ).loc[0 : len(all_date), "0_x"]
+        all_date["bucket_nbr"] = [x for n in range(bucket_num) for x in [n] * bucket_size][: len(all_date)]
 
         if self._group_ids is not None:
             group_names = [f"group_{i}" for i in range(len(self._group_ids[0]))]
@@ -143,14 +134,14 @@ class GroupRandomSampler(GroupFixednbrSampler):
         ratio: float,
         start: str = None,
         end: str = None,
-        group_ids: list[str] = None,
+        group_ids: List[str] = None,
     ):
         super().__init__(time_bucket, stride, start, end)
         self._group_ids = group_ids
         self._ratio = ratio
 
     def random_bucket(self):
-        bucket_num = self.time_bucket_num(start=self._start, end=self._end)
+        bucket_num = self.time_bucket_num()
         bucket_mask = np.zeros(bucket_num)
         bucket_mask[np.where(np.random.random_sample(bucket_num) < self._ratio)[0]] = 1
         return list(bucket_mask)
@@ -169,7 +160,7 @@ class UniformNPerGroupSampler(GroupFixednbrSampler):
         avg_nbr: int,
         start: str = None,
         end: str = None,
-        group_ids: list[str] = None,
+        group_ids: List[str] = None,
     ):
         super().__init__(time_bucket, stride, start, end)
         self._group_ids = group_ids
@@ -177,7 +168,7 @@ class UniformNPerGroupSampler(GroupFixednbrSampler):
         self._avg_nbr = avg_nbr
 
     def random_bucket(self):
-        bucket_num = self.time_bucket_num(start=self._start, end=self._end)
+        bucket_num = self.time_bucket_num()
         bucket_mask = np.zeros(bucket_num)
         avg_length = bucket_num // self._n_groups
         assert avg_length > 0, "time_bucket should be smaller to ensure every group have at least one bucket."

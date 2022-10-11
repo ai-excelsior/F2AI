@@ -62,12 +62,11 @@ class Dataset:
         self,
         fs: "FeatureStore",
         service_name: str,
-        start: str,
-        end: str,
-        time_bucket: int,
-        stride: int,
+        start: str = None,
+        end: str = None,
+        time_bucket: str = "10 days",
+        stride: int = 1,
         sampler: callable = None,
-        include: str = "both",
     ):
         self.fs = fs
         self.service_name = service_name
@@ -75,9 +74,7 @@ class Dataset:
         self.end = end
         self.bucket = time_bucket
         self.stride = stride
-        self.entity_index = sampler(
-            start=start, end=end, time_bucket=time_bucket, stride=stride, include=include
-        )
+        self.entity_index = sampler(start=start, end=end, time_bucket=time_bucket, stride=stride)()
 
     def to_pytorch(self) -> IterableDataset:
         """convert to iterablt pytorch dataset"""

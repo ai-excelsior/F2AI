@@ -149,11 +149,13 @@ if __name__ == "__main__":
     # get_period_features_and_labels()
 
     def dataset():
-        ds = fs.get_dataset(service_name="credit_scoring_v1")
+        ds = fs.get_dataset(
+            service_name="credit_scoring_v1", sampler=GroupFixednbrSampler, time_bucker="10 days", stride=2
+        )
         i_ds = ds.to_pytorch()
         iter(i_ds)
 
-    # dataset
+    dataset()
 
     def sample():
         time_bucket = "4 days"
