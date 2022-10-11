@@ -161,6 +161,8 @@ class FeatureStore:
 
         if self.connection.type == "file":
             return self._get_point_record(feature_view, entity_df, features, include)
+        elif self.connection.type == "pgsql":
+            return self._get_point_pgsql(feature_view, entity_df, features, include)
 
     def get_period_features(
         self,
@@ -201,6 +203,8 @@ class FeatureStore:
 
         if self.connection.type == "file":
             return self._get_point_record(label_view, entity_df, labels, include)
+        elif self.connection.type == "pgsql":
+            return self._get_point_pgsql(label_view, entity_df, labels, include, is_label = True)
 
     def get_period_labels(
         self,
@@ -268,6 +272,90 @@ class FeatureStore:
             df = get_newest_record(df, TIME_COL, entity_name, CREATE_COL)
         return df
 
+    def _get_point_pgsql(self, views, entity_df: pd.DataFrame, features: list, include: bool = True, is_label: bool = False):
+        entity = self._get_avaliable_entity(views)
+        entity_name = [en for en in entity if en in list(entity_df.columns[:-1])]
+        all_entity_col = [self.entity[en].entity + " as " + en for en in entity_name]
+        # connect to pgsql db
+        conn = psy_conn(**self.connection.__dict__)
+        to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
+
+        if isinstance(views, (FeatureViews, LabelViews)):
+            assert self.sources[views.batch_source].event_time, "View is not time-relevant, no period to get"
+            entity_df, df = Tables(f"{TMP_TBL}", f"{views.batch_source}")
+            all_time_col = (
+                [
+                    f"{self.sources[views.batch_source].event_time} as {TIME_COL}_tmp",
+                    f"{self.sources[views.batch_source].create_time} as {CREATE_COL}",
+                ]
+                if self.sources[views.batch_source].create_time
+                else [f"{self.sources[views.batch_source].event_time} as  {TIME_COL}_tmp"]
+            )
+            create_time = CREATE_COL
+        else:
+            entity_df, df = Tables(f"{TMP_TBL}", f"{views.materialize_path}")
+            all_time_col = [f"{TIME_COL} as {TIME_COL}_tmp", MATERIALIZE_TIME]
+            create_time = MATERIALIZE_TIME
+        df = Query.from_(df).select(Parameter(",".join(all_entity_col + all_time_col + features))).as_("df")
+        if all_entity_col:
+            sql_join = (
+                Query.from_(entity_df)
+                .inner_join(df)
+                .using(",".join(entity_name))
+                .select(Parameter(f"df.*, {TIME_COL}"))
+                .as_("sql_join")
+            )
+        else:
+            sql_join = (
+                Query.from_(entity_df)
+                .cross_join(df)
+                .cross()
+                .select(Parameter(f"df.*, {TIME_COL}"))
+                .as_("sql_join")
+            )
+        sql_query = sql_join
+        if self.sources[views.batch_source].event_time and views.ttl:
+            sql_query = self._get_window_pgsql(sql_join, views.ttl, include, is_label)
+        sql_result = (
+            Query.from_(sql_query).select(
+                Parameter(
+                    ",".join(
+                        entity_name
+                        + [f"{TIME_COL} as {QUERY_COL}", f"{TIME_COL}_tmp as {TIME_COL}"]
+                        + features
+                    )
+                ),
+            )
+            if len(all_time_col) == 1
+            else (
+                Query.from_(
+                    Query.from_(sql_query).select(
+                        sql_query.star,
+                        Parameter(
+                            f"row_number() over (partition by ({','.join(entity_name)},{TIME_COL},{TIME_COL}_tmp) order by {create_time} DESC)"
+                        ),
+                    )
+                )
+                .select(
+                    Parameter(
+                        ",".join(
+                            entity_name
+                            + [f"{TIME_COL} as {QUERY_COL}", f"{TIME_COL}_tmp as {TIME_COL}"]
+                            + features
+                        )
+                    )
+                )
+                .where(Parameter("row_number=1"))
+            )
+        )
+        result = pd.DataFrame(
+            sql_df(sql_result.get_sql(), conn), columns=entity_name + [QUERY_COL, TIME_COL] + features
+        )
+        # remove entity_df and close connection
+        remove_table(TMP_TBL, conn)
+        close_conn(conn)
+        return result
+        
     def _get_period_pgsql(
         self,
         views,
@@ -357,6 +445,7 @@ class FeatureStore:
         # remove entity_df and close connection
         remove_table(TMP_TBL, conn)
         close_conn(conn)
+        print(result)
         return result
 
     def _get_period_record(
