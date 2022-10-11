@@ -9,8 +9,11 @@ from common.utils import read_file
 if TYPE_CHECKING:
     from aie_feast.featurestore import FeatureStore
 
-class IterableDataset:
+TIME_COL = "event_timestamp"
+MATERIALIZE_TIME = "materialize_time"
 
+
+class IterableDataset:
     def __init__(self, dataset: "Dataset", materialize_pd: pd.DataFrame):
         self.dataset = dataset
         self.materialize_pd = materialize_pd
@@ -18,7 +21,7 @@ class IterableDataset:
     def __iter__(self):
         entity = self.dataset.entity
         for i in range(entity.last_valid_index() + 1):
-            yield self.get_context(entity[i: i + 1])
+            yield self.get_context(entity[i : i + 1])
 
     def get_context(self, entity: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
         fs = self.dataset.fs
@@ -29,8 +32,8 @@ class IterableDataset:
             period = self.get_period(col_name_and_period)
             feature_views_pd.merge(
                 fs.get_period_features(feature_view, entity, period, cols, include=self.dataset.include)
-                if period else
-                fs.get_features(feature_view, entity, cols, include=self.dataset.include)
+                if period
+                else fs.get_features(feature_view, entity, cols, include=self.dataset.include)
             )
 
         for label_view_key, col_name_and_period in self.dataset.service.labels.items():
@@ -39,8 +42,8 @@ class IterableDataset:
             period = self.get_period(col_name_and_period)
             label_views_pd.merge(
                 fs.get_period_labels(label_view, entity, period, cols, include=self.dataset.include)
-                if period else
-                fs.get_labels(label_view, entity, cols, include=self.dataset.include)
+                if period
+                else fs.get_labels(label_view, entity, cols, include=self.dataset.include)
             )
 
         return feature_views_pd, label_views_pd
@@ -49,9 +52,9 @@ class IterableDataset:
         for _, period in col_name_and_period.items():
             if period is not None:
                 return period
-                
-class Dataset:
 
+
+class Dataset:
     def __init__(
         self,
         fs: "FeatureStore",
@@ -59,24 +62,27 @@ class Dataset:
         start: str,
         end: str,
         sampler: callable,
-        bucket: int,
+        time_bucket: int,
         stride: int,
-        include: str
+        include: str,
     ):
         self.fs = fs
         self.service = service
         self.start = start
         self.end = end
         self.sampler = sampler
-        self.bucket = bucket
+        self.bucket = time_bucket
         self.stride = stride
         self.include = include
         # TODO
-        self.entity: pd.DataFrame = self.sampler()
+
+    #  self.entity: pd.DataFrame = self.sampler()
 
     def to_pytorch(self) -> IterableDataset:
         """convert to iterablt pytorch dataset"""
-        if self.service.materialize_path.endswith('.parquet'):
-            materialize_pd = read_file(self.service.materialize_path, type='parquet', time_col='event_timestamp')
+        if self.service.materialize_path.endswith(".parquet"):
+            materialize_pd = read_file(
+                self.service.materialize_path, type="parquet", time_col=[TIME_COL, MATERIALIZE_TIME]
+            )
 
         return IterableDataset(self, materialize_pd)

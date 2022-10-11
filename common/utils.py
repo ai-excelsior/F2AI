@@ -60,13 +60,13 @@ def read_file(path, type, time_col=None, entity_cols=None):
 def to_file(file, path, type):
     path = remove_prefix(path, "file://")
     if type.startswith("parq"):
-        file.to_parquet(path + ".parquet")
+        file.to_parquet(path)
     elif type.startswith("tsv"):
-        file.to_csv(path + ".tsv", sep="\t")
+        file.to_csv(path , sep="\t")
     elif type.startswith("txt"):
-        file.to_csv(path + ".txt", sep=" ")
+        file.to_csv(path , sep=" ")
     else:
-        file.to_csv(path + ".csv")
+        file.to_csv(path)
 
 
 def transform_freq(dt):

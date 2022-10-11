@@ -652,7 +652,7 @@ class FeatureStore:
         to_file(
             joined_frame,
             os.path.join(self.project_folder, f"{service.materialize_path}"),
-            self.sources[self.labels[label_key].batch_source].file_format,
+            f"{service.materialize_path}".split(".")[-1],
         )
 
     def _read_local_file(self, views, features, all_entity_col):
@@ -830,7 +830,16 @@ class FeatureStore:
 
         # service_entity: Service = self.service[service]
         materialize_path = os.path.join(self.project_folder, service.materialize_path)
-        return Dataset(self, service, start, end, sampler, bucket, stride, include, materialize_path)
+        return Dataset(
+            self,
+            service=service,
+            start=start,
+            end=end,
+            sampler=sampler,
+            time_bucket=bucket,
+            stride=stride,
+            include=include,
+        )
 
     def query(self, query: str = None):
         """customized query, for example, distinct

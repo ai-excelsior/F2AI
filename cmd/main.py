@@ -144,10 +144,11 @@ if __name__ == "__main__":
             fs.labels["travel_time_label_view"], entity_link_ID_period, period, include=False
         )
 
-    get_period_features_and_labels()
+    # get_period_features_and_labels()
 
     def dataset():
-        fs.get_dataset(fs.service["credit_scoring_v1"])
+        ds = fs.get_dataset(fs.service["credit_scoring_v1"])
+        ds.to_pytorch()
 
     # dataset
 
