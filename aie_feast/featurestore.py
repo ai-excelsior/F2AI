@@ -18,6 +18,7 @@ from common.get_config import (
 )
 from common.utils import (
     read_file,
+    to_file,
     parse_date,
     get_newest_record,
     get_stats_result,
@@ -26,6 +27,7 @@ from common.utils import (
 from common.psl_utils import execute_sql, psy_conn, to_pgsql, remove_table, close_conn, sql_df
 from dateutil.relativedelta import relativedelta
 
+pd.DataFrame.to_csv
 
 TIME_COL = "event_timestamp"  # timestamp of action taken in original tables or period-query result, or query time in single-query result table
 CREATE_COL = "created_timestamp"  # timestamp of record of the action taken in original tables, or timestamp of action taken in single-query result table
@@ -501,7 +503,18 @@ class FeatureStore:
             self._offline_pgsql_materialize(service, incremental_begin)
 
     def _offline_pgsql_materialize(self, service, incremental_begin):
-        dbt_path = os.path.join(self.project_folder, f"{service.dbt_path}")  # dir to store dbt project
+        try:
+            incremental_begin = pd.to_datetime(incremental_begin, utc=True) if incremental_begin else None
+        except ParserError:
+            incremental_begin = parse_date(incremental_begin)
+        except:
+            raise TypeError("please check your `incremental_begin` type")
+
+        # dir to store dbt project
+        dbt_path = os.path.join(self.project_folder.lstrip("file://"), f"{service.dbt_path}")
+        os.system(
+            f"cd {dbt_path} && dbt run --profiles-dir {dbt_path} --vars {{begin_point:{incremental_begin} }}"
+        )
 
     def _offline_record_materialize(self, service: Service, incremental_begin):
         """materialize offline file
@@ -547,7 +560,11 @@ class FeatureStore:
                 joined_frame.drop(columns=[CREATE_COL], inplace=True)
 
         joined_frame[MATERIALIZE_TIME] = pd.to_datetime(datetime.now(), utc=True)
-        joined_frame.to_parquet(os.path.join(self.project_folder, f"{service.materialize_path}.parquet"))
+        to_file(
+            joined_frame,
+            os.path.join(self.project_folder, f"{service.materialize_path}"),
+            self.sources[self.labels[label_key].batch_source].file_format,
+        )
 
     def _read_local_file(self, views, features, all_entity_col):
         df = df = read_file(
@@ -733,4 +750,4 @@ class FeatureStore:
             query (str, optional): _description_. Defaults to None.
         """
         conn = psy_conn(**self.connection.__dict__)
-        return execute_sql(query,conn)
+        return execute_sql(query, conn)

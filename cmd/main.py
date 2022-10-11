@@ -1,5 +1,5 @@
 from argparse import ArgumentParser
-
+import os
 from pytz import utc
 from common.cmd_parser import get_f2ai_parser
 from aie_feast.featurestore import FeatureStore
@@ -104,24 +104,23 @@ if __name__ == "__main__":
         fs.get_features(fs.features["credit_scoring_v1"], entity_loan)
         # fs.get_labels(fs.service["credit_scoring_v1"], entity_dobssn_period)
 
-    get_features()
+    # get_features()
 
     def do_materailize():
         fs.materialize(fs.service["credit_scoring_v1"])
 
-    # do_materailize()
+    do_materailize()
 
     def get_period_features_and_labels():
+
         period = "5 hours"
         entity_link_ID_period = pd.DataFrame.from_dict(
             {
                 "link": [
                     "3377906289228510514",
-                    "3377906289228510514",
                 ],
                 TIME_COL: [
                     datetime(2016, 5, 30, 0, 0, 0, tzinfo=timezone.utc),
-                    datetime(2016, 5, 26, 0, 0, 0, tzinfo=timezone.utc),
                 ],
             }
         )
@@ -136,21 +135,14 @@ if __name__ == "__main__":
                 ],
             }
         )
-        # fs.get_period_features(fs.features["loan_features"], entity_dobssn_period, period="365 days")
-        # fs.get_period_labels(
-        #     fs.labels["travel_time_label_view"], entity_link_ID_period, period, include=False
-        # )
-
-        # fs.get_period_features(
-        #     fs.features["gy_link_travel_time_features"],
-        #     entity_link_ID_period,
-        #     period,
-        #     features=None,
-        #     include=True,
-        # )
+        fs.get_period_features(
+            fs.features["gy_link_travel_time_features"], entity_link_ID_period, period, include=False
+        )
         fs.get_period_labels(
             fs.labels["travel_time_label_view"], entity_link_ID_period, period, include=False
         )
+
+    get_period_features_and_labels()
 
     def dataset():
         fs.get_dataset(fs.service["credit_scoring_v1"])
