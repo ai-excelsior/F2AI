@@ -115,6 +115,7 @@ class GroupFixednbrSampler(AbstractSampler):
             result.sort_values(by=group_names + ["timeIndex"], inplace=True)
 
         else:
+            all_date = all_date[all_date["bucket_nbr"].isin(list(np.where(np.array(bucket_mask()) == 1)[0]))]
             result = all_date.groupby(["bucket_nbr"]).apply(lambda x: self.bucket_random_sample(x))
             result = result["timeIndex"].droplevel(level="bucket_nbr")
             result.sort_values(inplace=True)
