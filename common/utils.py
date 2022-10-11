@@ -102,6 +102,8 @@ def parse_date(dt):
 
 
 def get_newest_record(df, time_col, entity_id, create_time):
+    if len(df) == 0:
+        return get_latest_record(df, time_col, create_time)
     return (
         df.groupby(entity_id + [time_col + "_y"])
         .apply(get_latest_record, time_col, create_time)
