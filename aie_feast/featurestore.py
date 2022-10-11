@@ -66,6 +66,7 @@ class FeatureStore:
             "median",
             "min",
             "max",
+            "unique",
         ], f"{fn}is not a available function, you can use fs.query() to customize your function"
 
     def _get_avaliable_features(self, view, check_type: bool = False):
@@ -720,6 +721,7 @@ class FeatureStore:
         start: str = None,
         end: str = None,
         include: str = "both",
+        keys_only: bool = False,
     ):
         """get from `start` to `end` statistical `fn` results of `entity_df` from `views`, only work for numeric features varied with time
 
@@ -733,13 +735,15 @@ class FeatureStore:
             include(str,optional): whether to include `start` or `end` timestamp
         """
         self.__check_fns(fn)
+        check_type = True if fn != "unique" else False
         if not features:
             features = (
-                self._get_avaliable_features(views, True)
+                self._get_avaliable_features(views, check_type)
                 if isinstance(views, FeatureViews)
-                else self._get_available_labels(views, True)
+                else self._get_available_labels(views, check_type)
                 if isinstance(views, LabelViews)
-                else self._get_avaliable_features(views, True) + self._get_available_labels(views, True)
+                else self._get_avaliable_features(views, check_type)
+                + self._get_available_labels(views, check_type)
             )
 
         if entity_df is not None:
@@ -771,14 +775,21 @@ class FeatureStore:
                 df.rename(columns={TIME_COL: TIME_COL + "_x"}, inplace=True)
                 # end_time limit
                 df = df.assign(**{TIME_COL + "_y": end})
-
-            result = df.groupby(entities).apply(
-                get_stats_result,
-                fn,
-                primary_keys=entities + [TIME_COL + "_x", TIME_COL + "_y"],
-                include=include,
-                start=start,
-            )
+            if keys_only:
+                assert fn == "unique", "keys_only=True can only be applied when fn==unique"
+                result = list(
+                    df[(df[TIME_COL + "_x"] < df[TIME_COL + "_y"]) & (df[TIME_COL + "_x"] >= start)]
+                    .groupby(entities)
+                    .groups.keys()
+                )
+            else:
+                result = df.groupby(entities).apply(
+                    get_stats_result,
+                    fn,
+                    primary_keys=entities + [TIME_COL + "_x", TIME_COL + "_y"],
+                    include=include,
+                    start=start,
+                )
         return result
 
     def get_latest_entities(self, view, entity: List[str] = []):
@@ -830,10 +841,6 @@ class FeatureStore:
         return Dataset(
             fs=self,
             service_name=service_name,
-            start=start,
-            end=end,
-            time_bucket=time_bucker,
-            stride=stride,
             sampler=sampler,
         )
 

@@ -31,8 +31,8 @@ class AbstractSampler:
 
         delta = self._end - self._start
         delta_days = delta.components.days
-        delta_month = delta_days // 30
-        delta_week = delta_days // 7
+        delta_months = delta_days // 30
+        delta_weeks = delta_days // 7
         delta_hours = delta.components.hours + delta_days * 24
         delta_minutes = delta.components.minutes + delta_hours * 60
         delta_seconds = delta.components.seconds + delta_minutes * 60
@@ -55,9 +55,11 @@ class GroupFixednbrSampler(AbstractSampler):
         start: str = None,
         end: str = None,
         group_ids: Union[tuple, list] = None,
+        group_names: list = None,
     ):
         super().__init__(time_bucket, stride, start, end)
         self._group_ids = group_ids
+        self._group_names = group_names
 
     def random_bucket(self):
         bucket_num = self.time_bucket_num()
@@ -96,33 +98,29 @@ class GroupFixednbrSampler(AbstractSampler):
         all_date["bucket_nbr"] = [x for n in range(bucket_num) for x in [n] * bucket_size][: len(all_date)]
 
         if self._group_ids is not None:
-            group_names = [f"group_{i}" for i in range(len(self._group_ids[0]))]
-            group_keys = pd.DataFrame(self._group_ids, columns=group_names)
-            all_date = pd.merge(group_keys, all_date, how="cross")
-            all_date = (
-                all_date.groupby(group_names)
-                .apply(lambda x: x[x["bucket_nbr"].isin(list(np.where(np.array(bucket_mask()) == 1)[0]))])
-                .reset_index(drop=True)
-            )
-            result = all_date.groupby(group_names + ["bucket_nbr"]).apply(
-                lambda x: self.bucket_random_sample(x)
+            group_keys = pd.DataFrame(self._group_ids, columns=self._group_names)
+            result = group_keys.groupby(self._group_names).apply(
+                lambda x: x.merge(
+                    all_date[all_date["bucket_nbr"].isin([g for g, i in enumerate(bucket_mask) if i])]
+                    .groupby(["bucket_nbr"])
+                    .apply(lambda x: self.bucket_random_sample(x))
+                    .droplevel(level="bucket_nbr"),
+                    how="cross",
+                )
             )
             if len(result) > 0:
-                result = result[group_names + ["timeIndex"]].droplevel(level=group_names + ["bucket_nbr"])
-                result.sort_values(by=group_names + ["timeIndex"], inplace=True)
-
+                result = result.drop(columns="bucket_nbr").droplevel(level=self._group_names)
         else:
-            all_date = all_date[all_date["bucket_nbr"].isin(list(np.where(np.array(bucket_mask()) == 1)[0]))]
+            all_date = all_date[all_date["bucket_nbr"].isin([g for g, i in enumerate(bucket_mask) if i])]
             result = all_date.groupby(["bucket_nbr"]).apply(lambda x: self.bucket_random_sample(x))
             if len(result) > 0:
-                result = result["timeIndex"].droplevel(level="bucket_nbr")
-                result.sort_values(inplace=True)
-        result.reset_index(inplace=True, drop=True)
+                result = result.drop(columns="bucket_nbr").droplevel(level="bucket_nbr")
+        # result.reset_index(inplace=True, drop=True)
 
         return result.drop_duplicates()
 
     def __call__(self):
-        bucket_mask = self.random_bucket
+        bucket_mask = self.random_bucket()
         return self.sample(bucket_mask)
 
 
@@ -147,7 +145,7 @@ class GroupRandomSampler(GroupFixednbrSampler):
         return list(bucket_mask)
 
     def __call__(self):
-        bucket_mask = self.random_bucket
+        bucket_mask = self.random_bucket()
         return self.sample(bucket_mask)
 
 
@@ -178,5 +176,5 @@ class UniformNPerGroupSampler(GroupFixednbrSampler):
         return list(bucket_mask)
 
     def __call__(self):
-        bucket_mask = self.random_bucket
+        bucket_mask = self.random_bucket()
         return self.sample(bucket_mask)

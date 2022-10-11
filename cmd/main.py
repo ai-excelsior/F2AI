@@ -149,8 +149,24 @@ if __name__ == "__main__":
     # get_period_features_and_labels()
 
     def dataset():
+        groups = fs.stats(
+            fs.features["loan_features"],
+            group_key=["zipcode", "dob_ssn"],
+            keys_only=True,
+            fn="unique",
+            start="2021-08-24",
+            end="2021-08-26",
+        )
         ds = fs.get_dataset(
-            service_name="credit_scoring_v1", sampler=GroupFixednbrSampler, time_bucker="10 days", stride=2
+            service_name="credit_scoring_v1",
+            sampler=GroupFixednbrSampler(
+                time_bucket="10 days",
+                stride=2,
+                group_ids=groups,
+                group_names=["zipcode", "dob_ssn"],
+                start="2020-12-24",
+                end="2021-08-26",
+            ),
         )
         i_ds = ds.to_pytorch()
         iter(i_ds)
