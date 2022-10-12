@@ -72,7 +72,7 @@ def to_file(file, path, type):
     else:
         file.to_csv(path)
 
-        
+
 def read_db(table_name: str, connection: ConnectConfig, time_col=None, entity_cols=None) -> pd.DataFrame:
     time_col = [i for i in time_col if i]
     if connection.type == "pgsql":
@@ -98,7 +98,7 @@ def transform_freq(dt):
     return {freq: int(value)}
 
 
-def transform_pgsql_period(period, is_label):
+def transform_pgsql_period(period, is_label: bool = False):
     value, freq = period.split(" ")
     if freq == "minutes":
         freq = "mins"
