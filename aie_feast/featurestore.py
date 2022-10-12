@@ -317,9 +317,7 @@ class FeatureStore:
                 .select(Parameter(f"df.*, {TIME_COL}"))
                 .as_("sql_join")
             )
-        sql_query = sql_join
-        if self.sources[views.batch_source].event_time and views.ttl:
-            sql_query = self._get_window_pgsql(sql_join, views.ttl, include, is_label)
+        sql_query = self._pgsql_timelimit(sql_join, views.ttl, include)
         sql_result = (
             Query.from_(  # filter only by TIME_COL
                 Query.from_(sql_query).select(
@@ -681,6 +679,36 @@ class FeatureStore:
             ]
         ]
         return df
+    def _pgsql_timelimit(self, join, ttl, include: bool = True):
+        if ttl:
+            sql_query = (
+                Query.from_(join)
+                .select(join.star)
+                .where(
+                    Parameter(
+                        f" ({TIME_COL}_tmp::timestamp >= {TIME_COL}::timestamp) - '{ttl}' and ({TIME_COL}_tmp::timestamp < {TIME_COL}::timestamp"
+                    )
+                    if include
+                    else Parameter(
+                        f" ({TIME_COL}_tmp::timestamp > {TIME_COL}::timestamp) - '{ttl}' and ({TIME_COL}_tmp::timestamp <= {TIME_COL}::timestamp"
+                    )
+                )
+            )
+        else:
+            sql_query = (
+                Query.from_(join)
+                .select(join.star)
+                .where(
+                    Parameter(
+                        f" ({TIME_COL}_tmp::timestamp >= {TIME_COL}::timestamp) and ({TIME_COL}_tmp::timestamp < {TIME_COL}::timestamp"
+                    )
+                    if include
+                    else Parameter(
+                        f" ({TIME_COL}_tmp::timestamp > {TIME_COL}::timestamp) and ({TIME_COL}_tmp::timestamp <= {TIME_COL}::timestamp"
+                    )
+                )
+            )
+        return sql_query
 
     def _read_local_db_data(
         self, views: Union[FeatureViews, LabelViews], features: List, all_entity_col: Dict[str, str]
