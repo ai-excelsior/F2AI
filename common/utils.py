@@ -105,10 +105,10 @@ def transform_pgsql_period(period, is_label: bool = False):
     elif freq == "quarters":
         freq = "months"
         value = int(value) * 3
-    elif freq == "millisecs":
+    elif freq in ["millisecs", "milliseconds"]:
         freq = "secs"
         value = int(value) / 10e3
-    elif freq == "microsecs":
+    elif freq in ["microsecs", "microseconds"]:
         freq = "secs"
         value = int(value) / 10e6
     return value + " " + freq if is_label else "-" + value + " " + freq
