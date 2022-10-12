@@ -913,15 +913,15 @@ class FeatureStore:
             sampler=sampler,
         )
 
-    def query(self, view, query: str = None):
-        """customized query, for example, distinct
+    def query(self, query: str = None,return_df:bool=True):
+        """customized query, only works when connection.type != 'file'
 
         Args:
-            view: FeatureView, LabelView or Service
-            query (str, optional): _description_. Defaults to None.
+            query (str, optional): full sql query to execute in db
         """
-        if self.connection.type == "file":
-            pass
-        elif self.connection.type == "pgsql":
+        assert (
+            self.connection.type != "file"
+        ), "query doesnt work for file type project, you can manualy read local files in pandas"
+        if self.connection.type=='pgsql':
             conn = psy_conn(**self.connection.__dict__)
-            return sql_df(query, conn)
+        
