@@ -71,7 +71,7 @@ if __name__ == "__main__":
         fs.stats(fs.features["gy_link_travel_time_features"], group_key=["link"], fn="mean")
         fs.get_latest_entities(fs.features["gy_link_travel_time_features"])
 
-    stats()
+    # stats()
 
     def get_features():
         entity_link = pd.DataFrame.from_dict(
@@ -108,7 +108,7 @@ if __name__ == "__main__":
         # fs.get_features(fs.features["zipcode_features"], entity_loan)
         # fs.get_labels(fs.service["credit_scoring_v1"], entity_dobssn_period)
 
-    # get_features()
+    get_features()
 
     def do_materailize():
         fs.materialize(

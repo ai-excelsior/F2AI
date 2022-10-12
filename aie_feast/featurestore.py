@@ -317,13 +317,13 @@ class FeatureStore:
                 .select(Parameter(f"df.*, {TIME_COL}"))
                 .as_("sql_join")
             )
-        sql_query = self._pgsql_timelimit(sql_join, views.ttl, include)
+        sql_query = self._pgsql_timelimit(sql_join, views.ttl, include, is_label)
         sql_result = (
             Query.from_(  # filter only by TIME_COL
                 Query.from_(sql_query).select(
                     sql_query.star,
                     Parameter(
-                        f"row_number() over (partition by ({','.join(entity_name)},{TIME_COL}) order by {TIME_COL}_tmp DESC)"
+                        f"row_number() over (partition by ({','.join(entity_name + [TIME_COL])}) order by {TIME_COL}_tmp DESC)"
                     ),
                 )
             )
@@ -679,20 +679,22 @@ class FeatureStore:
             ]
         ]
         return df
-    def _pgsql_timelimit(self, join, ttl, include: bool = True):
+    def _pgsql_timelimit(self, join, ttl, include: bool = True, is_label: bool = False):
         if ttl:
+            ttl = transform_pgsql_period(ttl, is_label)
             sql_query = (
                 Query.from_(join)
                 .select(join.star)
                 .where(
                     Parameter(
-                        f" ({TIME_COL}_tmp::timestamp >= {TIME_COL}::timestamp) - '{ttl}' and ({TIME_COL}_tmp::timestamp < {TIME_COL}::timestamp"
+                        f" ({TIME_COL}_tmp::timestamp >= {TIME_COL}::timestamp + '{ttl}') and ({TIME_COL}_tmp::timestamp < {TIME_COL}::timestamp) "
                     )
                     if include
                     else Parameter(
-                        f" ({TIME_COL}_tmp::timestamp > {TIME_COL}::timestamp) - '{ttl}' and ({TIME_COL}_tmp::timestamp <= {TIME_COL}::timestamp"
+                        f" ({TIME_COL}_tmp::timestamp > {TIME_COL}::timestamp + '{ttl}') and ({TIME_COL}_tmp::timestamp <= {TIME_COL}::timestamp) "
                     )
                 )
+                .as_("sql_query")
             )
         else:
             sql_query = (
@@ -700,13 +702,14 @@ class FeatureStore:
                 .select(join.star)
                 .where(
                     Parameter(
-                        f" ({TIME_COL}_tmp::timestamp >= {TIME_COL}::timestamp) and ({TIME_COL}_tmp::timestamp < {TIME_COL}::timestamp"
+                        f" ({TIME_COL}_tmp::timestamp >= {TIME_COL}::timestamp) "
                     )
                     if include
                     else Parameter(
-                        f" ({TIME_COL}_tmp::timestamp > {TIME_COL}::timestamp) and ({TIME_COL}_tmp::timestamp <= {TIME_COL}::timestamp"
+                        f" ({TIME_COL}_tmp::timestamp > {TIME_COL}::timestamp) "
                     )
                 )
+                .as_("sql_query")
             )
         return sql_query
 
