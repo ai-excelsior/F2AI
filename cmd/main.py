@@ -169,7 +169,7 @@ if __name__ == "__main__":
             ),
         )
         i_ds = ds.to_pytorch()
-        iter(i_ds)
+        next(iter(i_ds))
 
     dataset()
 
@@ -196,5 +196,3 @@ if __name__ == "__main__":
         print(sample1)
         print(sample2)
         print(sample3)
-
-    sample()

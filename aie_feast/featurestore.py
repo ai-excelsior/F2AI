@@ -261,7 +261,7 @@ class FeatureStore:
                 df = get_newest_record(df, TIME_COL, entity_name, CREATE_COL)
         else:  # `Service`, read from materialized table
             df = read_file(
-                os.path.join(self.project_folder, views.materialize_path + ".parquet"),
+                os.path.join(self.project_folder, views.materialize_path),
                 "parquet",
                 [TIME_COL, MATERIALIZE_TIME],
                 list(all_entity_col.values()),
@@ -484,7 +484,7 @@ class FeatureStore:
             df_period = self._read_local_file(views, features, all_entity_col)
             # merge according to `entity`
             if all_entity_col:
-                df_period = df_period.merge([entity_name + [TIME_COL]], on=entity_name, how="inner")
+                df_period = df_period.merge(entity_df[entity_name + [TIME_COL]], on=entity_name, how="inner")
             else:
                 df_period = df_period.merge(entity_df, how="cross")
             # # match time_limit
@@ -495,7 +495,7 @@ class FeatureStore:
             # df_period.sort_values(by=entity_name + [QUERY_COL, TIME_COL], inplace=True, ignore_index=True)
         else:
             df_period = read_file(
-                os.path.join(self.project_folder, views.materialize_path + ".parquet"),
+                os.path.join(self.project_folder, views.materialize_path),
                 "parquet",
                 [TIME_COL, MATERIALIZE_TIME],
                 list(all_entity_col.values()),
@@ -873,11 +873,7 @@ class FeatureStore:
     def get_dataset(
         self,
         service_name: str,
-        start: str = None,
-        end: str = None,
         sampler: callable = None,
-        time_bucker: str = None,
-        stride: int = 1,
     ) -> Dataset:
         """get from `start` to `end` length data for training from `views`
 

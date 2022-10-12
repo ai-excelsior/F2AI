@@ -1,3 +1,4 @@
+from posixpath import split
 import pandas as pd
 from typing import Dict, List, Tuple
 from typing import TYPE_CHECKING
@@ -9,46 +10,85 @@ from copy import deepcopy
 
 if TYPE_CHECKING:
     from aie_feast.featurestore import FeatureStore
+    from aie_feast.service import Service
 
 TIME_COL = "event_timestamp"
 MATERIALIZE_TIME = "materialize_time"
 CREATE_COL = "created_timestamp"
+QUERY_COL = "query_timestamp"
 
 
 class IterableDataset:
     def __init__(
-        self, materialize_pd: pd.DataFrame, entity_index: pd.DataFrame, all_features: list, all_labels: list
+        self,
+        fs: "FeatureStore",
+        service_name: str,
+        entity_index: pd.DataFrame,
     ):
-        self.materialize_pd = materialize_pd
+        self.fs = fs
+        self.service_name = service_name
         self.entity_index = entity_index
-        self.all_features = all_features
-        self.all_labels = all_labels  # self.dataset.fs._get_available_labels(self.service)
+
+        self.service = self.fs.service[self.service_name]
+        self.all_features = self.get_feature_period(self.service)
+        self.all_labels = self.get_feature_period(self.service, True)
 
     def __iter__(self):
-        return iter([self.get_context(self.entity_index.iloc[[i]]) for i in range(len(self.entity_index))])
+        for i in range(len(self.entity_index)):
+            data_sample = self.get_context(self.entity_index.iloc[[i]])
+            if not data_sample[0].empty and not data_sample[1].empty:
+                yield data_sample
 
     def get_context(self, entity: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        feature_views_pd = deepcopy(entity)
-        label_views_pd = deepcopy(entity)
+        if self.fs.connection.type == "file":
+            feature_views_pd = deepcopy(entity)
+            label_views_pd = deepcopy(entity)
+            for period, features in self.all_features.items():
+                if period:
+                    entity.rename({TIME_COL: QUERY_COL}, inplace=True)
+                feature_views_pd = feature_views_pd.merge(
+                    self.fs.get_period_features(self.service, entity, period, features, True)
+                    if period
+                    else self.fs.get_features(self.service, entity, features, True),
+                    how="inner",
+                    on=list(entity.columns),
+                )
+            for period, features in self.all_labels.items():
+                if period:
+                    entity.rename({TIME_COL: QUERY_COL}, inplace=True)
+                label_views_pd = label_views_pd.merge(
+                    self.fs.get_period_labels(self.service, entity, period, True)
+                    if period
+                    else self.fs.get_labels(self.service, entity, True),
+                    how="inner",
+                    on=list(entity.columns),
+                )
+        return feature_views_pd.drop(columns=entity.columns).dropna(how="all"), label_views_pd.drop(
+            columns=entity.columns
+        ).dropna(how="all")
 
-        feature_views_pd = entity.merge(
-            self.materialize_pd[self.all_features], on=list(entity.columns[:-1]) + [TIME_COL], how="inner"
-        )
-        label_views_pd = entity.merge(
-            self.materialize_pd[self.all_labels], on=list(entity.columns[:-1]) + [TIME_COL], how="inner"
-        )
-
-        return feature_views_pd, label_views_pd
-
-    def get_period(self, fea_collect: list):
+    def get_feature_period(self, service: "Service", is_label=False):
         period_dict = {}
-        for fea in fea_collect:
-            for k, v in fea.items():
-                v = v if v else 0
-                if v in period_dict:
-                    period_dict[v].append(k)
-                else:
-                    period_dict[v] = [k] if k != "__all__" else None
+        if is_label:
+            for table, cols in service.labels.items():
+                for fea in cols:
+                    for k, v in fea.items():
+                        v = v if v else 0
+                        k = [k] if k != "__all__" else list(self.fs.features[table].labels.keys())
+                        if v in period_dict:
+                            period_dict[v] = period_dict[v] + k
+                        else:
+                            period_dict[v] = k
+        else:
+            for table, cols in service.features.items():
+                for fea in cols:
+                    for k, v in fea.items():
+                        v = v if v else 0
+                        k = [k] if k != "__all__" else list(self.fs.features[table].features.keys())
+                        if v in period_dict:
+                            period_dict[v] = period_dict[v] + k
+                        else:
+                            period_dict[v] = k
         return period_dict
 
 
@@ -66,20 +106,8 @@ class Dataset:
     def to_pytorch(self) -> IterableDataset:
         """convert to iterablt pytorch dataset"""
 
-        if self.fs.service[self.service_name].materialize_type == "file":  # file-record
-            materialize_pd = read_file(
-                os.path.join(
-                    self.fs.project_folder, f"{self.fs.service[self.service_name].materialize_path}"
-                ),
-                type=self.fs.service[self.service_name].materialize_path.split(".")[-1],
-                time_col=[TIME_COL, MATERIALIZE_TIME],
-            )
-        elif self.fs.service[self.service_name].materialize_type == "pgsql":
-            conn = psy_conn(**self.fs.connection.__dict__)
-
         return IterableDataset(
-            materialize_pd,
+            self.fs,
+            self.service_name,
             self.entity_index,
-            self.fs._get_available_features(self.fs.service[self.service_name]),
-            self.fs._get_available_labels(self.fs.service[self.service_name]),
         )
