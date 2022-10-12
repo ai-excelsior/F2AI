@@ -352,7 +352,7 @@ class FeatureStore:
             .where(Parameter("row_number=1"))
         )
         result = pd.DataFrame(
-            sql_df(sql_result.get_sql(), conn), columns=entity_name + [QUERY_COL, TIME_COL] + features
+            sql_df(sql_result.get_sql(), conn), columns=entity_name + [TIME_COL, CREATE_COL] + features
         )
         # remove entity_df and close connection
         remove_table(TMP_TBL, conn)
