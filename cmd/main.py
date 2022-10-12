@@ -146,7 +146,7 @@ if __name__ == "__main__":
             fs.labels["travel_time_label_view"], entity_link_ID_period, period, include=False
         )
 
-    get_period_features_and_labels()
+    # get_period_features_and_labels()
 
     def dataset():
         groups = fs.stats(
@@ -178,7 +178,7 @@ if __name__ == "__main__":
         stride = 3
         start = "2010-01-01 00:00:00"
         end = "2010-01-30 00:00:00"
-        group_ids = (["A", 10], ["A", 11], ["B", 10], ["B", 11])
+        group_ids = [("A", 10), ("A", 11), ("B", 10), ("B", 11)]
         # group_ids = (("A", 10), ("A", 11), ("B", 10), ("B", 11))
         # group_ids = ("A", "B")
         # group_ids = ["A", "B"]
@@ -190,9 +190,15 @@ if __name__ == "__main__":
         # sample1 = GroupFixednbrSampler(time_bucket, stride, start, end)()
         # sample2 = GroupRandomSampler(time_bucket, stride, ratio, start, end)()
         # sample3 = UniformNPerGroupSampler(time_bucket, stride, n_groups, avg_nbr, start, end)()
-        sample1 = GroupFixednbrSampler(time_bucket, stride, start, end, group_ids=group_ids)()
-        sample2 = GroupRandomSampler(time_bucket, stride, ratio, start, end, group_ids=group_ids)()
-        sample3 = UniformNPerGroupSampler(time_bucket, stride, n_groups, avg_nbr, start, end, group_ids)()
+        sample1 = GroupFixednbrSampler(
+            time_bucket, stride, start, end, group_ids=group_ids, group_names=["LETTER", "NBR"]
+        )()
+        sample2 = GroupRandomSampler(
+            time_bucket, stride, ratio, start, end, group_ids=group_ids, group_names=["LETTER", "NBR"]
+        )()
+        sample3 = UniformNPerGroupSampler(time_bucket, stride, n_groups, avg_nbr, start, end, group_ids, group_names=["LETTER", "NBR"])()
         print(sample1)
         print(sample2)
         print(sample3)
+
+    sample()

@@ -135,10 +135,12 @@ class GroupRandomSampler(GroupFixednbrSampler):
         start: str = None,
         end: str = None,
         group_ids: List[str] = None,
+        group_names: list = None,
     ):
         super().__init__(time_bucket, stride, start, end)
         self._group_ids = group_ids
         self._ratio = ratio
+        self._group_names = group_names
 
     def random_bucket(self):
         bucket_num = self.time_bucket_num()
@@ -161,11 +163,13 @@ class UniformNPerGroupSampler(GroupFixednbrSampler):
         start: str = None,
         end: str = None,
         group_ids: List[str] = None,
+        group_names: list = None,
     ):
         super().__init__(time_bucket, stride, start, end)
         self._group_ids = group_ids
         self._n_groups = n_groups
         self._avg_nbr = avg_nbr
+        self._group_names = group_names
 
     def random_bucket(self):
         bucket_num = self.time_bucket_num()
