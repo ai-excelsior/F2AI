@@ -321,36 +321,35 @@ class FeatureStore:
         if self.sources[views.batch_source].event_time and views.ttl:
             sql_query = self._get_window_pgsql(sql_join, views.ttl, include, is_label)
         sql_result = (
-            Query.from_(sql_query).select(
+            Query.from_(  # filter only by TIME_COL
+                Query.from_(sql_query).select(
+                    sql_query.star,
+                    Parameter(
+                        f"row_number() over (partition by ({','.join(entity_name)},{TIME_COL}) order by {TIME_COL}_tmp DESC)"
+                    ),
+                )
+            )
+            .select(
                 Parameter(
-                    ",".join(
-                        entity_name
-                        + [f"{TIME_COL} as {QUERY_COL}", f"{TIME_COL}_tmp as {TIME_COL}"]
-                        + features
-                    )
+                    ",".join(entity_name + [f"{TIME_COL}", f"{TIME_COL}_tmp as {CREATE_COL}"] + features)
                 ),
             )
+            .where(Parameter("row_number=1"))
             if len(all_time_col) == 1
-            else (
-                Query.from_(
-                    Query.from_(sql_query).select(
-                        sql_query.star,
-                        Parameter(
-                            f"row_number() over (partition by ({','.join(entity_name)},{TIME_COL},{TIME_COL}_tmp) order by {create_time} DESC)"
-                        ),
-                    )
-                )
-                .select(
+            else Query.from_(  # filter by TIME_COL and created time
+                Query.from_(sql_query).select(
+                    sql_query.star,
                     Parameter(
-                        ",".join(
-                            entity_name
-                            + [f"{TIME_COL} as {QUERY_COL}", f"{TIME_COL}_tmp as {TIME_COL}"]
-                            + features
-                        )
-                    )
+                        f"row_number() over (partition by ({','.join(entity_name)},{TIME_COL}) order by {create_time} DESC {TIME_COL}_tmp DESC)"
+                    ),
                 )
-                .where(Parameter("row_number=1"))
             )
+            .select(
+                Parameter(
+                    ",".join(entity_name + [f"{TIME_COL}", f"{TIME_COL}_tmp as {CREATE_COL}"] + features)
+                )
+            )
+            .where(Parameter("row_number=1"))
         )
         result = pd.DataFrame(
             sql_df(sql_result.get_sql(), conn), columns=entity_name + [QUERY_COL, TIME_COL] + features
@@ -886,11 +885,15 @@ class FeatureStore:
             sampler=sampler,
         )
 
-    def query(self, query: str = None):
+    def query(self, view, query: str = None):
         """customized query, for example, distinct
 
         Args:
+            view: FeatureView, LabelView or Service
             query (str, optional): _description_. Defaults to None.
         """
-        conn = psy_conn(**self.connection.__dict__)
-        return sql_df(query, conn)
+        if self.connection.type == "file":
+            pass
+        elif self.connection.type == "pgsql":
+            conn = psy_conn(**self.connection.__dict__)
+            return sql_df(query, conn)

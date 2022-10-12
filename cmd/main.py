@@ -196,9 +196,11 @@ if __name__ == "__main__":
         sample2 = GroupRandomSampler(
             time_bucket, stride, ratio, start, end, group_ids=group_ids, group_names=["LETTER", "NBR"]
         )()
-        sample3 = UniformNPerGroupSampler(time_bucket, stride, n_groups, avg_nbr, start, end, group_ids, group_names=["LETTER", "NBR"])()
+        sample3 = UniformNPerGroupSampler(
+            time_bucket, stride, n_groups, avg_nbr, start, end, group_ids, group_names=["LETTER", "NBR"]
+        )()
         print(sample1)
         print(sample2)
         print(sample3)
 
-    sample()
+    # sample()
