@@ -45,7 +45,7 @@ class IterableDataset:
             label_views_pd = deepcopy(entity)
             for period, features in self.all_features.items():
                 if period:
-                    entity.rename({TIME_COL: QUERY_COL}, inplace=True)
+                    feature_views_pd.rename({TIME_COL: QUERY_COL}, inplace=True)
                 feature_views_pd = feature_views_pd.merge(
                     self.fs.get_period_features(self.service, entity, period, features, True)
                     if period
@@ -55,7 +55,7 @@ class IterableDataset:
                 )
             for period, features in self.all_labels.items():
                 if period:
-                    entity.rename({TIME_COL: QUERY_COL}, inplace=True)
+                    label_views_pd.rename({TIME_COL: QUERY_COL}, inplace=True)
                 label_views_pd = label_views_pd.merge(
                     self.fs.get_period_labels(self.service, entity, period, True)
                     if period
@@ -67,7 +67,16 @@ class IterableDataset:
             columns=entity.columns
         ).dropna(how="all")
 
-    def get_feature_period(self, service: "Service", is_label=False):
+    def get_feature_period(self, service: "Service", is_label=False) -> dict:
+        """_summary_
+
+        Args:
+            service (Service): materialized service to construct
+            is_label (bool, optional): get labels or not
+
+        Returns:
+            Dict: {period1:[fea1,fea2],period2[fea5],0:[fea3,fea4]}, 0 means no period
+        """
         period_dict = {}
         if is_label:
             for table, cols in service.labels.items():
