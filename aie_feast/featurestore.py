@@ -452,7 +452,6 @@ class FeatureStore:
         # remove entity_df and close connection
         remove_table(TMP_TBL, conn)
         close_conn(conn)
-        print(result)
         return result
 
     def _get_period_record(
@@ -687,7 +686,9 @@ class FeatureStore:
         ]
         return df
 
-    def _read_local_db_data(self, views: Union[FeatureViews, LabelViews], features: List, all_entity_col: Dict[str, str]) -> pd.DataFrame:
+    def _read_local_db_data(
+        self, views: Union[FeatureViews, LabelViews], features: List, all_entity_col: Dict[str, str]
+    ) -> pd.DataFrame:
         source: SourceConfig = self.sources[views.batch_source]
         df = read_db(
             source.name,
@@ -696,7 +697,8 @@ class FeatureStore:
                 source.event_time,
                 source.create_time,
             ],
-            list(all_entity_col.keys()))
+            list(all_entity_col.keys()),
+        )
         df.rename(
             columns={
                 source.event_time: TIME_COL,
@@ -809,7 +811,7 @@ class FeatureStore:
                 df = df[[col for col in features + list(all_entity_col.values()) + [TIME_COL]]]
 
         if entity_df is not None and entities:
-                df = df.merge(entity_df, how="right", on=entities)
+            df = df.merge(entity_df, how="right", on=entities)
         elif entity_df is not None:
             df = df.merge(entity_df, how="cross")
         else:
