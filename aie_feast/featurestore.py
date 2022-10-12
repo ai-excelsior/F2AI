@@ -1,10 +1,8 @@
 from datetime import datetime
 from typing import Dict, List, Union
-from parser import ParserError
 import pandas as pd
 import os
-from pypika import Query, Table, Field, Tables, Parameter
-from sqlalchemy import TIME
+from pypika import Query, Tables, Parameter
 from aie_feast.views import FeatureViews, LabelViews
 from aie_feast.service import Service
 from common.source import SourceConfig
@@ -53,7 +51,6 @@ class FeatureStore:
         self.features = get_feature_views(os.path.join(project_folder, "feature_views"))
         self.labels = get_label_views(os.path.join(project_folder, "label_views"))
         self.service = get_service_cfg(os.path.join(project_folder, "services"))
-        self.dataset = {}
 
     def __check_format(self, entity_df):
         assert (

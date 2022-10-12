@@ -1,11 +1,6 @@
-from posixpath import split
 import pandas as pd
-from typing import Dict, List, Tuple
+from typing import Tuple
 from typing import TYPE_CHECKING
-from aie_feast.views import FeatureViews, LabelViews
-from common.utils import read_file
-from common.psl_utils import psy_conn
-import os
 from copy import deepcopy
 
 if TYPE_CHECKING:
@@ -110,13 +105,13 @@ class Dataset:
     ):
         self.fs = fs
         self.service_name = service_name
-        self.entity_index = sampler()
+        self.sampler = sampler
 
     def to_pytorch(self) -> IterableDataset:
-        """convert to iterablt pytorch dataset"""
-
+        """convert to iterablt pytorch dataset really hold data"""
+        entity_index = self.sampler()
         return IterableDataset(
             self.fs,
             self.service_name,
-            self.entity_index,
+            entity_index,
         )
