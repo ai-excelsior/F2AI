@@ -1,8 +1,8 @@
 import pandas as pd
-from pypika import Query
+from pypika import Query, Parameter, Table
 from pypika.queries import QueryBuilder
 from common.connect import ConnectConfig
-from common.psl_utils import psy_conn, sql_df
+from common.psl_utils import psy_conn, sql_df, execute_sql
 
 
 FSKEY = "__FS__"
@@ -78,7 +78,11 @@ def read_db(table_name: str, connection: ConnectConfig, time_col=None, entity_co
     if connection.type == "pgsql":
         conn = psy_conn(**connection.__dict__)
         q: QueryBuilder = Query.from_(table_name).select("*")
-        df = pd.read_sql(q.get_sql(), conn)
+        cursor = execute_sql(q.get_sql(), conn)
+        df = pd.DataFrame(
+            cursor.fetchall(), columns=[c.name for c in cursor.description]
+        )
+        conn.close()
     for col in time_col:
         df[col] = pd.to_datetime(df[col], utc=True)
     if entity_cols:
