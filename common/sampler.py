@@ -3,8 +3,7 @@ import numpy as np
 import math
 import pandas as pd
 import warnings
-from typing import Union, List, Tuple
-from datetime import datetime
+from typing import Union, List
 
 TIME_COL = "event_timestamp"
 
@@ -81,15 +80,15 @@ class GroupFixednbrSampler(AbstractSampler):
     def sample(self, bucket_mask):
         bucket_num = self.time_bucket_num()
         bucket_size = int(self._time_bucket.split(" ", 1)[0])
-        time_bucket_unit = self._time_bucket.split(" ", 1)[1]
+        time_bucket_unit = self._time_bucket.split(" ", 1)[1].rstrip("s")
         freq_dict = {
-            "months": "MS",
-            "weeks": "W",
-            "days": "D",
-            "hours": "H",
-            "minutes": "min",
-            "seconds": "S",
-            "milliseconds": "ms",
+            "month": "MS",
+            "week": "W",
+            "day": "D",
+            "hour": "H",
+            "minute": "min",
+            "second": "S",
+            "millisecond": "ms",
         }
 
         all_date = pd.DataFrame(
