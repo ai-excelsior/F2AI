@@ -878,12 +878,7 @@ class FeatureStore:
 
         Args:
             service_name(str): name of `SERVICE` to use
-            start (str, optional): _description_. Defaults to None.
-            end (str, optional): _description_. Defaults to None.
-            sampler (callable, optional): _description_. Defaults to None.
-            time_bucker (str): time_bucket, Defaults to None means all in one bucket
-            stride (int, optional): stride to sample, Defaults to 1 means no stride
-            include(str,optional): whether to include `start` or `end` timestamp
+            sampler (callable, optional): sampler
         """
         return Dataset(
             fs=self,
@@ -898,4 +893,4 @@ class FeatureStore:
             query (str, optional): _description_. Defaults to None.
         """
         conn = psy_conn(**self.connection.__dict__)
-        return execute_sql(query, conn)
+        return sql_df(query, conn)

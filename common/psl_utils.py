@@ -20,7 +20,7 @@ def close_conn(conn):
 def execute_sql(sql, conn):
     cursor = conn.cursor()
     cursor.execute(sql)
-    conn.commit()
+    return cursor
 
 
 def to_pgsql(df, tbl_name, **kwagrs):
@@ -31,9 +31,7 @@ def to_pgsql(df, tbl_name, **kwagrs):
 
 
 def sql_df(sql, conn):
-    cursor = conn.cursor()
-    cursor.execute(sql)
-    df = list(cursor.fetchall())
+    df = list(execute_sql(sql, conn).fetchall())
     conn.commit()
     return df
 
