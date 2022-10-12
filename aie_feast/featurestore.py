@@ -424,7 +424,7 @@ class FeatureStore:
                     Query.from_(sql_query).select(
                         sql_query.star,
                         Parameter(
-                            f"row_number() over (partition by ({','.join(entity_name)},{TIME_COL},{TIME_COL}_tmp) order by {create_time} DESC)"
+                            f"row_number() over (partition by ({','.join(entity_name+[TIME_COL,TIME_COL+'_tmp'])}) order by {create_time} DESC)"
                         ),
                     )
                 )
