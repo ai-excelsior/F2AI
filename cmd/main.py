@@ -103,7 +103,7 @@ if __name__ == "__main__":
             }
         )  # 19991113_3598 has duplicates, due to the original data
 
-        fs.get_features(fs.features["gy_link_travel_time_features"], entity_link)
+        fs.get_features(fs.service["credit_scoring_v1"], entity_dobssn_period)
         # fs.get_period_features(fs.features["gy_link_travel_time_features"], entity_link, period="5 hours")
         # fs.get_features(fs.features["zipcode_features"], entity_loan)
         # fs.get_labels(fs.service["credit_scoring_v1"], entity_dobssn_period)
@@ -173,7 +173,7 @@ if __name__ == "__main__":
         i_ds = ds.to_pytorch()
         next(iter(i_ds))
 
-    # dataset()
+    #    dataset()
 
     def sample():
         time_bucket = "4 days"
