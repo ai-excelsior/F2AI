@@ -300,6 +300,7 @@ class FeatureStore:
             entity_df, df = Tables(f"{TMP_TBL}", f"{views.materialize_path}")
             all_time_col = [f"{TIME_COL} as {TIME_COL}_tmp", MATERIALIZE_TIME]
             create_time = MATERIALIZE_TIME
+        
         df = Query.from_(df).select(Parameter(",".join(all_entity_col + all_time_col + features))).as_("df")
         if all_entity_col:
             sql_join = (
@@ -317,7 +318,8 @@ class FeatureStore:
                 .select(Parameter(f"df.*, {TIME_COL}"))
                 .as_("sql_join")
             )
-        sql_query = self._pgsql_timelimit(sql_join, views.ttl, include, is_label)
+        ttl = transform_pgsql_period(views.ttl, False)
+        sql_query = self._pgsql_timelimit(sql_join, ttl, include)
         sql_result = (
             Query.from_(  # filter only by TIME_COL
                 Query.from_(sql_query).select(
@@ -338,7 +340,7 @@ class FeatureStore:
                 Query.from_(sql_query).select(
                     sql_query.star,
                     Parameter(
-                        f"row_number() over (partition by ({','.join(entity_name)},{TIME_COL}) order by {create_time} DESC {TIME_COL}_tmp DESC)"
+                        f"row_number() over (partition by ({','.join(entity_name)+ [TIME_COL]}) order by {create_time} DESC {TIME_COL}_tmp DESC)"
                     ),
                 )
             )
@@ -679,19 +681,18 @@ class FeatureStore:
             ]
         ]
         return df
-    def _pgsql_timelimit(self, join, ttl, include: bool = True, is_label: bool = False):
+    def _pgsql_timelimit(self, join, ttl, include: bool = True):
         if ttl:
-            ttl = transform_pgsql_period(ttl, is_label)
             sql_query = (
                 Query.from_(join)
                 .select(join.star)
                 .where(
                     Parameter(
-                        f" ({TIME_COL}_tmp::timestamp >= {TIME_COL}::timestamp + '{ttl}') and ({TIME_COL}_tmp::timestamp < {TIME_COL}::timestamp) "
+                        f" ({TIME_COL}_tmp::timestamp > {TIME_COL}::timestamp + '{ttl}') and ({TIME_COL}_tmp::timestamp <= {TIME_COL}::timestamp) "
                     )
                     if include
                     else Parameter(
-                        f" ({TIME_COL}_tmp::timestamp > {TIME_COL}::timestamp + '{ttl}') and ({TIME_COL}_tmp::timestamp <= {TIME_COL}::timestamp) "
+                        f" ({TIME_COL}_tmp::timestamp >= {TIME_COL}::timestamp + '{ttl}') and ({TIME_COL}_tmp::timestamp < {TIME_COL}::timestamp) "
                     )
                 )
                 .as_("sql_query")
@@ -702,11 +703,11 @@ class FeatureStore:
                 .select(join.star)
                 .where(
                     Parameter(
-                        f" ({TIME_COL}_tmp::timestamp >= {TIME_COL}::timestamp) "
+                        f" ({TIME_COL}_tmp::timestamp <= {TIME_COL}::timestamp) "
                     )
                     if include
                     else Parameter(
-                        f" ({TIME_COL}_tmp::timestamp > {TIME_COL}::timestamp) "
+                        f" ({TIME_COL}_tmp::timestamp < {TIME_COL}::timestamp) "
                     )
                 )
                 .as_("sql_query")
@@ -925,6 +926,5 @@ class FeatureStore:
         assert (
             self.connection.type != "file"
         ), "query doesnt work for file type project, you can manualy read local files in pandas"
-        if self.connection.type=='pgsql':
-            conn = psy_conn(**self.connection.__dict__)
+       
         
