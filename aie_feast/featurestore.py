@@ -318,8 +318,7 @@ class FeatureStore:
                 .select(Parameter(f"df.*, {TIME_COL}"))
                 .as_("sql_join")
             )
-        ttl = transform_pgsql_period(views.ttl, False)
-        sql_query = self._pgsql_timelimit(sql_join, ttl, include)
+        sql_query = self._pgsql_timelimit(sql_join, views.ttl, include)
         sql_result = (
             Query.from_(  # filter only by TIME_COL
                 Query.from_(sql_query).select(
@@ -684,6 +683,7 @@ class FeatureStore:
 
     def _pgsql_timelimit(self, join, ttl, include: bool = True):
         if ttl:
+            ttl = transform_pgsql_period(ttl, False)
             sql_query = (
                 Query.from_(join)
                 .select(join.star)
