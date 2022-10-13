@@ -314,7 +314,7 @@ class FeatureStore:
             sql_join = (
                 Query.from_(Query.from_(entity_df).select(Parameter(",".join(entity_name + [TIME_COL]))))
                 .inner_join(df)
-                .using(Parameter(",".join(entity_name)))
+                .using(*(entity_name))
                 .select(Parameter(f"df.*, {TIME_COL}"))
                 .as_("sql_join")
             )
@@ -405,7 +405,7 @@ class FeatureStore:
             sql_join = (
                 Query.from_(Query.from_(entity_df).select(Parameter(",".join(entity_name + [TIME_COL]))))
                 .inner_join(df)
-                .using(Parameter(",".join(entity_name)))
+                .using(*(entity_name))
                 .select(Parameter(f"df.*, {TIME_COL}"))
                 .as_("sql_join")
             )
