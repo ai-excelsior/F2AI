@@ -300,7 +300,7 @@ class FeatureStore:
             entity_df, df = Tables(f"{TMP_TBL}", f"{views.materialize_path}")
             all_time_col = [f"{TIME_COL} as {TIME_COL}_tmp", MATERIALIZE_TIME]
             create_time = MATERIALIZE_TIME
-        
+
         df = Query.from_(df).select(Parameter(",".join(all_entity_col + all_time_col + features))).as_("df")
         if all_entity_col:
             sql_join = (
@@ -681,6 +681,7 @@ class FeatureStore:
             ]
         ]
         return df
+
     def _pgsql_timelimit(self, join, ttl, include: bool = True):
         if ttl:
             sql_query = (
@@ -702,13 +703,9 @@ class FeatureStore:
                 Query.from_(join)
                 .select(join.star)
                 .where(
-                    Parameter(
-                        f" ({TIME_COL}_tmp::timestamp <= {TIME_COL}::timestamp) "
-                    )
+                    Parameter(f" ({TIME_COL}_tmp::timestamp <= {TIME_COL}::timestamp) ")
                     if include
-                    else Parameter(
-                        f" ({TIME_COL}_tmp::timestamp < {TIME_COL}::timestamp) "
-                    )
+                    else Parameter(f" ({TIME_COL}_tmp::timestamp < {TIME_COL}::timestamp) ")
                 )
                 .as_("sql_query")
             )
@@ -917,7 +914,7 @@ class FeatureStore:
             sampler=sampler,
         )
 
-    def query(self, query: str = None,return_df:bool=True):
+    def query(self, query: str = None, return_df: bool = True):
         """customized query, only works when connection.type != 'file'
 
         Args:
@@ -926,5 +923,12 @@ class FeatureStore:
         assert (
             self.connection.type != "file"
         ), "query doesnt work for file type project, you can manualy read local files in pandas"
-       
-        
+        if self.connection.type == "pgsql":
+            conn = psy_conn(**self.connection.__dict__)
+            if return_df:
+                result = pd.DataFrame(sql_df(query, conn))
+            else:
+                execute_sql(query, conn)
+                result = None
+            close_conn(conn)
+            return result
