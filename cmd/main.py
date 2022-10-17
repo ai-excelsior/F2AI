@@ -96,26 +96,26 @@ if __name__ == "__main__":
                 "dob_ssn": ["19991113_3598", "19960703_3449"],
                 "loan": ["21837", "38637"],
                 TIME_COL: [
-                    datetime(2021, 8, 26, tzinfo=timezone.utc),
-                    datetime(2021, 1, 1, 10, 59, 42, tzinfo=timezone.utc),
+                    datetime(2020, 8, 26, tzinfo=timezone.utc),
+                    datetime(2020, 1, 1, 10, 59, 42, tzinfo=timezone.utc),
                     #   datetime(2021, 7, 1, 10, 59, 42, tzinfo=timezone.utc),
                 ],
             }
         )  # 19991113_3598 has duplicates, due to the original data
 
-        fs.get_features(fs.service["credit_scoring_v1"], entity_dobssn_period)
+        fs.get_period_labels(fs.service["credit_scoring_v1"], entity_dobssn_period, "365 days")
         # fs.get_period_features(fs.features["gy_link_travel_time_features"], entity_link, period="5 hours")
         # fs.get_features(fs.features["zipcode_features"], entity_loan)
         # fs.get_labels(fs.service["credit_scoring_v1"], entity_dobssn_period)
 
-    # get_features()
+    get_features()
 
     def do_materailize():
         fs.materialize(
             "credit_scoring_v1",
         )
 
-    do_materailize()
+    # do_materailize()
 
     def get_period_features_and_labels():
 

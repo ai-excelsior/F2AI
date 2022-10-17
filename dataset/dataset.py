@@ -80,9 +80,6 @@ class IterableDataset:
                 self.entity_col,
             ]
             for period, features in self.all_features.items():
-                if period:
-                    features_result = Query.from_(entity).inner_join()
-
                 feature_views_pd = (
                     self.fs.get_period_features(self.service, entity, period, features, True)
                     if period

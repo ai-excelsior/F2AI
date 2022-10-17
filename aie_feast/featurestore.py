@@ -1,4 +1,5 @@
 from datetime import datetime
+from tkinter import N
 from typing import Dict, List, Union
 import pandas as pd
 import os
@@ -164,10 +165,12 @@ class FeatureStore:
             features = self._get_available_features(feature_view)
 
         if self.connection.type == "file":
-            assert isinstance(entity_df, pd.DataFrame), "file-source project can only accept local query"
             return self._get_point_record(feature_view, entity_df, features, include)
         elif self.connection.type == "pgsql":
-            return self._get_point_pgsql(feature_view, entity_df, features, include)
+            to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
+            return self._get_point_pgsql(
+                feature_view, entity_df, features, include, TMP_TBL, list(entity_df.columns[:-1])
+            )
 
     def get_period_features(
         self,
@@ -191,10 +194,19 @@ class FeatureStore:
             features = self._get_available_features(feature_view)
 
         if self.connection.type == "file":
-            assert isinstance(entity_df, pd.DataFrame), "file-source project can only accept local query"
             return self._get_period_record(feature_view, entity_df, period, features, include, is_label=False)
         elif self.connection.type == "pgsql":
-            return self._get_period_pgsql(feature_view, entity_df, period, features, include, is_label=False)
+            to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
+            return self._get_period_pgsql(
+                feature_view,
+                entity_df,
+                period,
+                features,
+                include,
+                False,
+                TMP_TBL,
+                list(entity_df.columns[:-1]),
+            )
 
     def get_labels(self, label_view, entity_df: pd.DataFrame, include: bool = False):
         """non-time series prediction use: get labels of `entity_df` from `label_views`
@@ -208,10 +220,12 @@ class FeatureStore:
         labels = self._get_available_labels(label_view)
 
         if self.connection.type == "file":
-            assert isinstance(entity_df, pd.DataFrame), "file-source project can only accept local query"
             return self._get_point_record(label_view, entity_df, labels, include)
         elif self.connection.type == "pgsql":
-            return self._get_point_pgsql(label_view, entity_df, labels, include, is_label=True)
+            to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
+            return self._get_point_pgsql(
+                label_view, entity_df, labels, include, TMP_TBL, list(entity_df.columns[:-1])
+            )
 
     def get_period_labels(
         self,
@@ -232,10 +246,12 @@ class FeatureStore:
         labels = self._get_available_labels(label_view)
 
         if self.connection.type == "file":
-            assert isinstance(entity_df, pd.DataFrame), "file-source project can only accept local query"
             return self._get_period_record(label_view, entity_df, period, labels, include, is_label=True)
         elif self.connection.type == "pgsql":
-            return self._get_period_pgsql(label_view, entity_df, period, labels, include, is_label=False)
+            to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
+            return self._get_period_pgsql(
+                label_view, entity_df, period, labels, include, True, TMP_TBL, list(entity_df.columns[:-1])
+            )
 
     def _get_point_record(self, views, entity_df: pd.DataFrame, features: list, include: bool = True):
         """non time-series prediction use
@@ -281,17 +297,22 @@ class FeatureStore:
         return df
 
     def _get_point_pgsql(
-        self, views, entity_df: Union[pd.DataFrame, List[str]], features: list, include: bool = True
+        self,
+        views,
+        entity_df: Union[pd.DataFrame, List[str]],
+        features: list,
+        include: bool = True,
+        table_name: str = None,
+        entity_columns: list = None,
     ):
         entity = self._get_available_entity(views)
-        entity_name = [en for en in entity if en in list(entity_df.columns[:-1])]
+        entity_name = [en for en in entity if en in entity_columns]
         # connect to pgsql db
         conn = psy_conn(**self.connection.__dict__)
-        to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
 
         if isinstance(views, (FeatureViews, LabelViews)):
             assert self.sources[views.batch_source].event_time, "View is not time-relevant, no period to get"
-            entity_df, df = Tables(f"{TMP_TBL}", f"{views.batch_source}")
+            entity_df, df = Tables(f"{table_name}", f"{views.batch_source}")
             all_entity_col = [self.entity[en].entity + " as " + en for en in entity_name]
             all_time_col = (
                 [
@@ -304,7 +325,7 @@ class FeatureStore:
             create_time = CREATE_COL
             ttl = views.ttl
         else:
-            entity_df, df = Tables(f"{TMP_TBL}", f"{views.materialize_path}")
+            entity_df, df = Tables(f"{table_name}", f"{views.materialize_path}")
             all_entity_col = entity_name
             all_time_col = [f"{TIME_COL} as {TIME_COL}_tmp", MATERIALIZE_TIME]
             create_time = MATERIALIZE_TIME
@@ -347,7 +368,7 @@ class FeatureStore:
                 Query.from_(sql_query).select(
                     sql_query.star,
                     Parameter(
-                        f"row_number() over (partition by ({','.join(entity_name+ [TIME_COL])}) order by {create_time} DESC {TIME_COL}_tmp DESC)"
+                        f"row_number() over (partition by ({','.join(entity_name+ [TIME_COL])}) order by {create_time} DESC, {TIME_COL}_tmp DESC)"
                     ),
                 )
             )
@@ -362,7 +383,7 @@ class FeatureStore:
             sql_df(sql_result.get_sql(), conn), columns=entity_name + [TIME_COL, CREATE_COL] + features
         )
         # remove entity_df and close connection
-        remove_table(TMP_TBL, conn)
+        remove_table(table_name, conn)
         close_conn(conn)
         return result
 
@@ -374,17 +395,18 @@ class FeatureStore:
         features: list,
         include: bool = True,
         is_label: bool = False,
+        table_name: str = None,
+        entity_columns: list = None,
     ):
         entity = self._get_available_entity(views)
-        entity_name = [en for en in entity if en in list(entity_df.columns[:-1])]
+        entity_name = [en for en in entity if en in entity_columns]
         # connect to pgsql db
         conn = psy_conn(**self.connection.__dict__)
-        to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
         period = transform_pgsql_period(period, is_label)
 
         if isinstance(views, (FeatureViews, LabelViews)):
             assert self.sources[views.batch_source].event_time, "View is not time-relevant, no period to get"
-            entity_df, df = Tables(f"{TMP_TBL}", f"{views.batch_source}")
+            entity_df, df = Tables(f"{table_name}", f"{views.batch_source}")
             all_entity_col = [self.entity[en].entity + " as " + en for en in entity_name]
             all_time_col = (
                 [
@@ -396,7 +418,7 @@ class FeatureStore:
             )
             create_time = CREATE_COL
         else:
-            entity_df, df = Tables(f"{TMP_TBL}", f"{views.materialize_path}")
+            entity_df, df = Tables(f"{table_name}", f"{views.materialize_path}")
             all_entity_col = entity_name
             all_time_col = [f"{TIME_COL} as {TIME_COL}_tmp", MATERIALIZE_TIME]
             create_time = MATERIALIZE_TIME
@@ -454,7 +476,7 @@ class FeatureStore:
             sql_df(sql_result.get_sql(), conn), columns=entity_name + [QUERY_COL, TIME_COL] + features
         )
         # remove entity_df and close connection
-        remove_table(TMP_TBL, conn)
+        remove_table(table_name, conn)
         close_conn(conn)
         return result
 
