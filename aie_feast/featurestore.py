@@ -169,7 +169,7 @@ class FeatureStore:
         elif self.connection.type == "pgsql":
             to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
             return self._get_point_pgsql(
-                feature_view, features, include, TMP_TBL, list(entity_df.columns[:-1])
+                feature_view, TMP_TBL, features, include, list(entity_df.columns[:-1])
             )
 
     def get_period_features(
@@ -199,11 +199,11 @@ class FeatureStore:
             to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
             return self._get_period_pgsql(
                 feature_view,
+                TMP_TBL,
                 period,
                 features,
                 include,
                 False,
-                TMP_TBL,
                 list(entity_df.columns[:-1]),
             )
 
@@ -222,7 +222,7 @@ class FeatureStore:
             return self._get_point_record(label_view, entity_df, labels, include)
         elif self.connection.type == "pgsql":
             to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
-            return self._get_point_pgsql(label_view, labels, include, TMP_TBL, list(entity_df.columns[:-1]))
+            return self._get_point_pgsql(label_view, TMP_TBL, labels, include, list(entity_df.columns[:-1]))
 
     def get_period_labels(
         self,
@@ -247,7 +247,7 @@ class FeatureStore:
         elif self.connection.type == "pgsql":
             to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
             return self._get_period_pgsql(
-                label_view, period, labels, include, True, TMP_TBL, list(entity_df.columns[:-1])
+                label_view, TMP_TBL, period, labels, include, True, list(entity_df.columns[:-1])
             )
 
     def _get_point_record(self, views, entity_df: pd.DataFrame, features: list, include: bool = True):
@@ -296,9 +296,9 @@ class FeatureStore:
     def _get_point_pgsql(
         self,
         views,
+        table_name: str,
         features: list,
         include: bool = True,
-        table_name: str = None,
         entity_columns: list = None,
     ):
         entity = self._get_available_entity(views)
@@ -308,7 +308,6 @@ class FeatureStore:
 
         if isinstance(views, (FeatureViews, LabelViews)):
             assert self.sources[views.batch_source].event_time, "View is not time-relevant, no period to get"
-            entity_df, df = Tables(f"{table_name}", f"{views.batch_source}")
             all_entity_col = [self.entity[en].entity + " as " + en for en in entity_name]
             all_time_col = (
                 [
@@ -320,16 +319,25 @@ class FeatureStore:
             )
             create_time = CREATE_COL
             ttl = views.ttl
+            df = (
+                Query.from_(views.batch_source)
+                .select(Parameter(",".join(all_entity_col + all_time_col + features)))
+                .as_("df")
+            )
         else:
-            entity_df, df = Tables(f"{table_name}", f"{views.materialize_path}")
             all_entity_col = entity_name
             all_time_col = [f"{TIME_COL} as {TIME_COL}_tmp", MATERIALIZE_TIME]
             create_time = MATERIALIZE_TIME
             ttl = None
-        df = Query.from_(df).select(Parameter(",".join(all_entity_col + all_time_col + features))).as_("df")
+            df = (
+                Query.from_(views.materialize_path)
+                .select(Parameter(",".join(all_entity_col + all_time_col + features)))
+                .as_("df")
+            )
+
         if all_entity_col:
             sql_join = (
-                Query.from_(Query.from_(entity_df).select(Parameter(",".join(entity_name + [TIME_COL]))))
+                Query.from_(Query.from_(table_name).select(Parameter(",".join(entity_name + [TIME_COL]))))
                 .inner_join(df)
                 .using(*(entity_name))
                 .select(Parameter(f"df.*, {TIME_COL}"))
@@ -337,7 +345,7 @@ class FeatureStore:
             )
         else:
             sql_join = (
-                Query.from_(entity_df)
+                Query.from_(table_name)
                 .cross_join(df)
                 .cross()
                 .select(Parameter(f"df.*, {TIME_COL}"))
@@ -386,11 +394,11 @@ class FeatureStore:
     def _get_period_pgsql(
         self,
         views,
+        table_name: str,
         period: str,
         features: list,
         include: bool = True,
         is_label: bool = False,
-        table_name: str = None,
         entity_columns: list = None,
     ):
         entity = self._get_available_entity(views)
@@ -401,7 +409,6 @@ class FeatureStore:
 
         if isinstance(views, (FeatureViews, LabelViews)):
             assert self.sources[views.batch_source].event_time, "View is not time-relevant, no period to get"
-            entity_df, df = Tables(f"{table_name}", f"{views.batch_source}")
             all_entity_col = [self.entity[en].entity + " as " + en for en in entity_name]
             all_time_col = (
                 [
@@ -412,15 +419,24 @@ class FeatureStore:
                 else [f"{self.sources[views.batch_source].event_time} as  {TIME_COL}_tmp"]
             )
             create_time = CREATE_COL
+            df = (
+                Query.from_(views.batch_source)
+                .select(Parameter(",".join(all_entity_col + all_time_col + features)))
+                .as_("df")
+            )
         else:
-            entity_df, df = Tables(f"{table_name}", f"{views.materialize_path}")
             all_entity_col = entity_name
             all_time_col = [f"{TIME_COL} as {TIME_COL}_tmp", MATERIALIZE_TIME]
             create_time = MATERIALIZE_TIME
-        df = Query.from_(df).select(Parameter(",".join(all_entity_col + all_time_col + features))).as_("df")
+            df = (
+                Query.from_(views.materialize_path)
+                .select(Parameter(",".join(all_entity_col + all_time_col + features)))
+                .as_("df")
+            )
+
         if all_entity_col:
             sql_join = (
-                Query.from_(Query.from_(entity_df).select(Parameter(",".join(entity_name + [TIME_COL]))))
+                Query.from_(Query.from_(table_name).select(Parameter(",".join(entity_name + [TIME_COL]))))
                 .inner_join(df)
                 .using(*(entity_name))
                 .select(Parameter(f"df.*, {TIME_COL}"))
@@ -428,7 +444,7 @@ class FeatureStore:
             )
         else:
             sql_join = (
-                Query.from_(entity_df)
+                Query.from_(table_name)
                 .cross_join(df)
                 .cross()
                 .select(Parameter(f"df.*, {TIME_COL}"))

@@ -26,13 +26,8 @@ class IterableDataset:
     ):
         self.fs = fs
         self.service_name = service_name
-        self.entity_col = list(entity_index.columns[:-2])
-
-        if self.fs.connection.type == "file":
-            self.entity_index = entity_index
-        elif self.fs.connection.type == "pgsql":
-            self.entity_index = Tables(f"{SAM_TBL}")
-
+        self.entity_index = entity_index
+        self.entity_name = list(self.entity_index.columns[:-1])
         self.service = self.fs.service[self.service_name]
         self.all_features = self.get_feature_period(self.service)
         self.all_labels = self.get_feature_period(self.service, True)
@@ -70,20 +65,11 @@ class IterableDataset:
                 )
 
         elif self.fs.connection.type == "pgsql":
-            entity = [
-                (
-                    Query.from_(SAM_TBL)
-                    .select(Parameter("*"))
-                    .where(Parameter(f"{ROW} = {i}"))
-                    .as_("entity_df")
-                ),
-                self.entity_col,
-            ]
             for period, features in self.all_features.items():
                 feature_views_pd = (
-                    self.fs._get_period_pgsql(self.service, entity, period, features, True)
+                    self.fs._get_period_pgsql(self.service, period, features, True, SAM_TBL, self.entity_name)
                     if period
-                    else self.fs._get_point_pgsql(self.service, entity, features, True),
+                    else self.fs._get_point_pgsql(self.service, features, True, SAM_TBL, self.entity_name),
                 )
 
             for period, features in self.all_labels.items():
