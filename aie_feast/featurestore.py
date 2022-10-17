@@ -177,7 +177,7 @@ class FeatureStore:
                 sql_df(sql_result.get_sql(), conn), columns=entity_name + [TIME_COL, CREATE_COL] + features
             )
             # remove entity_df and close connection
-            close_conn(conn, tables=TMP_TBL)
+            close_conn(conn, tables=[f"{self.connection.database}.{self.connection.schema}.{TMP_TBL}"])
             return result
 
     def get_period_features(
@@ -220,7 +220,7 @@ class FeatureStore:
                 sql_df(sql_result.get_sql(), conn), columns=entity_name + [TIME_COL, CREATE_COL] + features
             )
             # remove entity_df and close connection
-            close_conn(conn, tables=TMP_TBL)
+            close_conn(conn, tables=[f"{self.connection.database}.{self.connection.schema}.{TMP_TBL}"])
             return result
 
     def get_labels(self, label_view, entity_df: pd.DataFrame, include: bool = False):
@@ -247,7 +247,7 @@ class FeatureStore:
                 sql_df(sql_result.get_sql(), conn), columns=entity_name + [TIME_COL, CREATE_COL] + features
             )
             # remove entity_df and close connection
-            close_conn(conn, tables=TMP_TBL)
+            close_conn(conn, tables=[f"{self.connection.database}.{self.connection.schema}.{TMP_TBL}"])
             return result
 
     def get_period_labels(
@@ -281,7 +281,7 @@ class FeatureStore:
                 sql_df(sql_result.get_sql(), conn), columns=entity_name + [TIME_COL, CREATE_COL] + features
             )
             # remove entity_df and close connection
-            close_conn(conn, tables=TMP_TBL)
+            close_conn(conn, tables=[f"{self.connection.database}.{self.connection.schema}.{TMP_TBL}"])
             return result
 
     def _get_point_record(self, views, entity_df: pd.DataFrame, features: list, include: bool = True):
@@ -995,5 +995,6 @@ class FeatureStore:
             else:
                 execute_sql(query, conn)
                 result = None
+                conn.commit()
             close_conn(conn)
             return result

@@ -41,3 +41,4 @@ def sql_df(sql, conn):
 def remove_table(tbl_name, conn):
     sql = f"drop table if exists {tbl_name}"
     execute_sql(sql, conn)
+    conn.commit()
