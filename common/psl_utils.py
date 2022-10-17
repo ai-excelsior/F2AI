@@ -13,7 +13,9 @@ def psy_conn(user, passwd, host, port, database, **kwargs):
     return conn
 
 
-def close_conn(conn):
+def close_conn(conn, tables: list = None):
+    for tab in tables:
+        remove_table(tab, conn)
     conn.close()
 
 

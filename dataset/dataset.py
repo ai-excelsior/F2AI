@@ -66,10 +66,13 @@ class IterableDataset:
 
         elif self.fs.connection.type == "pgsql":
             for period, features in self.all_features.items():
+                temp_samp = Query.from_(SAM_TBL).select("*").where(Parameter(f"row_nbr={i}"))
                 feature_views_pd = (
-                    self.fs._get_period_pgsql(self.service, period, features, True, SAM_TBL, self.entity_name)
+                    self.fs._get_period_pgsql(
+                        self.service, temp_samp, period, features, True, self.entity_name
+                    )
                     if period
-                    else self.fs._get_point_pgsql(self.service, features, True, SAM_TBL, self.entity_name),
+                    else self.fs._get_point_pgsql(self.service, temp_samp, features, True, self.entity_name),
                 )
 
             for period, features in self.all_labels.items():

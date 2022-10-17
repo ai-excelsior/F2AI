@@ -168,9 +168,17 @@ class FeatureStore:
             return self._get_point_record(feature_view, entity_df, features, include)
         elif self.connection.type == "pgsql":
             to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
-            return self._get_point_pgsql(
+            # connect to pgsql db
+            conn = psy_conn(**self.connection.__dict__)
+            sql_result, entity_name, features = self._get_point_pgsql(
                 feature_view, TMP_TBL, features, include, list(entity_df.columns[:-1])
             )
+            result = pd.DataFrame(
+                sql_df(sql_result.get_sql(), conn), columns=entity_name + [TIME_COL, CREATE_COL] + features
+            )
+            # remove entity_df and close connection
+            close_conn(conn, tables=TMP_TBL)
+            return result
 
     def get_period_features(
         self,
@@ -197,7 +205,9 @@ class FeatureStore:
             return self._get_period_record(feature_view, entity_df, period, features, include, is_label=False)
         elif self.connection.type == "pgsql":
             to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
-            return self._get_period_pgsql(
+            # connect to pgsql db
+            conn = psy_conn(**self.connection.__dict__)
+            sql_result, entity_name, features = self._get_period_pgsql(
                 feature_view,
                 TMP_TBL,
                 period,
@@ -206,6 +216,12 @@ class FeatureStore:
                 False,
                 list(entity_df.columns[:-1]),
             )
+            result = pd.DataFrame(
+                sql_df(sql_result.get_sql(), conn), columns=entity_name + [TIME_COL, CREATE_COL] + features
+            )
+            # remove entity_df and close connection
+            close_conn(conn, tables=TMP_TBL)
+            return result
 
     def get_labels(self, label_view, entity_df: pd.DataFrame, include: bool = False):
         """non-time series prediction use: get labels of `entity_df` from `label_views`
@@ -222,7 +238,17 @@ class FeatureStore:
             return self._get_point_record(label_view, entity_df, labels, include)
         elif self.connection.type == "pgsql":
             to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
-            return self._get_point_pgsql(label_view, TMP_TBL, labels, include, list(entity_df.columns[:-1]))
+            # connect to pgsql db
+            conn = psy_conn(**self.connection.__dict__)
+            sql_result, entity_name, features = self._get_point_pgsql(
+                label_view, TMP_TBL, labels, include, list(entity_df.columns[:-1])
+            )
+            result = pd.DataFrame(
+                sql_df(sql_result.get_sql(), conn), columns=entity_name + [TIME_COL, CREATE_COL] + features
+            )
+            # remove entity_df and close connection
+            close_conn(conn, tables=TMP_TBL)
+            return result
 
     def get_period_labels(
         self,
@@ -246,9 +272,17 @@ class FeatureStore:
             return self._get_period_record(label_view, entity_df, period, labels, include, is_label=True)
         elif self.connection.type == "pgsql":
             to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
-            return self._get_period_pgsql(
+            # connect to pgsql db
+            conn = psy_conn(**self.connection.__dict__)
+            sql_result, entity_name, features = self._get_period_pgsql(
                 label_view, TMP_TBL, period, labels, include, True, list(entity_df.columns[:-1])
             )
+            result = pd.DataFrame(
+                sql_df(sql_result.get_sql(), conn), columns=entity_name + [TIME_COL, CREATE_COL] + features
+            )
+            # remove entity_df and close connection
+            close_conn(conn, tables=TMP_TBL)
+            return result
 
     def _get_point_record(self, views, entity_df: pd.DataFrame, features: list, include: bool = True):
         """non time-series prediction use
@@ -303,8 +337,6 @@ class FeatureStore:
     ):
         entity = self._get_available_entity(views)
         entity_name = [en for en in entity if en in entity_columns]
-        # connect to pgsql db
-        conn = psy_conn(**self.connection.__dict__)
 
         if isinstance(views, (FeatureViews, LabelViews)):
             assert self.sources[views.batch_source].event_time, "View is not time-relevant, no period to get"
@@ -383,13 +415,8 @@ class FeatureStore:
             )
             .where(Parameter("row_number=1"))
         )
-        result = pd.DataFrame(
-            sql_df(sql_result.get_sql(), conn), columns=entity_name + [TIME_COL, CREATE_COL] + features
-        )
-        # remove entity_df and close connection
-        remove_table(table_name, conn)
-        close_conn(conn)
-        return result
+
+        return sql_result, entity_name, features
 
     def _get_period_pgsql(
         self,
@@ -404,7 +431,6 @@ class FeatureStore:
         entity = self._get_available_entity(views)
         entity_name = [en for en in entity if en in entity_columns]
         # connect to pgsql db
-        conn = psy_conn(**self.connection.__dict__)
         period = transform_pgsql_period(period, is_label)
 
         if isinstance(views, (FeatureViews, LabelViews)):
@@ -483,13 +509,7 @@ class FeatureStore:
                 .where(Parameter("row_number=1"))
             )
         )
-        result = pd.DataFrame(
-            sql_df(sql_result.get_sql(), conn), columns=entity_name + [QUERY_COL, TIME_COL] + features
-        )
-        # remove entity_df and close connection
-        remove_table(table_name, conn)
-        close_conn(conn)
-        return result
+        return sql_result, entity_name, features
 
     def _get_period_record(
         self,
