@@ -4,6 +4,7 @@ from typing import Dict, List, Union
 import pandas as pd
 import os
 from pypika import Query, Tables, Parameter
+from pandas._libs.tslibs.timestamps import Timestamp
 from aie_feast.views import FeatureViews, LabelViews
 from aie_feast.service import Service
 from common.source import SourceConfig
@@ -777,17 +778,29 @@ class FeatureStore:
         return sql_query
 
     def _read_local_db_data(
-        self, views: Union[FeatureViews, LabelViews], features: List, all_entity_col: Dict[str, str]
+        self,
+        views: Union[FeatureViews, LabelViews],
+        features: List[str],
+        all_entity_col: Dict[str, str],
+        start: Timestamp=None,
+        end: Timestamp=None,
+        include: str='both',
+        agg_type: str='mean'
     ) -> pd.DataFrame:
         source: SourceConfig = self.sources[views.batch_source]
         df = read_db(
             source.name,
             self.connection,
+            features,
+            start,
+            end,
+            include,
             [
                 source.event_time,
                 source.create_time,
             ],
             list(all_entity_col.keys()),
+            agg_type
         )
         df.rename(
             columns={
@@ -888,42 +901,46 @@ class FeatureStore:
                     list(all_entity_col.values()),
                 )
                 df = df[[col for col in features + list(all_entity_col.values()) + [TIME_COL]]]
+                if entity_df is not None and entities:
+                    df = df.merge(entity_df, how="right", on=entities)
+                elif entity_df is not None:
+                    df = df.merge(entity_df, how="cross")
+                else:
+                    df.rename(columns={TIME_COL: TIME_COL + "_x"}, inplace=True)
+                    # end_time limit
+                    df = df.assign(**{TIME_COL + "_y": end})
+                    if keys_only:
+                        assert fn == "unique", "keys_only=True can only be applied when fn==unique"
+                        result = list(
+                            df[(df[TIME_COL + "_x"] < df[TIME_COL + "_y"]) & (df[TIME_COL + "_x"] >= start)]
+                            .groupby(entities)
+                            .groups.keys()
+                        )
+                    else:
+                        result = df.groupby(entities).apply(
+                            get_stats_result,
+                            fn,
+                            primary_keys=entities + [TIME_COL + "_x", TIME_COL + "_y"],
+                            include=include,
+                            start=start,
+                        )
+                    return result
         elif self.connection.type == "pgsql":
             if isinstance(views, (FeatureViews, LabelViews)):
-                df = self._read_local_db_data(views, features, all_entity_col)
+                df = self._read_local_db_data(views, features, all_entity_col, start, end, include, fn)
             else:
                 df = read_db(
                     views.materialize_path,
                     self.connection,
+                    features,
+                    start,
+                    end,
+                    include,
                     [TIME_COL],
                     list(all_entity_col.values()),
+                    agg_type=fn
                 )
-                df = df[[col for col in features + list(all_entity_col.values()) + [TIME_COL]]]
-
-        if entity_df is not None and entities:
-            df = df.merge(entity_df, how="right", on=entities)
-        elif entity_df is not None:
-            df = df.merge(entity_df, how="cross")
-        else:
-            df.rename(columns={TIME_COL: TIME_COL + "_x"}, inplace=True)
-            # end_time limit
-            df = df.assign(**{TIME_COL + "_y": end})
-        if keys_only:
-            assert fn == "unique", "keys_only=True can only be applied when fn==unique"
-            result = list(
-                df[(df[TIME_COL + "_x"] < df[TIME_COL + "_y"]) & (df[TIME_COL + "_x"] >= start)]
-                .groupby(entities)
-                .groups.keys()
-            )
-        else:
-            result = df.groupby(entities).apply(
-                get_stats_result,
-                fn,
-                primary_keys=entities + [TIME_COL + "_x", TIME_COL + "_y"],
-                include=include,
-                start=start,
-            )
-        return result
+            return df
 
     def get_latest_entities(self, view, entity: List[str] = []):
         """get latest entity and its timestamp from a single FeatureViews/LabelViews or a materialzed Service
@@ -953,8 +970,9 @@ class FeatureStore:
                 df = read_db(
                     view.materialize_path,
                     self.connection,
-                    [TIME_COL],
-                    list(all_entity_col.values()),
+                    [],
+                    time_col=[TIME_COL],
+                    entity_cols=list(all_entity_col.values()),
                 )
         # sort by event_time, decending
         df.sort_values(by=TIME_COL, ascending=False, inplace=True, ignore_index=True)
