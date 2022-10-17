@@ -108,14 +108,14 @@ if __name__ == "__main__":
         # fs.get_features(fs.features["zipcode_features"], entity_loan)
         # fs.get_labels(fs.service["credit_scoring_v1"], entity_dobssn_period)
 
-    get_features()
+    # get_features()
 
     def do_materailize():
         fs.materialize(
             "credit_scoring_v1",
         )
 
-    # do_materailize()
+    do_materailize()
 
     def get_period_features_and_labels():
 
@@ -173,7 +173,7 @@ if __name__ == "__main__":
         i_ds = ds.to_pytorch()
         next(iter(i_ds))
 
-    #    dataset()
+    # dataset()
 
     def sample():
         time_bucket = "4 days"

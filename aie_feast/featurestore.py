@@ -608,6 +608,7 @@ class FeatureStore:
             raise TypeError("please check your `incremental_begin` type")
 
         # dir to store dbt project
+
         dbt_path = os.path.join(self.project_folder.lstrip("file://"), f"{service.dbt_path}")
         os.system(
             f"cd {dbt_path} && dbt run --profiles-dir {dbt_path} --vars {{begin_point:{incremental_begin} }}"
@@ -642,7 +643,9 @@ class FeatureStore:
         for feature_key in service.features.keys():
             feature_view: FeatureViews = self.features[feature_key]
             feature_cols = [
-                item for item in all_features_use if item in self._get_available_features(feature_view)
+                item
+                for item in all_features_use
+                if item in self._get_available_features(feature_view) and item not in joined_frame.columns
             ]
             fea_entities = self._get_available_entity(feature_view)
             entity_col = {self.entity[en].entity: en for en in fea_entities}
