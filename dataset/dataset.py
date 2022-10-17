@@ -81,9 +81,9 @@ class IterableDataset:
             ]
             for period, features in self.all_features.items():
                 feature_views_pd = (
-                    self.fs.get_period_features(self.service, entity, period, features, True)
+                    self.fs._get_period_pgsql(self.service, entity, period, features, True)
                     if period
-                    else self.fs.get_features(self.service, entity, features, True),
+                    else self.fs._get_point_pgsql(self.service, entity, features, True),
                 )
 
             for period, features in self.all_labels.items():

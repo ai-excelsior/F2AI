@@ -169,7 +169,7 @@ class FeatureStore:
         elif self.connection.type == "pgsql":
             to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
             return self._get_point_pgsql(
-                feature_view, entity_df, features, include, TMP_TBL, list(entity_df.columns[:-1])
+                feature_view, features, include, TMP_TBL, list(entity_df.columns[:-1])
             )
 
     def get_period_features(
@@ -199,7 +199,6 @@ class FeatureStore:
             to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
             return self._get_period_pgsql(
                 feature_view,
-                entity_df,
                 period,
                 features,
                 include,
@@ -223,9 +222,7 @@ class FeatureStore:
             return self._get_point_record(label_view, entity_df, labels, include)
         elif self.connection.type == "pgsql":
             to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
-            return self._get_point_pgsql(
-                label_view, entity_df, labels, include, TMP_TBL, list(entity_df.columns[:-1])
-            )
+            return self._get_point_pgsql(label_view, labels, include, TMP_TBL, list(entity_df.columns[:-1]))
 
     def get_period_labels(
         self,
@@ -250,7 +247,7 @@ class FeatureStore:
         elif self.connection.type == "pgsql":
             to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
             return self._get_period_pgsql(
-                label_view, entity_df, period, labels, include, True, TMP_TBL, list(entity_df.columns[:-1])
+                label_view, period, labels, include, True, TMP_TBL, list(entity_df.columns[:-1])
             )
 
     def _get_point_record(self, views, entity_df: pd.DataFrame, features: list, include: bool = True):
@@ -299,7 +296,6 @@ class FeatureStore:
     def _get_point_pgsql(
         self,
         views,
-        entity_df: Union[pd.DataFrame, List[str]],
         features: list,
         include: bool = True,
         table_name: str = None,
@@ -390,7 +386,6 @@ class FeatureStore:
     def _get_period_pgsql(
         self,
         views,
-        entity_df: pd.DataFrame,
         period: str,
         features: list,
         include: bool = True,
