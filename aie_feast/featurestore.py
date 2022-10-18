@@ -166,12 +166,12 @@ class FeatureStore:
             features = self._get_available_features(feature_view)
 
         if self.connection.type == "file":
-            return self._get_point_record(feature_view, entity_df, features, include)
+            return self._get_point_record(feature_view, entity_df, features, include)[0]
         elif self.connection.type == "pgsql":
             to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
             # connect to pgsql db
             conn = psy_conn(**self.connection.__dict__)
-            sql_result, entity_name, features = self._get_point_pgsql(
+            sql_result, entity_name = self._get_point_pgsql(
                 feature_view, TMP_TBL, features, include, list(entity_df.columns[:-1])
             )
             result = pd.DataFrame(
@@ -208,7 +208,7 @@ class FeatureStore:
             to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
             # connect to pgsql db
             conn = psy_conn(**self.connection.__dict__)
-            sql_result, entity_name, features = self._get_period_pgsql(
+            sql_result, entity_name = self._get_period_pgsql(
                 feature_view,
                 TMP_TBL,
                 period,
@@ -218,7 +218,7 @@ class FeatureStore:
                 list(entity_df.columns[:-1]),
             )
             result = pd.DataFrame(
-                sql_df(sql_result.get_sql(), conn), columns=entity_name + [TIME_COL, CREATE_COL] + features
+                sql_df(sql_result.get_sql(), conn), columns=entity_name + [QUERY_COL, TIME_COL] + features
             )
             # remove entity_df and close connection
             close_conn(conn, tables=[f"{self.connection.database}.{self.connection.schema}.{TMP_TBL}"])
@@ -241,11 +241,11 @@ class FeatureStore:
             to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
             # connect to pgsql db
             conn = psy_conn(**self.connection.__dict__)
-            sql_result, entity_name, features = self._get_point_pgsql(
+            sql_result, entity_name = self._get_point_pgsql(
                 label_view, TMP_TBL, labels, include, list(entity_df.columns[:-1])
             )
             result = pd.DataFrame(
-                sql_df(sql_result.get_sql(), conn), columns=entity_name + [TIME_COL, CREATE_COL] + features
+                sql_df(sql_result.get_sql(), conn), columns=entity_name + [TIME_COL, CREATE_COL] + labels
             )
             # remove entity_df and close connection
             close_conn(conn, tables=[f"{self.connection.database}.{self.connection.schema}.{TMP_TBL}"])
@@ -275,11 +275,11 @@ class FeatureStore:
             to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
             # connect to pgsql db
             conn = psy_conn(**self.connection.__dict__)
-            sql_result, entity_name, features = self._get_period_pgsql(
+            sql_result, entity_name = self._get_period_pgsql(
                 label_view, TMP_TBL, period, labels, include, True, list(entity_df.columns[:-1])
             )
             result = pd.DataFrame(
-                sql_df(sql_result.get_sql(), conn), columns=entity_name + [TIME_COL, CREATE_COL] + features
+                sql_df(sql_result.get_sql(), conn), columns=entity_name + [QUERY_COL, TIME_COL] + labels
             )
             # remove entity_df and close connection
             close_conn(conn, tables=[f"{self.connection.database}.{self.connection.schema}.{TMP_TBL}"])
@@ -326,7 +326,7 @@ class FeatureStore:
             df = self._fil_timelimit(include, None, df)
             # newest record
             df = get_newest_record(df, TIME_COL, entity_name, CREATE_COL)
-        return df
+        return df, entity_name, features
 
     def _get_point_pgsql(
         self,
@@ -417,7 +417,7 @@ class FeatureStore:
             .where(Parameter("row_number=1"))
         )
 
-        return sql_result, entity_name, features
+        return sql_result, entity_name
 
     def _get_period_pgsql(
         self,
@@ -510,7 +510,7 @@ class FeatureStore:
                 .where(Parameter("row_number=1"))
             )
         )
-        return sql_result, entity_name, features
+        return sql_result, entity_name
 
     def _get_period_record(
         self,

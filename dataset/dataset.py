@@ -1,8 +1,8 @@
-from re import S
+from common.psl_utils import sql_df, psy_conn
 import pandas as pd
 from typing import TYPE_CHECKING, Tuple
 from copy import deepcopy
-from pypika import Query, Tables, Parameter
+from pypika import Query, Parameter
 from common.psl_utils import to_pgsql
 
 if TYPE_CHECKING:
@@ -39,55 +39,88 @@ class IterableDataset:
                 yield data_sample
 
     def get_context(self, i: int) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        feature_list = []
+        label_list = []
         if self.fs.connection.type == "file":
             entity = self.entity_index.iloc[[i]]
             feature_views_pd = deepcopy(entity)
             label_views_pd = deepcopy(entity)
+            to_drop = entity.columns
+
             for period, features in self.all_features.items():
                 if period:
-                    feature_views_pd.rename({TIME_COL: QUERY_COL}, inplace=True)
-                feature_views_pd = feature_views_pd.merge(
-                    self.fs.get_period_features(self.service, entity, period, features, True)
-                    if period
-                    else self.fs.get_features(self.service, entity, features, True),
-                    how="inner",
-                    on=list(entity.columns),
-                )
+                    tmp_result = self.fs.get_period_features(self.service, entity, period, features, True)
+                    tmp_result.rename({QUERY_COL: TIME_COL}, inplace=True)
+                else:
+                    tmp_result = self.fs.get_features(self.service, entity, features, True)
+                feature_views_pd = feature_views_pd.merge(tmp_result, how="inner", on=list(entity.columns))
+                feature_list += features
+            feature_views_pd = feature_views_pd[list(entity.columns) + feature_list]
+
             for period, features in self.all_labels.items():
                 if period:
-                    label_views_pd.rename({TIME_COL: QUERY_COL}, inplace=True)
-                label_views_pd = label_views_pd.merge(
-                    self.fs.get_period_labels(self.service, entity, period, True)
-                    if period
-                    else self.fs.get_labels(self.service, entity, True),
-                    how="inner",
-                    on=list(entity.columns),
-                )
+                    tmp_result = self.fs.get_period_labels(self.service, entity, period, True)
+                    tmp_result.rename({QUERY_COL: TIME_COL}, inplace=True)
+                else:
+                    tmp_result = self.fs.get_labels(self.service, entity, True)
+                label_views_pd = label_views_pd.merge(tmp_result, how="inner", on=list(entity.columns))
+                label_list += features
+            label_views_pd = label_views_pd[list(entity.columns) + label_list]
 
         elif self.fs.connection.type == "pgsql":
+            conn = psy_conn(**self.fs.connection.__dict__)
+            entity = Query.from_(SAM_TBL).select(*self.entity_name).where(Parameter(f"row_nbr={i}"))
+            feature_views_pd = deepcopy(entity)
+            label_views_pd = deepcopy(entity)
+            to_drop = self.entity_name
             for period, features in self.all_features.items():
-                temp_samp = Query.from_(SAM_TBL).select("*").where(Parameter(f"row_nbr={i}"))
-                feature_views_pd = (
-                    self.fs._get_period_pgsql(
-                        self.service, temp_samp, period, features, True, self.entity_name
+                if period:
+                    tmp_result = self.fs._get_period_pgsql(
+                        self.service, entity, period, features, True, False, self.entity_name
                     )
-                    if period
-                    else self.fs._get_point_pgsql(self.service, temp_samp, features, True, self.entity_name),
+                    tmp_result = Query.from_(tmp_result[0]).select(
+                        *tmp_result[1], Parameter(f"{QUERY_COL} as {TIME_COL}"), *tmp_result[2]
+                    )
+                else:
+                    tmp_result = self.fs._get_point_pgsql(
+                        self.service, entity, features, True, self.entity_name
+                    )
+                feature_views_pd = (
+                    Query.from_(feature_views_pd)
+                    .inner_join(tmp_result[0])
+                    .using(*self.entity_name)
+                    .select("*")
                 )
+                feature_list += features
+            feature_views_pd = Query.from_(feature_views_pd).select(*self.entity_name, *feature_list)
 
             for period, features in self.all_labels.items():
                 if period:
-                    label_views_pd.rename({TIME_COL: QUERY_COL}, inplace=True)
-                label_views_pd = label_views_pd.merge(
-                    self.fs.get_period_labels(self.service, entity, period, True)
-                    if period
-                    else self.fs.get_labels(self.service, entity, True),
-                    how="inner",
-                    on=list(entity.columns),
+                    tmp_result = self.fs._get_period_pgsql(
+                        self.service, entity, period, features, True, True, self.entity_name
+                    )
+                    tmp_result = Query.from_(tmp_result[0]).select(
+                        *tmp_result[1], Parameter(f"{QUERY_COL} as {TIME_COL}"), *tmp_result[2]
+                    )
+                else:
+                    tmp_result = self.fs._get_point_pgsql(
+                        self.service, entity, features, True, self.entity_name
+                    )
+                label_views_pd = (
+                    Query.from_(label_views_pd).inner_join(tmp_result[0]).using(*self.entity_name).select("*")
                 )
-            feature_views_pd, feature_views_pd = pd.DataFrame()
-        return feature_views_pd.drop(columns=entity.columns).dropna(how="all"), label_views_pd.drop(
-            columns=entity.columns
+                label_list += features
+            label_views_pd = Query.from_(label_views_pd).select(*self.entity_name, *label_list)
+
+            feature_views_pd = pd.DataFrame(
+                sql_df(feature_views_pd.get_sql(), conn), columns=self.entity_name + feature_list
+            )
+            label_views_pd = pd.DataFrame(
+                sql_df(label_views_pd.get_sql(), conn), columns=self.entity_name + label_list
+            )
+
+        return feature_views_pd.drop(columns=to_drop).dropna(how="all"), label_views_pd.drop(
+            columns=to_drop
         ).dropna(how="all")
 
     def get_feature_period(self, service: "Service", is_label=False) -> dict:
