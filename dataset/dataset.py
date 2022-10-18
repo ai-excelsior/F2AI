@@ -23,6 +23,7 @@ class IterableDataset:
         fs: "FeatureStore",
         service_name: str,
         entity_index: pd.DataFrame,
+        table_suffix: str = None,
     ):
         self.fs = fs
         self.service_name = service_name
@@ -31,6 +32,7 @@ class IterableDataset:
         self.service = self.fs.service[self.service_name]
         self.all_features = self.get_feature_period(self.service)
         self.all_labels = self.get_feature_period(self.service, True)
+        self.table_suffix = table_suffix
 
     def __iter__(self):
         for i in range(len(self.entity_index)):
@@ -50,7 +52,7 @@ class IterableDataset:
             for period, features in self.all_features.items():
                 if period:
                     tmp_result = self.fs.get_period_features(self.service, entity, period, features, True)
-                    tmp_result.rename({QUERY_COL: TIME_COL}, inplace=True)
+                    tmp_result.rename({QUERY_COL: TIME_COL}, inplace=True)  # always merge on TIME_COL
                 else:
                     tmp_result = self.fs.get_features(self.service, entity, features, True)
                 feature_views_pd = feature_views_pd.merge(tmp_result, how="inner", on=list(entity.columns))
@@ -60,7 +62,7 @@ class IterableDataset:
             for period, features in self.all_labels.items():
                 if period:
                     tmp_result = self.fs.get_period_labels(self.service, entity, period, False)
-                    tmp_result.rename({QUERY_COL: TIME_COL}, inplace=True)
+                    tmp_result.rename({QUERY_COL: TIME_COL}, inplace=True)  # always merge on TIME_COL
                 else:
                     tmp_result = self.fs.get_labels(self.service, entity, True)
                 label_views_pd = label_views_pd.merge(tmp_result, how="inner", on=list(entity.columns))
@@ -69,7 +71,11 @@ class IterableDataset:
 
         elif self.fs.connection.type == "pgsql":
             conn = psy_conn(**self.fs.connection.__dict__)
-            entity = Query.from_(SAM_TBL).select(*self.entity_name).where(Parameter(f"row_nbr={i}"))
+            entity = (
+                Query.from_(f"{SAM_TBL}_{self.table_suffix}")
+                .select(*self.entity_name)
+                .where(Parameter(f"row_nbr={i}"))
+            )
             feature_views_pd = deepcopy(entity)
             label_views_pd = deepcopy(entity)
             to_drop = self.entity_name
@@ -78,9 +84,9 @@ class IterableDataset:
                     tmp_result = self.fs._get_period_pgsql(
                         self.service, entity, period, features, True, False, self.entity_name
                     )
-                    tmp_result = Query.from_(tmp_result[0]).select(
-                        *tmp_result[1], Parameter(f"{QUERY_COL} as {TIME_COL}"), *tmp_result[2]
-                    )
+                    tmp_result[0] = Query.from_(tmp_result[0]).select(
+                        *tmp_result[1], Parameter(f"{QUERY_COL} as {TIME_COL}"), *features
+                    )  # always merge on TIME_COL, remove cols not in feature schema
                 else:
                     tmp_result = self.fs._get_point_pgsql(
                         self.service, entity, features, True, self.entity_name
@@ -88,7 +94,7 @@ class IterableDataset:
                 feature_views_pd = (
                     Query.from_(feature_views_pd)
                     .inner_join(tmp_result[0])
-                    .using(*self.entity_name)
+                    .using(*self.entity_name)  # tmp_result[1] + TIME_COL
                     .select("*")
                 )
                 feature_list += features
@@ -99,16 +105,16 @@ class IterableDataset:
                     tmp_result = self.fs._get_period_pgsql(
                         self.service, entity, period, features, False, True, self.entity_name
                     )
-                    tmp_result = Query.from_(tmp_result[0]).select(
-                        *tmp_result[1], Parameter(f"{QUERY_COL} as {TIME_COL}"), *tmp_result[2]
-                    )
+                    tmp_result[0] = Query.from_(tmp_result[0]).select(
+                        *tmp_result[1], Parameter(f"{QUERY_COL} as {TIME_COL}"), *features
+                    )  # always merge on TIME_COL, remove cols not in feature schema
                 else:
                     tmp_result = self.fs._get_point_pgsql(
                         self.service, entity, features, True, self.entity_name
                     )
                 label_views_pd = (
                     Query.from_(label_views_pd).inner_join(tmp_result[0]).using(*self.entity_name).select("*")
-                )
+                )  # tmp_result[1] + TIME_COL
                 label_list += features
             label_views_pd = Query.from_(label_views_pd).select(*self.entity_name, *label_list)
 
@@ -171,11 +177,13 @@ class Dataset:
     def to_pytorch(self) -> IterableDataset:
         """convert to iterablt pytorch dataset really hold data"""
         entity_index = self.sampler()
+        table_suffix = None
         if self.fs.connection.type == "pgsql":
             entity_index[ROW] = range(len(entity_index))
-            to_pgsql(entity_index, SAM_TBL, **self.fs.connection.__dict__)
+            table_suffix = to_pgsql(entity_index, SAM_TBL, **self.fs.connection.__dict__)
         return IterableDataset(
             self.fs,
             self.service_name,
             entity_index,
+            table_suffix,
         )

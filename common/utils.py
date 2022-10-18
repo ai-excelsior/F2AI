@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import Dict, List, Union
 import pandas as pd
 from pypika import Query, functions as fn, Parameter, Table
 from pypika.queries import QueryBuilder
@@ -74,75 +74,119 @@ def to_file(file, path, type):
     else:
         file.to_csv(path)
 
-def build_filter_time_query(q: QueryBuilder, start: Timestamp, end: Timestamp, include: str) -> "QueryBuilder":
-    if include == "neither":
-        return q.where(Parameter(f" ({TIME_COL}::timestamp > to_timestamp({start.timestamp()})) and ({TIME_COL}::timestamp < to_timestamp({end.timestamp()})) "))
-    elif include == "left":
-        return q.where(Parameter(f" ({TIME_COL}::timestamp >= to_timestamp({start.timestamp()})) and ({TIME_COL}::timestamp < to_timestamp({end.timestamp()})) "))
-    elif include == "right":
-        return q.where(Parameter(f" ({TIME_COL}::timestamp > to_timestamp({start.timestamp()})) and ({TIME_COL}::timestamp <= to_timestamp({end.timestamp()})) "))
-    else:
-        return q.where(Parameter(f" ({TIME_COL}::timestamp >= to_timestamp({start.timestamp()})) and ({TIME_COL}::timestamp <= to_timestamp({end.timestamp()})) "))
 
-def build_agg_query(q: QueryBuilder, features: List[str], entity_cols: List[str], agg_type: str, start: Timestamp, end: Timestamp, include: str) -> "QueryBuilder":
-    if start and end and include:
-        q = build_filter_time_query(q, start, end, include)
+def build_filter_time_query(
+    q: QueryBuilder, start: Union[Timestamp, str], end: Union[Timestamp, str], include: str, timecol: str
+) -> "QueryBuilder":
+    if include == "neither":
+        return (
+            q.where(
+                Parameter(
+                    f" ({timecol}::timestamp > '{start}'::timestamp) and ({timecol}::timestamp < '{end}'::timestamp) "
+                )
+            )
+            if end
+            else q.where(
+                Parameter(
+                    f" ({timecol}::timestamp > '{start}'::timestamp) and ({timecol}::timestamp < {TIME_COL}_tmp::timestamp) "
+                )
+            )
+        )
+    elif include == "left":
+        return (
+            q.where(
+                Parameter(
+                    f" ({timecol}::timestamp >= '{start}'::timestamp) and ({timecol}::timestamp < '{end}'::timestamp) "
+                )
+            )
+            if end
+            else q.where(
+                Parameter(
+                    f" ({timecol}::timestamp >= '{start}'::timestamp) and ({timecol}::timestamp < {TIME_COL}_tmp::timestamp) "
+                )
+            )
+        )
+    elif include == "right":
+        return (
+            q.where(
+                Parameter(
+                    f" ({timecol}::timestamp > '{start}'::timestamp) and ({timecol}::timestamp <= '{end}'::timestamp) "
+                )
+            )
+            if end
+            else q.where(
+                Parameter(
+                    f" ({timecol}::timestamp > '{start}'::timestamp) and ({timecol}::timestamp <= {TIME_COL}_tmp::timestamp) "
+                )
+            )
+        )
+    else:
+        return (
+            q.where(
+                Parameter(
+                    f" ({timecol}::timestamp >= '{start}'::timestamp) and ({timecol}::timestamp <= '{end}'::timestamp) "
+                )
+            )
+            if end
+            else q.where(
+                Parameter(
+                    f" ({timecol}::timestamp >= '{start}'::timestamp) and ({timecol}::timestamp <= {TIME_COL}_tmp::timestamp) "
+                )
+            )
+        )
+
+
+def build_agg_query(
+    q: QueryBuilder,
+    features: List[str],
+    entity_cols: List[str],
+    agg_type: str,
+    start: Union[Timestamp, str],
+    end: Union[Timestamp, str],
+    include: str,
+    timecol: str = TIME_COL,
+) -> "QueryBuilder":
+
+    q = build_filter_time_query(q, start, end, include, timecol)
+
     if agg_type == "mean":
-        return q.groupby(*entity_cols).select(*([fn.Avg(q[feature]).as_(feature) for feature in features] + entity_cols))
+        return q.groupby(*entity_cols).select(
+            *([fn.Avg(Parameter(fea), fea) for fea in features] + entity_cols)
+        )
     elif agg_type == "sum":
-        return q.groupby(*entity_cols).select(*([fn.Sum(q[feature]).as_(feature) for feature in features] + entity_cols))
+        return q.groupby(*entity_cols).select(
+            *([fn.Sum(Parameter(fea), fea) for fea in features] + entity_cols)
+        )
     elif agg_type == "max":
-        return q.groupby(*entity_cols).select(*([fn.Max(q[feature]).as_(feature) for feature in features] + entity_cols))
+        return q.groupby(*entity_cols).select(
+            *([fn.Max(Parameter(fea), fea) for fea in features] + entity_cols)
+        )
     elif agg_type == "min":
-        return q.groupby(*entity_cols).select(*([fn.Min(q[feature]).as_(feature) for feature in features] + entity_cols))
+        return q.groupby(*entity_cols).select(
+            *([fn.Min(Parameter(fea), fea) for fea in features] + entity_cols)
+        )
     elif agg_type == "std":
-        return q.groupby(*entity_cols).select(*([fn.Std(q[feature]).as_(feature) for feature in features] + entity_cols))
+        return q.groupby(*entity_cols).select(
+            *([fn.Std(Parameter(fea), fea) for fea in features] + entity_cols)
+        )
     elif agg_type == "mode":
         return q.groupby(*entity_cols).select(
-            *([
-                Parameter(f'MODE() WITHIN GROUP (ORDER BY {feature}) as {feature}')
-                for feature in features
-            ] + entity_cols)
+            *([Parameter(f"MODE() WITHIN GROUP (ORDER BY {fea}) as {fea}") for fea in features] + entity_cols)
         )
     elif agg_type == "median":
         return q.groupby(*entity_cols).select(
-            *([
-                Parameter(f'PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY {feature}) as {feature}') 
-                for feature in features
-            ] + entity_cols)
+            *(
+                [
+                    Parameter(f"PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY {fea}) as {fea}")
+                    for fea in features
+                ]
+                + entity_cols
+            )
         )
-    else:
-        return q
-    
-
-def read_db(
-    table_name: str,
-    connection: ConnectConfig,
-    features: List[str],
-    start: Timestamp=None,
-    end: Timestamp=None,
-    include: str='both',
-    time_col=None, 
-    entity_cols: List=None,
-    agg_type: str='mean'
-) -> pd.DataFrame:
-    time_col = [i for i in time_col if i]
-    if connection.type == "pgsql":
-        conn = psy_conn(**connection.__dict__)
-        table = Table(table_name)
-        q: QueryBuilder = Query.from_(table)
-        q = build_agg_query(q, features, entity_cols, agg_type, start, end, include)
-        cursor = execute_sql(q.get_sql(), conn)
-        df = pd.DataFrame(
-            cursor.fetchall(), columns=[c.name for c in cursor.description]
+    elif agg_type == "unique":
+        return q.groupby(*entity_cols).select(
+            *([Parameter(f"distinct({fea})") for fea in features] + entity_cols)
         )
-        conn.close() 
-    for col in time_col:
-        if col in df.columns:
-            df[col] = pd.to_datetime(df[col], utc=True)
-    if entity_cols:
-        df[entity_cols] = df[entity_cols].astype("str")
-    return df
 
 
 def transform_freq(dt):

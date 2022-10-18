@@ -1,14 +1,10 @@
 from datetime import datetime
-from pyexpat import features
-from tkinter import N
-from typing import Dict, List, Union
+from typing import List, Union
 import pandas as pd
 import os
-from pypika import Query, Tables, Parameter
-from pandas._libs.tslibs.timestamps import Timestamp
+from pypika import Query, Parameter, Tables
 from aie_feast.views import FeatureViews, LabelViews
 from aie_feast.service import Service
-from common.source import SourceConfig
 from dataset.dataset import Dataset
 from common.get_config import (
     get_conn_cfg,
@@ -19,15 +15,15 @@ from common.get_config import (
     get_source_cfg,
 )
 from common.utils import (
-    read_db,
     read_file,
     to_file,
     parse_date,
     get_newest_record,
     get_stats_result,
     transform_pgsql_period,
+    build_agg_query,
 )
-from common.psl_utils import execute_sql, psy_conn, to_pgsql, remove_table, close_conn, sql_df
+from common.psl_utils import execute_sql, psy_conn, to_pgsql, close_conn, sql_df
 from dateutil.relativedelta import relativedelta
 
 pd.DataFrame.to_csv
@@ -169,17 +165,19 @@ class FeatureStore:
         if self.connection.type == "file":
             return self._get_point_record(feature_view, entity_df, features, include)[0]
         elif self.connection.type == "pgsql":
-            to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
+            table_suffix = to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
             # connect to pgsql db
             conn = psy_conn(**self.connection.__dict__)
             sql_result, entity_name = self._get_point_pgsql(
-                feature_view, TMP_TBL, features, include, list(entity_df.columns[:-1])
+                feature_view, f"{TMP_TBL}_{table_suffix}", features, include, list(entity_df.columns[:-1])
             )
             result = pd.DataFrame(
                 sql_df(sql_result.get_sql(), conn), columns=entity_name + [TIME_COL, CREATE_COL] + features
             )
             # remove entity_df and close connection
-            close_conn(conn, tables=[f"{self.connection.database}.{self.connection.schema}.{TMP_TBL}"])
+            close_conn(
+                conn, tables=[f"{self.connection.database}.{self.connection.schema}.{TMP_TBL}_{table_suffix}"]
+            )
             return result
 
     def get_period_features(
@@ -206,12 +204,12 @@ class FeatureStore:
         if self.connection.type == "file":
             return self._get_period_record(feature_view, entity_df, period, features, include, is_label=False)
         elif self.connection.type == "pgsql":
-            to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
+            table_suffix = to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
             # connect to pgsql db
             conn = psy_conn(**self.connection.__dict__)
             sql_result, entity_name = self._get_period_pgsql(
                 feature_view,
-                TMP_TBL,
+                f"{TMP_TBL}_{table_suffix}",
                 period,
                 features,
                 include,
@@ -222,7 +220,9 @@ class FeatureStore:
                 sql_df(sql_result.get_sql(), conn), columns=entity_name + [QUERY_COL, TIME_COL] + features
             )
             # remove entity_df and close connection
-            close_conn(conn, tables=[f"{self.connection.database}.{self.connection.schema}.{TMP_TBL}"])
+            close_conn(
+                conn, tables=[f"{self.connection.database}.{self.connection.schema}.{TMP_TBL}_{table_suffix}"]
+            )
             return result
 
     def get_labels(self, label_view, entity_df: pd.DataFrame, include: bool = False):
@@ -239,17 +239,19 @@ class FeatureStore:
         if self.connection.type == "file":
             return self._get_point_record(label_view, entity_df, labels, include)
         elif self.connection.type == "pgsql":
-            to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
+            table_suffix = to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
             # connect to pgsql db
             conn = psy_conn(**self.connection.__dict__)
             sql_result, entity_name = self._get_point_pgsql(
-                label_view, TMP_TBL, labels, include, list(entity_df.columns[:-1])
+                label_view, f"{TMP_TBL}_{table_suffix}", labels, include, list(entity_df.columns[:-1])
             )
             result = pd.DataFrame(
                 sql_df(sql_result.get_sql(), conn), columns=entity_name + [TIME_COL, CREATE_COL] + labels
             )
             # remove entity_df and close connection
-            close_conn(conn, tables=[f"{self.connection.database}.{self.connection.schema}.{TMP_TBL}"])
+            close_conn(
+                conn, tables=[f"{self.connection.database}.{self.connection.schema}.{TMP_TBL}_{table_suffix}"]
+            )
             return result
 
     def get_period_labels(
@@ -273,17 +275,25 @@ class FeatureStore:
         if self.connection.type == "file":
             return self._get_period_record(label_view, entity_df, period, labels, include, is_label=True)
         elif self.connection.type == "pgsql":
-            to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
+            table_suffix = to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
             # connect to pgsql db
             conn = psy_conn(**self.connection.__dict__)
             sql_result, entity_name = self._get_period_pgsql(
-                label_view, TMP_TBL, period, labels, include, True, list(entity_df.columns[:-1])
+                label_view,
+                f"{TMP_TBL}_{table_suffix}",
+                period,
+                labels,
+                include,
+                True,
+                list(entity_df.columns[:-1]),
             )
             result = pd.DataFrame(
                 sql_df(sql_result.get_sql(), conn), columns=entity_name + [QUERY_COL, TIME_COL] + labels
             )
             # remove entity_df and close connection
-            close_conn(conn, tables=[f"{self.connection.database}.{self.connection.schema}.{TMP_TBL}"])
+            close_conn(
+                conn, tables=[f"{self.connection.database}.{self.connection.schema}.{TMP_TBL}_{table_suffix}"]
+            )
             return result
 
     def _get_point_record(self, views, entity_df: pd.DataFrame, features: list, include: bool = True):
@@ -798,48 +808,6 @@ class FeatureStore:
             )
         return sql_query
 
-    def _read_local_db_data(
-        self,
-        views: Union[FeatureViews, LabelViews],
-        features: List[str],
-        all_entity_col: Dict[str, str],
-        start: Timestamp = None,
-        end: Timestamp = None,
-        include: str = "both",
-        agg_type: str = "mean",
-    ) -> pd.DataFrame:
-        source: SourceConfig = self.sources[views.batch_source]
-        df = read_db(
-            source.name,
-            self.connection,
-            features,
-            start,
-            end,
-            include,
-            [
-                source.event_time,
-                source.create_time,
-            ],
-            list(all_entity_col.keys()),
-            agg_type,
-        )
-        df.rename(
-            columns={
-                source.event_time: TIME_COL,
-                source.create_time: CREATE_COL,
-            },
-            inplace=True,
-        )
-        df.rename(columns=all_entity_col, inplace=True)
-        df = df[
-            [
-                col
-                for col in list(all_entity_col.values()) + features + [TIME_COL, CREATE_COL]
-                if col in df.columns
-            ]
-        ]
-        return df
-
     def _fil_timelimit(self, include, ttl, df):
         if include:
             return (
@@ -892,6 +860,25 @@ class FeatureStore:
         """
         self.__check_fns(fn)
         check_type = True if fn != "unique" else False
+        if entity_df is not None:
+            self.__check_format(entity_df)
+            entity_df[TIME_COL] = pd.to_datetime(entity_df[TIME_COL])
+            entities = (
+                list(entity_df.columns[:-1])
+                if entity_df.columns[:-1] is not None
+                else self._get_available_entity(views)
+            )
+            start = pd.to_datetime(0, utc=True)
+        else:
+            entities = group_key if group_key else self._get_available_entity(views)
+            end = pd.to_datetime(end) if end else pd.to_datetime(datetime.now(), utc=True)
+            start = pd.to_datetime(start) if start else pd.to_datetime(0, utc=True)
+        all_entity_col = {self.entity[en].entity if en in self.entity else en: en for en in entities}
+
+        if keys_only:
+            assert fn == "unique", "keys_only=True can only be applied when fn==unique"
+            features = list(all_entity_col.keys())
+
         if not features:
             features = (
                 self._get_available_features(views, check_type)
@@ -902,15 +889,6 @@ class FeatureStore:
                 + self._get_available_labels(views, check_type)
             )
 
-        if entity_df is not None:
-            self.__check_format(entity_df)
-            entities = entity_df.columns[:-1]
-            start = pd.to_datetime(0, utc=True)
-        else:
-            entities = group_key if group_key else self._get_available_entity(views)
-            end = end if end else pd.to_datetime(datetime.now(), utc=True)
-            start = start if start else pd.to_datetime(0, utc=True)
-        all_entity_col = {self.entity[en].entity: en for en in entities}
         if self.connection.type == "file":
             if isinstance(views, (FeatureViews, LabelViews)):
                 df = self._read_local_file(views, features, all_entity_col)
@@ -921,47 +899,90 @@ class FeatureStore:
                     [TIME_COL],
                     list(all_entity_col.values()),
                 )
-                df = df[[col for col in features + list(all_entity_col.values()) + [TIME_COL]]]
-                if entity_df is not None and entities:
-                    df = df.merge(entity_df, how="right", on=entities)
-                elif entity_df is not None:
-                    df = df.merge(entity_df, how="cross")
-                else:
-                    df.rename(columns={TIME_COL: TIME_COL + "_x"}, inplace=True)
-                    # end_time limit
-                    df = df.assign(**{TIME_COL + "_y": end})
-                    if keys_only:
-                        assert fn == "unique", "keys_only=True can only be applied when fn==unique"
-                        result = list(
-                            df[(df[TIME_COL + "_x"] < df[TIME_COL + "_y"]) & (df[TIME_COL + "_x"] >= start)]
-                            .groupby(entities)
-                            .groups.keys()
-                        )
-                    else:
-                        result = df.groupby(entities).apply(
-                            get_stats_result,
-                            fn,
-                            primary_keys=entities + [TIME_COL + "_x", TIME_COL + "_y"],
-                            include=include,
-                            start=start,
-                        )
-                    return result
-        elif self.connection.type == "pgsql":
-            if isinstance(views, (FeatureViews, LabelViews)):
-                df = self._read_local_db_data(views, features, all_entity_col, start, end, include, fn)
+            df = df[[col for col in features + list(all_entity_col.values()) + [TIME_COL]]]
+            if entity_df is not None and entities:
+                df = df.merge(entity_df, how="right", on=entities)
+            elif entity_df is not None:
+                df = df.merge(entity_df, how="cross")
             else:
-                df = read_db(
-                    views.materialize_path,
-                    self.connection,
+                df.rename(columns={TIME_COL: TIME_COL + "_x"}, inplace=True)
+                # end_time limit
+                df = df.assign(**{TIME_COL + "_y": end})
+            if keys_only:
+                result = list(
+                    df[(df[TIME_COL + "_x"] < df[TIME_COL + "_y"]) & (df[TIME_COL + "_x"] >= start)]
+                    .groupby(entities)
+                    .groups.keys()
+                )
+            else:
+                result = df.groupby(entities).apply(
+                    get_stats_result,
+                    fn,
+                    primary_keys=entities + [TIME_COL + "_x", TIME_COL + "_y"],
+                    include=include,
+                    start=start,
+                )
+        elif self.connection.type == "pgsql":
+            conn = psy_conn(**self.connection.__dict__)
+            if isinstance(views, (FeatureViews, LabelViews)):
+                if entity_df is not None and entities:
+                    entity_df.rename(columns={v: k for k, v in all_entity_col.items()}, inplace=True)
+                    table_suffix = to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
+                    q = Query.from_(views.batch_source)
+                    q = q.inner_join(
+                        Query.from_(f"{TMP_TBL}_{table_suffix}").select(
+                            *list(all_entity_col.keys()), Parameter(f"{TIME_COL} as {TIME_COL}_tmp")
+                        )
+                    ).using(*list(all_entity_col.keys()))
+                elif entity_df is not None:
+                    q = Query.from_(views.batch_source)
+                    table_suffix = to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
+                    q = q.cross_join(
+                        Query.from_(f"{TMP_TBL}_{table_suffix}").select(
+                            Parameter(f"{TIME_COL} as {TIME_COL}_tmp")
+                        )
+                    ).cross()
+                else:
+                    q = Query.from_(views.batch_source)
+                q = build_agg_query(
+                    q,
                     features,
+                    list(all_entity_col.keys()),
+                    fn,
                     start,
                     end,
                     include,
-                    [TIME_COL],
-                    list(all_entity_col.values()),
-                    agg_type=fn,
+                    self.sources[views.batch_source].event_time,
                 )
-            return df
+            else:
+                if entity_df is not None and entities:
+                    table_suffix = to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
+                    q = Query.from_(views.materialize_path)
+                    q = q.inner_join(
+                        Query.from_(f"{TMP_TBL}_{table_suffix}").select(
+                            *list(all_entity_col.values()), Parameter(f"{TIME_COL} as {TIME_COL}_tmp")
+                        )
+                    ).using(*list(all_entity_col.values()))
+                elif entity_df is not None:
+                    q = Query.from_(views.materialize_path)
+                    table_suffix = to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
+                    q = q.cross_join(
+                        Query.from_(f"{TMP_TBL}_{table_suffix}").select(
+                            Parameter(f"{TIME_COL} as {TIME_COL}_tmp")
+                        )
+                    ).cross()
+                else:
+                    q = Query.from_(views.materialize_path)
+                q = build_agg_query(q, features, list(all_entity_col.values()), fn, start, end, include)
+
+            result = pd.DataFrame(
+                sql_df(q.get_sql(), conn),
+                columns=[f"{c}_{fn}" for c in features] + list(all_entity_col.values()),
+            )
+            close_conn(conn, [f"{TMP_TBL}_{table_suffix}"])
+            if keys_only:
+                result = list(result.groupby(*list(all_entity_col.values())).groups.keys())
+        return result
 
     def get_latest_entities(self, view, entity: List[str] = []):
         """get latest entity and its timestamp from a single FeatureViews/LabelViews or a materialzed Service
@@ -971,8 +992,8 @@ class FeatureStore:
         """
         if not entity:
             entity = self._get_available_entity(view)
+        all_entity_col = {self.entity[en].entity if en in self.entity else None: en for en in entity}
 
-        all_entity_col = {self.entity[en].entity: en for en in entity}
         if self.connection.type == "file":
             if isinstance(view, (FeatureViews, LabelViews)):
                 df = self._read_local_file(view, [], all_entity_col)
@@ -983,22 +1004,27 @@ class FeatureStore:
                     [TIME_COL],
                     list(all_entity_col.values()),
                 )
-
+            df = df[list(all_entity_col.values()) + [TIME_COL]]
+            # sort by event_time, decending
+            df.sort_values(by=TIME_COL, ascending=False, inplace=True, ignore_index=True)
+            # due to `ascending=False`, keep the `first` record means the latest one
+            df = df.drop_duplicates(subset=list(all_entity_col.values()), keep="first")
         elif self.connection.type == "pgsql":
+            conn = psy_conn(**self.connection.__dict__)
             if isinstance(view, (FeatureViews, LabelViews)):
-                df = self._read_local_db_data(view, [], all_entity_col)
-            else:
-                df = read_db(
-                    view.materialize_path,
-                    self.connection,
-                    [],
-                    time_col=[TIME_COL],
-                    entity_cols=list(all_entity_col.values()),
+                q = Query.from_(view.batch_source)
+                q = q.groupby(*list(all_entity_col.keys())).select(
+                    *list(all_entity_col.keys()),
+                    Parameter(f"max({self.sources[view.batch_source].event_time})"),
                 )
-        # sort by event_time, decending
-        df.sort_values(by=TIME_COL, ascending=False, inplace=True, ignore_index=True)
-        # due to `ascending=False`, keep the `first` record means the latest one
-        df = df.drop_duplicates(subset=entity, keep="first")
+            else:
+                q = Query.from_(view.materialize_path)
+                q = q.groupby(*list(all_entity_col.values())).select(
+                    *list(all_entity_col.values()), Parameter(f"max({TIME_COL})")
+                )
+            df = pd.DataFrame(sql_df(q.get_sql(), conn), columns=list(all_entity_col.values()) + [TIME_COL])
+            close_conn(conn)
+
         return df
 
     def get_dataset(

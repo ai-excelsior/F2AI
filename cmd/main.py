@@ -56,22 +56,25 @@ if __name__ == "__main__":
         )  # TODO include设置再确定一下
 
     def get_latest_entity():
-        fs.get_latest_entities(fs.features["loan_features"])
+        fs.get_latest_entities(fs.features["gy_link_travel_time_features"])
+
+    # get_latest_entity()
 
     def stats():
         entity_link = pd.DataFrame.from_dict(
             {
-                "link": ["3377906280028510514", "4377906282959500514"],
+                #  "link": ["3377906280028510514", "4377906282959500514"],
                 TIME_COL: [
                     datetime(2016, 6, 1, 0, 0, 0, tzinfo=timezone.utc),
                     datetime(2016, 7, 1, 0, 0, 0, tzinfo=timezone.utc),
                 ],
             }
         )
-        fs.stats(fs.features["gy_link_travel_time_features"], group_key=["link"], fn="mean")
+        fs.stats(fs.service["traval_time_prediction_embedding_v1"], entity_df=entity_link, fn="mean")
+        fs.stats(fs.features["gy_link_travel_time_features"], entity_df=entity_link, fn="mean")
         fs.get_latest_entities(fs.features["gy_link_travel_time_features"])
 
-    # stats()
+    stats()
 
     def get_features():
         entity_link = pd.DataFrame.from_dict(
@@ -115,7 +118,7 @@ if __name__ == "__main__":
             "traval_time_prediction_embedding_v1",
         )
 
-    do_materailize()
+    #  do_materailize()
 
     def get_period_features_and_labels():
 
@@ -151,23 +154,42 @@ if __name__ == "__main__":
     # get_period_features_and_labels()
 
     def dataset():
+        # groups = fs.stats(
+        #     fs.features["loan_features"],
+        #     group_key=["zipcode", "dob_ssn"],
+        #     keys_only=True,
+        #     fn="unique",
+        #     start="2021-08-24",
+        #     end="2021-08-26",
+        # )
+        # ds = fs.get_dataset(
+        #     service_name="credit_scoring_v1",
+        #     sampler=GroupFixednbrSampler(
+        #         time_bucket="10 days",
+        #         stride=2,
+        #         group_ids=groups,
+        #         group_names=["zipcode", "dob_ssn"],
+        #         start="2020-12-24",
+        #         end="2021-08-26",
+        #     ),
+        # )
         groups = fs.stats(
-            fs.features["loan_features"],
-            group_key=["zipcode", "dob_ssn"],
+            fs.features["gy_link_travel_time_features"],
+            group_key=["link"],
             keys_only=True,
             fn="unique",
-            start="2021-08-24",
-            end="2021-08-26",
+            start="2016-03-01 00:02:00",
+            end="2016-06-30 08:00:00",
         )
         ds = fs.get_dataset(
-            service_name="credit_scoring_v1",
+            service_name="traval_time_prediction_embedding_v1",
             sampler=GroupFixednbrSampler(
-                time_bucket="10 days",
-                stride=2,
+                time_bucket="24 hours",
+                stride=1,
                 group_ids=groups,
-                group_names=["zipcode", "dob_ssn"],
-                start="2020-12-24",
-                end="2021-08-26",
+                group_names=["link"],
+                start="2016-03-01",
+                end="2016-07-01",
             ),
         )
         i_ds = ds.to_pytorch()
