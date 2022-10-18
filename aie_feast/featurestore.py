@@ -1,4 +1,5 @@
 from datetime import datetime
+from pyexpat import features
 from tkinter import N
 from typing import Dict, List, Union
 import pandas as pd
@@ -662,6 +663,26 @@ class FeatureStore:
             raise TypeError("please check your `incremental_begin` type")
 
         # dir to store dbt project
+        label_view = self.labels[list(service.labels.keys())[0]].__dict__
+        label_view.update(
+            {
+                "event_time": self.sources[label_view["batch_source"]].event_time,
+                "create_time": self.sources[label_view["batch_source"]].create_time,
+            }
+        )
+
+        feature_views = [self.features[feature_key].__dict__ for feature_key in service.features.keys()]
+        for feature_view in feature_views:
+            feature_view.update(
+                {
+                    "event_time": self.sources[feature_view["batch_source"]].event_time,
+                    "create_time": self.sources[feature_view["batch_source"]].create_time,
+                }
+            )
+        all_entities = self._get_available_entity(service)
+        entities_dict = {en: self.entity[en].entity for en in all_entities}
+
+        # incremental_begin 在 sql 中处理
 
         dbt_path = os.path.join(self.project_folder.lstrip("file://"), f"{service.dbt_path}")
         os.system(
@@ -782,10 +803,10 @@ class FeatureStore:
         views: Union[FeatureViews, LabelViews],
         features: List[str],
         all_entity_col: Dict[str, str],
-        start: Timestamp=None,
-        end: Timestamp=None,
-        include: str='both',
-        agg_type: str='mean'
+        start: Timestamp = None,
+        end: Timestamp = None,
+        include: str = "both",
+        agg_type: str = "mean",
     ) -> pd.DataFrame:
         source: SourceConfig = self.sources[views.batch_source]
         df = read_db(
@@ -800,7 +821,7 @@ class FeatureStore:
                 source.create_time,
             ],
             list(all_entity_col.keys()),
-            agg_type
+            agg_type,
         )
         df.rename(
             columns={
@@ -938,7 +959,7 @@ class FeatureStore:
                     include,
                     [TIME_COL],
                     list(all_entity_col.values()),
-                    agg_type=fn
+                    agg_type=fn,
                 )
             return df
 

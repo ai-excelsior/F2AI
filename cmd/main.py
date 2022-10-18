@@ -103,7 +103,7 @@ if __name__ == "__main__":
             }
         )  # 19991113_3598 has duplicates, due to the original data
 
-        fs.get_labels(fs.service["credit_scoring_v1"], entity_dobssn_period, "365 days")
+        # fs.get_labels(fs.service["credit_scoring_v1"], entity_dobssn_period, "365 days")
         # fs.get_period_features(fs.features["gy_link_travel_time_features"], entity_link, period="5 hours")
         # fs.get_features(fs.features["zipcode_features"], entity_loan)
         # fs.get_labels(fs.service["credit_scoring_v1"], entity_dobssn_period)
@@ -112,10 +112,10 @@ if __name__ == "__main__":
 
     def do_materailize():
         fs.materialize(
-            "credit_scoring_v1",
+            "traval_time_prediction_embedding_v1",
         )
 
-    # do_materailize()
+    do_materailize()
 
     def get_period_features_and_labels():
 
