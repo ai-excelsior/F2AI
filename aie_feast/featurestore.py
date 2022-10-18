@@ -707,7 +707,7 @@ class FeatureStore:
         max_timestamp = Query.from_(service.materialize_path).select(
             functions.Max(Parameter(label_view["event_time"]))
         )
-        max_timestamp_label = Query.from_(label_view["batch_souirce"]).select(
+        max_timestamp_label = Query.from_(label_view["batch_source"]).select(
             functions.Max(Parameter(label_view["event_time"]))
         )
 
@@ -726,9 +726,11 @@ class FeatureStore:
         else:
             incremental_begin = incremental_begin
 
-        dbt_path = os.path.join("/", self.project_folder.lstrip("file://"), f"{service.dbt_path}")
+        dbt_path = os.path.join(
+            "/", self.project_folder.lstrip("file://"), f"{service.dbt_path}", f"{service.materialize_path}"
+        )
         os.system(
-            f"cd {dbt_path} && dbt run --profiles-dir {dbt_path} --vars {{begin_point:{incremental_begin} }}"
+            f"cd {dbt_path} && dbt run --profiles-dir {dbt_path} --vars '{{key:value, labelviews:{label_view},featureviews:{feature_views}, entities:{entities_dict}, increment_begin:{incremental_begin} }}' "
         )
 
     def _offline_record_materialize(self, service: Service, incremental_begin):
