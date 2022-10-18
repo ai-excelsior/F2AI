@@ -317,7 +317,7 @@ class FeatureStore:
                 [TIME_COL, MATERIALIZE_TIME],
                 list(all_entity_col.values()),
             )
-            df = df[[col for col in list(all_entity_col.values()) + features + [TIME_COL, MATERIALIZE_TIME]]]
+            df = df[[col for col in list(all_entity_col.values()) + [TIME_COL, MATERIALIZE_TIME] + features]]
             if all_entity_col:
                 df = df.merge(entity_df, on=entity_name, how="inner")
             else:
@@ -326,7 +326,7 @@ class FeatureStore:
             df = self._fil_timelimit(include, None, df)
             # newest record
             df = get_newest_record(df, TIME_COL, entity_name, CREATE_COL)
-        return df, entity_name, features
+        return df
 
     def _get_point_pgsql(
         self,
@@ -741,7 +741,7 @@ class FeatureStore:
         df = df[
             [
                 col
-                for col in list(all_entity_col.values()) + features + [TIME_COL, CREATE_COL]
+                for col in list(all_entity_col.values()) + [TIME_COL, CREATE_COL] + features
                 if col in df.columns
             ]
         ]
@@ -782,10 +782,10 @@ class FeatureStore:
         views: Union[FeatureViews, LabelViews],
         features: List[str],
         all_entity_col: Dict[str, str],
-        start: Timestamp=None,
-        end: Timestamp=None,
-        include: str='both',
-        agg_type: str='mean'
+        start: Timestamp = None,
+        end: Timestamp = None,
+        include: str = "both",
+        agg_type: str = "mean",
     ) -> pd.DataFrame:
         source: SourceConfig = self.sources[views.batch_source]
         df = read_db(
@@ -800,7 +800,7 @@ class FeatureStore:
                 source.create_time,
             ],
             list(all_entity_col.keys()),
-            agg_type
+            agg_type,
         )
         df.rename(
             columns={
@@ -938,7 +938,7 @@ class FeatureStore:
                     include,
                     [TIME_COL],
                     list(all_entity_col.values()),
-                    agg_type=fn
+                    agg_type=fn,
                 )
             return df
 

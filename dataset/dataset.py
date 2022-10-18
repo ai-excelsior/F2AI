@@ -59,7 +59,7 @@ class IterableDataset:
 
             for period, features in self.all_labels.items():
                 if period:
-                    tmp_result = self.fs.get_period_labels(self.service, entity, period, True)
+                    tmp_result = self.fs.get_period_labels(self.service, entity, period, False)
                     tmp_result.rename({QUERY_COL: TIME_COL}, inplace=True)
                 else:
                     tmp_result = self.fs.get_labels(self.service, entity, True)
@@ -97,7 +97,7 @@ class IterableDataset:
             for period, features in self.all_labels.items():
                 if period:
                     tmp_result = self.fs._get_period_pgsql(
-                        self.service, entity, period, features, True, True, self.entity_name
+                        self.service, entity, period, features, False, True, self.entity_name
                     )
                     tmp_result = Query.from_(tmp_result[0]).select(
                         *tmp_result[1], Parameter(f"{QUERY_COL} as {TIME_COL}"), *tmp_result[2]
