@@ -2,7 +2,12 @@ from datetime import datetime
 from typing import List, Union
 import pandas as pd
 import os
+<<<<<<< HEAD
 from pypika import Query, Parameter, Tables
+=======
+from pypika import Query, Tables, Parameter, functions
+from pandas._libs.tslibs.timestamps import Timestamp
+>>>>>>> c157c97 (_offline_pgsql_materialize)
 from aie_feast.views import FeatureViews, LabelViews
 from aie_feast.service import Service
 from dataset.dataset import Dataset
@@ -676,15 +681,26 @@ class FeatureStore:
         label_view = self.labels[list(service.labels.keys())[0]].__dict__
         label_view.update(
             {
+                "labels": [
+                    label
+                    for label in label_view["labels"].keys()
+                    if label in self._get_available_labels(service)
+                ],
                 "event_time": self.sources[label_view["batch_source"]].event_time,
                 "create_time": self.sources[label_view["batch_source"]].create_time,
             }
         )
 
         feature_views = [self.features[feature_key].__dict__ for feature_key in service.features.keys()]
+        all_features_use = self._get_available_features(service)
         for feature_view in feature_views:
             feature_view.update(
                 {
+                    "features": [
+                        feature
+                        for feature in feature_view["features"].keys()
+                        if feature in all_features_use and feature not in label_view["labels"]
+                    ],
                     "event_time": self.sources[feature_view["batch_source"]].event_time,
                     "create_time": self.sources[feature_view["batch_source"]].create_time,
                 }
@@ -692,7 +708,23 @@ class FeatureStore:
         all_entities = self._get_available_entity(service)
         entities_dict = {en: self.entity[en].entity for en in all_entities}
 
-        # incremental_begin 在 sql 中处理
+        conn = psy_conn(**self.connection.__dict__)
+        max_timestamp = Query.from_(service.materialize_path).select(
+            functions.Max(Parameter(label_view["event_time"]))
+        )
+        max_timestamp_label = Query.from_(label_view["batch_souirce"]).select(
+            functions.Max(Parameter(label_view["event_time"]))
+        )
+        result = pd.to_datetime(sql_df(max_timestamp.get_sql(), conn)[0][0], utc=True)
+        label_result = pd.to_datetime(sql_df(max_timestamp_label.get_sql(), conn)[0][0], utc=True)
+        conn.close()
+
+        if incremental_begin is None:
+            incremental_begin = result
+        elif isinstance(incremental_begin, dict):
+            incremental_begin = label_result - relativedelta(**incremental_begin)
+        else:
+            incremental_begin = incremental_begin
 
         dbt_path = os.path.join(self.project_folder.lstrip("file://"), f"{service.dbt_path}")
         os.system(
