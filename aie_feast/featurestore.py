@@ -710,8 +710,13 @@ class FeatureStore:
         max_timestamp_label = Query.from_(label_view["batch_souirce"]).select(
             functions.Max(Parameter(label_view["event_time"]))
         )
-        result = pd.to_datetime(sql_df(max_timestamp.get_sql(), conn)[0][0], utc=True)
+
         label_result = pd.to_datetime(sql_df(max_timestamp_label.get_sql(), conn)[0][0], utc=True)
+        try:
+            result = pd.to_datetime(sql_df(max_timestamp.get_sql(), conn)[0][0], utc=True)
+        except:
+            result = pd.to_datetime("1970-01-01 00:00:00", utc=True)
+
         conn.close()
 
         if incremental_begin is None:
@@ -721,7 +726,7 @@ class FeatureStore:
         else:
             incremental_begin = incremental_begin
 
-        dbt_path = os.path.join(self.project_folder.lstrip("file://"), f"{service.dbt_path}")
+        dbt_path = os.path.join("/", self.project_folder.lstrip("file://"), f"{service.dbt_path}")
         os.system(
             f"cd {dbt_path} && dbt run --profiles-dir {dbt_path} --vars {{begin_point:{incremental_begin} }}"
         )
