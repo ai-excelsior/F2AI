@@ -889,6 +889,7 @@ class FeatureStore:
             start (str, optional): start_time. Defaults to None, works and only works when `entity_df` is None.
             end (str, optional): end_time. Defaults to None, works and only works when `entity_df` is None.
             include(str,optional): whether to include `start` or `end` timestamp
+            keys_only(bool,optional): whether to take action on keys
         """
         self.__check_fns(fn)
         check_type = True if fn != "unique" else False

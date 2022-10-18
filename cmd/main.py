@@ -74,7 +74,7 @@ if __name__ == "__main__":
         fs.stats(fs.features["gy_link_travel_time_features"], entity_df=entity_link, fn="mean")
         fs.get_latest_entities(fs.features["gy_link_travel_time_features"])
 
-    stats()
+    # stats()
 
     def get_features():
         entity_link = pd.DataFrame.from_dict(
@@ -118,7 +118,7 @@ if __name__ == "__main__":
             "traval_time_prediction_embedding_v1",
         )
 
-    #  do_materailize()
+    do_materailize()
 
     def get_period_features_and_labels():
 
