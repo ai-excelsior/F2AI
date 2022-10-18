@@ -2,12 +2,7 @@ from datetime import datetime
 from typing import List, Union
 import pandas as pd
 import os
-<<<<<<< HEAD
-from pypika import Query, Parameter, Tables
-=======
-from pypika import Query, Tables, Parameter, functions
-from pandas._libs.tslibs.timestamps import Timestamp
->>>>>>> c157c97 (_offline_pgsql_materialize)
+from pypika import Query, Parameter, functions
 from aie_feast.views import FeatureViews, LabelViews
 from aie_feast.service import Service
 from dataset.dataset import Dataset
