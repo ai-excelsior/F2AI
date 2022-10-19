@@ -1,7 +1,9 @@
 from datetime import datetime
+import imp
 from typing import List, Union
 import pandas as pd
 import os
+import json
 from pypika import Query, Parameter, functions
 from aie_feast.views import FeatureViews, LabelViews
 from aie_feast.service import Service
@@ -729,9 +731,15 @@ class FeatureStore:
         dbt_path = os.path.join(
             "/", self.project_folder.lstrip("file://"), f"{service.dbt_path}", f"{service.materialize_path}"
         )
-        os.system(
-            f"cd {dbt_path} && dbt run --profiles-dir {dbt_path} --vars '{{key:value, labelviews:{label_view},featureviews:{feature_views}, entities:{entities_dict}, increment_begin:{incremental_begin} }}' "
-        )
+
+        a = {
+            "labelviews": label_view,
+            "featureviews": feature_views,
+            "entities": entities_dict,
+            "increment_begin": str(incremental_begin),
+        }
+        b = json.dumps(a)
+        os.system(f"cd {dbt_path} && dbt run --profiles-dir {dbt_path} --vars '{b}' ")
 
     def _offline_record_materialize(self, service: Service, incremental_begin):
         """materialize offline file
