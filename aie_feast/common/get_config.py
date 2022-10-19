@@ -1,11 +1,17 @@
 import os
 from aie_feast.entity import Entity
 from aie_feast.service import Service
-from aie_feast.views import FeatureViews, LabelViews
+from aie_feast.views import FeatureView, LabelView
 from .connect import ConnectConfig
 from .source import SourceConfig
 from .read_file import read_yml
 from .utils import remove_prefix, schema_to_dict, service_to_dict
+
+
+def listdir_if_exist(path: str):
+    if os.path.isdir(path):
+        return os.listdir(remove_prefix(path, "file://"))
+    return []
 
 
 def get_conn_cfg(url: str):
@@ -44,7 +50,7 @@ def get_service_cfg(url: str):
         url (str): url of .yml
     """
     service_cfg = {}
-    for cfg in os.listdir(remove_prefix(url, "file://")):
+    for cfg in listdir_if_exist(url):
         if cfg.endswith(".yml") or cfg.endswith(".yaml"):
             cfg = read_yml(os.path.join(url, cfg))
             service = Service(
@@ -65,10 +71,10 @@ def get_entity_cfg(url: str):
         url (str): url of .yml
     """
     entities = {}
-    for cfg in os.listdir(remove_prefix(url, "file://")):
+    for cfg in listdir_if_exist(url):
         if cfg.endswith(".yml") or cfg.endswith(".yaml"):
             cfg = read_yml(os.path.join(url, cfg))
-            entity_cfg = Entity(entity=cfg.get("join_keys", [cfg["name"]])[0])
+            entity_cfg = Entity(name=cfg.get("join_keys", [cfg["name"]])[0])
             entities.update({cfg["name"]: entity_cfg})
     return entities
 
@@ -80,10 +86,10 @@ def get_feature_views(url: str):
         url (str): rl of .yml
     """
     feature_views = {}
-    for cfg in os.listdir(remove_prefix(url, "file://")):
+    for cfg in listdir_if_exist(url):
         if cfg.endswith(".yml") or cfg.endswith(".yaml"):
             cfg = read_yml(os.path.join(url, cfg))
-            feature_cfg = FeatureViews(
+            feature_cfg = FeatureView(
                 entity=cfg["entities"],
                 features=schema_to_dict(cfg["schema"]),
                 batch_source=cfg["batch_source"],
@@ -102,10 +108,10 @@ def get_label_views(url: str):
         url (str): rl of .yml
     """
     label_views = {}
-    for cfg in os.listdir(remove_prefix(url, "file://")):
+    for cfg in listdir_if_exist(url):
         if cfg.endswith(".yml") or cfg.endswith(".yaml"):
             cfg = read_yml(os.path.join(url, cfg))
-            label_cfg = LabelViews(
+            label_cfg = LabelView(
                 entity=cfg["entities"],
                 labels=schema_to_dict(cfg["schema"]),
                 batch_source=cfg["batch_source"],
@@ -123,7 +129,7 @@ def get_source_cfg(url: str):
         url (str): rl of .yml
     """
     source_dict = {}
-    for filename in os.listdir(remove_prefix(url, "file://")):
+    for filename in listdir_if_exist(url):
         if filename.endswith(".yml"):
             cfg = read_yml(os.path.join(url, filename))
             cfg["file_path"] = cfg.pop("path", None)

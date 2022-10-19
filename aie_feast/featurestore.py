@@ -5,7 +5,7 @@ import os
 import json
 from dateutil.relativedelta import relativedelta
 from pypika import Query, Parameter, functions
-from aie_feast.views import FeatureViews, LabelViews
+from aie_feast.views import FeatureView, LabelView
 from aie_feast.service import Service
 from aie_feast.dataset.dataset import Dataset
 from aie_feast.common.get_config import (
@@ -70,7 +70,7 @@ class FeatureStore:
         ], f"{fn}is not a available function, you can use fs.query() to customize your function"
 
     def _get_available_features(self, view, check_type: bool = False):
-        if isinstance(view, FeatureViews):
+        if isinstance(view, FeatureView):
             features = (
                 [k for k, v in view.features.items() if v not in ["string", "bool"]]
                 if check_type
@@ -102,7 +102,7 @@ class FeatureStore:
         return features
 
     def _get_available_labels(self, view, check_type: bool = False):
-        if isinstance(view, LabelViews):
+        if isinstance(view, LabelView):
             labels = (
                 [k for k, v in view.labels.items() if v not in ["string", "bool"]]
                 if check_type
@@ -134,7 +134,7 @@ class FeatureStore:
 
     def _get_available_entity(self, view):
         entity = []
-        if isinstance(view, (FeatureViews, LabelViews)):
+        if isinstance(view, (FeatureView, LabelView)):
             entity = list(view.entity)
         elif isinstance(view, Service):  # Services
             for table, _ in view.features.items():
@@ -296,7 +296,7 @@ class FeatureStore:
             )
             return result
 
-    def _get_point_record(self, views, entity_df: pd.DataFrame, features: list, include: bool = True):
+    def _get_point_record(self, view, entity_df: pd.DataFrame, features: list, include: bool = True):
         """non time-series prediction use
 
         Args:
@@ -305,25 +305,25 @@ class FeatureStore:
             features(list):columns to select besides times and entities
             include (bool, optional): include timestamp defined in `entity_df` or not. Defaults to True.
         """
-        entity = self._get_available_entity(views)
-        all_entity_col = {self.entity[en].entity: en for en in entity if en in list(entity_df.columns[:-1])}
+        view_entities = self._get_available_entity(view)
+        all_entity_col = {self.entity[view_entity].entity: view_entity for view_entity in view_entities if view_entity in list(entity_df.columns[:-1])}
         entity_name = list(all_entity_col.values())  # entity column name in table
 
-        if isinstance(views, (FeatureViews, LabelViews)):  # read from single view
-            df = self._read_local_file(views, features, all_entity_col)
+        if isinstance(view, (FeatureView, LabelView)):  # read from single view
+            df = self._read_local_file(view, features, all_entity_col)
             # rename entity columns
             if all_entity_col:
                 df = df.merge(entity_df[entity_name + [TIME_COL]], on=entity_name, how="inner")
             else:
                 df = df.merge(entity_df, how="cross")
-            if self.sources[views.batch_source].event_time:  #  time-relavent features
+            if self.sources[view.batch_source].event_time:  #  time-relavent features
                 # match time_limit
-                df = self._fil_timelimit(include, views.ttl, df)
+                df = self._fil_timelimit(include, view.ttl, df)
                 # newest record
                 df = get_newest_record(df, TIME_COL, entity_name, CREATE_COL)
         else:  # `Service`, read from materialized table
             df = read_file(
-                os.path.join(self.project_folder, views.materialize_path),
+                os.path.join(self.project_folder, view.materialize_path),
                 "parquet",
                 [TIME_COL, MATERIALIZE_TIME],
                 list(all_entity_col.values()),
@@ -350,7 +350,7 @@ class FeatureStore:
         entity = self._get_available_entity(views)
         entity_name = [en for en in entity if en in entity_columns]
 
-        if isinstance(views, (FeatureViews, LabelViews)):
+        if isinstance(views, (FeatureView, LabelView)):
             assert self.sources[views.batch_source].event_time, "View is not time-relevant, no period to get"
             all_entity_col = [self.entity[en].entity + " as " + en for en in entity_name]
             all_time_col = (
@@ -445,7 +445,7 @@ class FeatureStore:
         # connect to pgsql db
         period = transform_pgsql_period(period, is_label)
 
-        if isinstance(views, (FeatureViews, LabelViews)):
+        if isinstance(views, (FeatureView, LabelView)):
             assert self.sources[views.batch_source].event_time, "View is not time-relevant, no period to get"
             all_entity_col = [self.entity[en].entity + " as " + en for en in entity_name]
             all_time_col = (
@@ -547,7 +547,7 @@ class FeatureStore:
         entity = self._get_available_entity(views)
         all_entity_col = {self.entity[en].entity: en for en in entity if en in list(entity_df.columns[:-1])}
         entity_name = list(all_entity_col.values())  # entity column name in table
-        if isinstance(views, (FeatureViews, LabelViews)):
+        if isinstance(views, (FeatureView, LabelView)):
             assert self.sources[views.batch_source].event_time, "View is not time-relevant, no period to get"
             df_period = self._read_local_file(views, features, all_entity_col)
             # merge according to `entity`
@@ -766,7 +766,7 @@ class FeatureStore:
                 joined_frame = joined_frame[joined_frame[TIME_COL] >= incremental_begin]
         # join features dataframe
         for feature_key in service.features.keys():
-            feature_view: FeatureViews = self.features[feature_key]
+            feature_view: FeatureView = self.features[feature_key]
             feature_cols = [
                 item
                 for item in all_features_use
@@ -923,15 +923,15 @@ class FeatureStore:
         if not features:
             features = (
                 self._get_available_features(views, check_type)
-                if isinstance(views, FeatureViews)
+                if isinstance(views, FeatureView)
                 else self._get_available_labels(views, check_type)
-                if isinstance(views, LabelViews)
+                if isinstance(views, LabelView)
                 else self._get_available_features(views, check_type)
                 + self._get_available_labels(views, check_type)
             )
 
         if self.connection.type == "file":
-            if isinstance(views, (FeatureViews, LabelViews)):
+            if isinstance(views, (FeatureView, LabelView)):
                 df = self._read_local_file(views, features, all_entity_col)
             else:
                 df = read_file(
@@ -965,7 +965,7 @@ class FeatureStore:
                 )
         elif self.connection.type == "pgsql":
             conn = psy_conn(**self.connection.__dict__)
-            if isinstance(views, (FeatureViews, LabelViews)):
+            if isinstance(views, (FeatureView, LabelView)):
                 if entity_df is not None and entities:
                     entity_df.rename(columns={v: k for k, v in all_entity_col.items()}, inplace=True)
                     table_suffix = to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
@@ -1036,7 +1036,7 @@ class FeatureStore:
         all_entity_col = {self.entity[en].entity if en in self.entity else None: en for en in entity}
 
         if self.connection.type == "file":
-            if isinstance(view, (FeatureViews, LabelViews)):
+            if isinstance(view, (FeatureView, LabelView)):
                 df = self._read_local_file(view, [], all_entity_col)
             else:
                 df = read_file(
@@ -1052,7 +1052,7 @@ class FeatureStore:
             df = df.drop_duplicates(subset=list(all_entity_col.values()), keep="first")
         elif self.connection.type == "pgsql":
             conn = psy_conn(**self.connection.__dict__)
-            if isinstance(view, (FeatureViews, LabelViews)):
+            if isinstance(view, (FeatureView, LabelView)):
                 q = Query.from_(view.batch_source)
                 q = q.groupby(*list(all_entity_col.keys())).select(
                     *list(all_entity_col.keys()),

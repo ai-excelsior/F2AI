@@ -18,6 +18,9 @@ def read_yml(url: str) -> Dict:
 def _read_file(url):
     if url.startswith("file://"):
         with open(remove_prefix(url, "file://"), "r") as file:
+            return file.read()  # default behavior
+    else:
+        with open(url, "r") as file:
             return file.read()
     # elif url.startswith("oss://"):  # TODO: may not be correct
     #     bucket, key = get_bucket_from_oss_url(url)

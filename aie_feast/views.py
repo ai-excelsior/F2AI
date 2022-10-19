@@ -4,7 +4,7 @@ from aie_feast.common.utils import get_default_value
 
 
 @dataclass
-class FeatureViews:
+class FeatureView:
     """realize object using one .yml"""
 
     entity: List[str]
@@ -16,7 +16,7 @@ class FeatureViews:
 
 
 @dataclass
-class LabelViews:
+class LabelView:
     """realize object using one .yml"""
 
     entity: List[str]
