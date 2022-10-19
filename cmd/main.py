@@ -61,20 +61,32 @@ if __name__ == "__main__":
     # get_latest_entity()
 
     def stats():
-        entity_link = pd.DataFrame.from_dict(
+        # entity_link = pd.DataFrame.from_dict(
+        #     {
+        #         #  "link": ["3377906280028510514", "4377906282959500514"],
+        #         TIME_COL: [
+        #             datetime(2016, 6, 1, 0, 0, 0, tzinfo=timezone.utc),
+        #             datetime(2016, 7, 1, 0, 0, 0, tzinfo=timezone.utc),
+        #         ],
+        #     }
+        # )
+        # fs.stats(fs.features["gy_link_travel_time_features"], entity_df=entity_link, fn="mean")
+        # fs.get_latest_entities(fs.features["gy_link_travel_time_features"])
+
+        entity_dobssn_period = pd.DataFrame.from_dict(
             {
-                #  "link": ["3377906280028510514", "4377906282959500514"],
+                # "dob_ssn": ["19991113_3598", "19960703_3449"],
+                # "loan": ["21837", "38637"],
                 TIME_COL: [
-                    datetime(2016, 6, 1, 0, 0, 0, tzinfo=timezone.utc),
-                    datetime(2016, 7, 1, 0, 0, 0, tzinfo=timezone.utc),
+                    datetime(2021, 8, 26, tzinfo=timezone.utc),
+                    datetime(2021, 1, 1, 10, 59, 42, tzinfo=timezone.utc),
+                    #   datetime(2021, 7, 1, 10, 59, 42, tzinfo=timezone.utc),
                 ],
             }
         )
-        fs.stats(fs.service["traval_time_prediction_embedding_v1"], entity_df=entity_link, fn="mean")
-        fs.stats(fs.features["gy_link_travel_time_features"], entity_df=entity_link, fn="mean")
-        fs.get_latest_entities(fs.features["gy_link_travel_time_features"])
+        fs.stats(fs.service["credit_scoring_v1"], entity_df=entity_dobssn_period, fn="mean")
 
-    # stats()
+    #stats()
 
     def get_features():
         entity_link = pd.DataFrame.from_dict(
@@ -118,7 +130,7 @@ if __name__ == "__main__":
             "traval_time_prediction_embedding_v1",
         )
 
-    do_materailize()
+    # do_materailize()
 
     def get_period_features_and_labels():
 
@@ -195,7 +207,7 @@ if __name__ == "__main__":
         i_ds = ds.to_pytorch()
         next(iter(i_ds))
 
-    dataset()
+    # dataset()
 
     def sample():
         time_bucket = "4 days"
