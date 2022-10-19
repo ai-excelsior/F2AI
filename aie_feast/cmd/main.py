@@ -1,11 +1,9 @@
 from argparse import ArgumentParser
-import os
-from pytz import utc
-from common.cmd_parser import get_f2ai_parser
-from aie_feast.featurestore import FeatureStore
 import pandas as pd
 from datetime import datetime, timezone
-from common.sampler import GroupFixednbrSampler, GroupRandomSampler, UniformNPerGroupSampler
+from aie_feast.common.cmd_parser import get_f2ai_parser
+from aie_feast.featurestore import FeatureStore
+from aie_feast.common.sampler import GroupFixednbrSampler, GroupRandomSampler, UniformNPerGroupSampler
 
 TIME_COL = "event_timestamp"
 
@@ -86,7 +84,7 @@ if __name__ == "__main__":
         )
         fs.stats(fs.service["credit_scoring_v1"], entity_df=entity_dobssn_period, fn="mean")
 
-    #stats()
+    # stats()
 
     def get_features():
         entity_link = pd.DataFrame.from_dict(

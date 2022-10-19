@@ -1,4 +1,4 @@
-from typing import Type
+import os
 from aie_feast.entity import Entity
 from aie_feast.service import Service
 from aie_feast.views import FeatureViews, LabelViews
@@ -6,7 +6,6 @@ from .connect import ConnectConfig
 from .source import SourceConfig
 from .read_file import read_yml
 from .utils import remove_prefix, schema_to_dict, service_to_dict
-import os
 
 
 def get_conn_cfg(url: str):

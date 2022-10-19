@@ -1,10 +1,8 @@
-from typing import Dict, List, Union
+from typing import List, Union
 import pandas as pd
-from pypika import Query, functions as fn, Parameter, Table
+from pypika import functions as fn, Parameter
 from pypika.queries import QueryBuilder
-from common.connect import ConnectConfig
 from pandas._libs.tslibs.timestamps import Timestamp
-from common.psl_utils import psy_conn, sql_df, execute_sql
 
 
 FSKEY = "__FS__"

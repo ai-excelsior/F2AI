@@ -1,9 +1,9 @@
-from common.psl_utils import sql_df, psy_conn
 import pandas as pd
 from typing import TYPE_CHECKING, Tuple
 from copy import deepcopy
 from pypika import Query, Parameter
-from common.psl_utils import to_pgsql
+from aie_feast.common.psl_utils import to_pgsql
+from aie_feast.common.psl_utils import sql_df, psy_conn
 
 if TYPE_CHECKING:
     from aie_feast.featurestore import FeatureStore

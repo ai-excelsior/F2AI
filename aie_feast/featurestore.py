@@ -1,14 +1,14 @@
 from datetime import datetime
-import imp
 from typing import List, Union
 import pandas as pd
 import os
 import json
+from dateutil.relativedelta import relativedelta
 from pypika import Query, Parameter, functions
 from aie_feast.views import FeatureViews, LabelViews
 from aie_feast.service import Service
-from dataset.dataset import Dataset
-from common.get_config import (
+from aie_feast.dataset.dataset import Dataset
+from aie_feast.common.get_config import (
     get_conn_cfg,
     get_service_cfg,
     get_entity_cfg,
@@ -16,7 +16,7 @@ from common.get_config import (
     get_feature_views,
     get_source_cfg,
 )
-from common.utils import (
+from aie_feast.common.utils import (
     read_file,
     to_file,
     parse_date,
@@ -25,10 +25,8 @@ from common.utils import (
     transform_pgsql_period,
     build_agg_query,
 )
-from common.psl_utils import execute_sql, psy_conn, to_pgsql, close_conn, sql_df
-from dateutil.relativedelta import relativedelta
+from aie_feast.common.psl_utils import execute_sql, psy_conn, to_pgsql, close_conn, sql_df
 
-pd.DataFrame.to_csv
 
 TIME_COL = "event_timestamp"  # timestamp of action taken in original tables or period-query result, or query time in single-query result table
 CREATE_COL = "created_timestamp"  # timestamp of record of the action taken in original tables, or timestamp of action taken in single-query result table

@@ -1,6 +1,6 @@
 from typing import Dict
 from dataclasses import dataclass, field
-from common.utils import get_default_value
+from aie_feast.common.utils import get_default_value
 
 
 @dataclass
