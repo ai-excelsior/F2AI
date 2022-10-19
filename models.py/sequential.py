@@ -6,7 +6,7 @@ import pandas as pd
 
 
 class SimpleClassify(nn.Module):
-    def __init__(self, cont_nbr=15, cat_nbr=5, emd_dim=2, max_types=6) -> None:
+    def __init__(self, cont_nbr, cat_nbr, emd_dim, max_types) -> None:
         super().__init__()
         # num_embeddings not less than type
         self.categorical_embedding = nn.Embedding(num_embeddings=max_types, embedding_dim=emd_dim)
@@ -23,7 +23,7 @@ class SimpleClassify(nn.Module):
 
 
 if __name__ == "__main__":
-    test_data = Iterator(
+    test_data = Iterator(  # just example, use your data to replace;
         pd.DataFrame(
             columns=[
                 "cont_fea1",
@@ -38,26 +38,30 @@ if __name__ == "__main__":
         )
     )
 
-    def cutomized_collet_fn():
+    def cutomized_collet_fn(scale_boudary={}):
+        # cutomize your collet_fn to adjust SimpleClassify Model
+        # involve pre-process 1. encoder str-like features to numeric;
+        #                     2. scale numeric features, the oveall min/max/avg/std can be accessed by `fs.stats` and transported or written in this func;
+        #                     3. others if need
+        # involve collect method to convert original data format to that used in SimpleClassify.forward and loss calculation
         pass
 
-    test_data_loader = DataLoader(test_data, collate_fn=cutomized_collet_fn)
-    # test_data_batch = {  # assume batch_size = 16
-    #         "categorical_features": torch.randint(6, [16, 2], dtype=torch.int),
-    #         "continous_features": torch.rand([16, 5], dtype=torch.float),
-    #         "labels": torch.randint(2, [16, 1], dtype=torch.float),
-    #     }
+    test_data_loader = DataLoader(  # `batch_siz`e and `drop_last`` do not matter now, `sampler`` set it to be None cause `test_data`` is a Iterator
+        test_data, collate_fn=cutomized_collet_fn, batch_size=4, drop_last=False, sampler=None
+    )
+    # cont_nbr/cat_nbr means the number of continuous/categorical features delivered to model;
+    # max_types means the max different types in all categorical features
+    # emd_dim is a parameter do not matter now
     model = SimpleClassify(cont_nbr=5, cat_nbr=2, emd_dim=2, max_types=6)
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-    loss_fn = nn.BCELoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)  # no need to change
+    loss_fn = nn.BCELoss()  # loss function to train a classification model
 
     for epoch in range(10):  # assume 10 epoch
         print(f"epoch: {epoch} begin")
-        # each batch_data: batch_size * feature_dim * 1
         pred_label = model(test_data_loader)
         true_label = test_data["labels"]
         loss = loss_fn(pred_label, true_label)
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-    print(f"epoch: {epoch} done")
+        print(f"epoch: {epoch} done, loss: {loss}")
