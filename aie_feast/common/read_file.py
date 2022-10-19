@@ -18,7 +18,8 @@ def read_yml(url: str) -> Dict:
 def _read_file(url):
     if url.startswith("file://"):
         with open(remove_prefix(url, "file://"), "r") as file:
-            return file.read()  # default behavior
+            return file.read()
+    # default behavior
     else:
         with open(url, "r") as file:
             return file.read()
