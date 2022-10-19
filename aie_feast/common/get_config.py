@@ -4,11 +4,12 @@ from typing import List, Dict
 from aie_feast.entity import Entity
 from aie_feast.service import Service
 from aie_feast.views import FeatureView, LabelView
+from aie_feast.definations import OfflineStoreType
+
 from .connect import ConnectConfig
 from .source import Source, parse_source_yaml
 from .read_file import read_yml
 from .utils import remove_prefix, schema_to_dict, service_to_dict
-from .definations import OfflineStoreType
 
 
 def listdir_with_extensions(path: str, extensions: List[str] = []) -> List[str]:

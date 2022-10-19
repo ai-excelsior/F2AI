@@ -322,7 +322,7 @@ class FeatureStore:
                 df = df.merge(entity_df[entity_name + [TIME_COL]], on=entity_name, how="inner")
             else:
                 df = df.merge(entity_df, how="cross")
-            if self.sources[view.batch_source].timestamp_field:  #  time-relavent features
+            if self.sources[view.batch_source].timestamp_field:  # time-relavent features
                 # match time_limit
                 df = self._fil_timelimit(include, view.ttl, df)
                 # newest record

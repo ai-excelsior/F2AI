@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
 from enum import Enum
-from .definations import Feature, OfflineStoreType
+from aie_feast.definations import Feature, OfflineStoreType
 from .utils import get_default_value
 
 
