@@ -43,18 +43,22 @@ def service_to_dict(schema):
     return item_dict
 
 
-def read_file(path, type, time_col=None, entity_cols=None):
-    time_col = [i for i in time_col if i]
+def read_file(path, file_format=None, time_cols=None, entity_cols=None):
+    time_cols = [i for i in time_cols if i]
     path = remove_prefix(path, "file://")
-    if type.startswith("parq"):
+
+    if file_format is None:
+        file_format = path.split(".")[-1]
+
+    if file_format.startswith("parq"):
         df = pd.read_parquet(path)
-    elif type.startswith("tsv"):
-        df = pd.read_csv(path, sep="\t", parse_dates=time_col if time_col else [])
-    elif type.startswith("txt"):
-        df = pd.read_csv(path, sep=" ", parse_dates=time_col if time_col else [])
+    elif file_format.startswith("tsv"):
+        df = pd.read_csv(path, sep="\t", parse_dates=time_cols if time_cols else [])
+    elif file_format.startswith("txt"):
+        df = pd.read_csv(path, sep=" ", parse_dates=time_cols if time_cols else [])
     else:
-        df = pd.read_csv(path, parse_dates=time_col if time_col else [])
-    for col in time_col:
+        df = pd.read_csv(path, parse_dates=time_cols if time_cols else [])
+    for col in time_cols:
         df[col] = pd.to_datetime(df[col], utc=True)
     if entity_cols:
         df[entity_cols] = df[entity_cols].astype("str")

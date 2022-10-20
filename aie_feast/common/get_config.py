@@ -8,7 +8,7 @@ from aie_feast.definitions import OfflineStoreType, Entity
 from .connect import ConnectConfig
 from .source import Source, parse_source_yaml
 from .read_file import read_yml
-from .utils import remove_prefix, schema_to_dict, service_to_dict
+from .utils import remove_prefix, service_to_dict
 
 
 def listdir_with_extensions(path: str, extensions: List[str] = []) -> List[str]:
@@ -98,7 +98,7 @@ def get_feature_views(url: str) -> Dict[str, FeatureView]:
     return feature_views
 
 
-def get_label_views(url: str):
+def get_label_views(url: str) -> Dict[str, LabelView]:
     """get Dict(LabelViews) from /label_views/*.yml
 
     Args:
@@ -106,15 +106,8 @@ def get_label_views(url: str):
     """
     label_views = {}
     for filepath in listdir_yamls(url):
-        cfg = read_yml(filepath)
-        label_cfg = LabelView(
-            entity=cfg["entities"],
-            labels=schema_to_dict(cfg["schema"]),
-            batch_source=cfg["batch_source"],
-            ttl=cfg.get("ttl", None),
-            request_source=cfg.get("request_source", None),
-        )
-        label_views.update({cfg["name"]: label_cfg})
+        label_view = LabelView(**read_yml(filepath))
+        label_views[label_view.name] = label_view
     return label_views
 
 
