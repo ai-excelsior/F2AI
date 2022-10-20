@@ -127,7 +127,7 @@ class FeatureStore:
             raise TypeError("must be LabelViews or Service")
         return labels
 
-    def _get_available_entity(self, view) -> List[str]:
+    def _get_available_entity_names(self, view) -> List[str]:
         entities = []
         if isinstance(view, FeatureView):
             entities = list(view.entities)
@@ -302,42 +302,43 @@ class FeatureStore:
             features(list):columns to select besides times and entities
             include (bool, optional): include timestamp defined in `entity_df` or not. Defaults to True.
         """
-        view_entities = self._get_available_entity(view)
-        all_entity_col = {
-            self.entities[view_entity].name: view_entity
-            for view_entity in view_entities
-            if view_entity in list(entity_df.columns[:-1])
+        avaliable_entity_names = self._get_available_entity_names(view)
+        # TODO: support multi join keys in future
+        join_key_to_entity_names = {
+            self.entities[entity_name].join_keys[0]: entity_name
+            for entity_name in avaliable_entity_names
+            if entity_name in entity_df.columns
         }
-        entity_name = list(all_entity_col.values())  # entity column name in table
+        entity_names = list(join_key_to_entity_names.values())
 
         if isinstance(view, (FeatureView, LabelView)):  # read from single view
-            df = self._read_local_file(view, features, all_entity_col)
+            df = self._read_local_file(view, features, join_key_to_entity_names)
             # rename entity columns
-            if all_entity_col:
-                df = df.merge(entity_df[entity_name + [TIME_COL]], on=entity_name, how="inner")
+            if join_key_to_entity_names:
+                df = df.merge(entity_df[entity_names + [TIME_COL]], on=entity_names, how="inner")
             else:
                 df = df.merge(entity_df, how="cross")
             if self.sources[view.batch_source].timestamp_field:  # time-relavent features
                 # match time_limit
                 df = self._fil_timelimit(include, view.ttl, df)
                 # newest record
-                df = get_newest_record(df, TIME_COL, entity_name, CREATE_COL)
+                df = get_newest_record(df, TIME_COL, entity_names, CREATE_COL)
         else:  # `Service`, read from materialized table
             df = read_file(
                 os.path.join(self.project_folder, view.materialize_path),
                 "parquet",
                 [TIME_COL, MATERIALIZE_TIME],
-                list(all_entity_col.values()),
+                entity_names,
             )
-            df = df[[col for col in list(all_entity_col.values()) + [TIME_COL, MATERIALIZE_TIME] + features]]
-            if all_entity_col:
-                df = df.merge(entity_df, on=entity_name, how="inner")
+            df = df[[col for col in entity_names + [TIME_COL, MATERIALIZE_TIME] + features]]
+            if join_key_to_entity_names:
+                df = df.merge(entity_df, on=entity_names, how="inner")
             else:
                 df = df.merge(entity_df, how="cross")
             # match time_limit
             df = self._fil_timelimit(include, None, df)
             # newest record
-            df = get_newest_record(df, TIME_COL, entity_name, CREATE_COL)
+            df = get_newest_record(df, TIME_COL, entity_names, CREATE_COL)
         return df
 
     def _get_point_pgsql(
@@ -348,15 +349,19 @@ class FeatureStore:
         include: bool = True,
         entity_columns: list = None,
     ):
-        entity = self._get_available_entity(views)
-        entity_name = [en for en in entity if en in entity_columns]
+        avaliable_entity_names = self._get_available_entity_names(views)
+        entity_names = [
+            entity_name for entity_name in avaliable_entity_names if entity_name in entity_columns
+        ]
 
         if isinstance(views, (FeatureView, LabelView)):
             assert self.sources[
                 views.batch_source
             ].timestamp_field, "View is not time-relevant, no period to get"
 
-            all_entity_col = [self.entities[en].name + " as " + en for en in entity_name]
+            all_entity_col = [
+                self.entities[entity_name].join_keys[0] + " as " + entity_name for entity_name in entity_names
+            ]
             all_time_col = (
                 [
                     f"{self.sources[views.batch_source].timestamp_field} as {TIME_COL}_tmp",
@@ -373,7 +378,7 @@ class FeatureStore:
                 .as_("df")
             )
         else:
-            all_entity_col = entity_name
+            all_entity_col = entity_names
             all_time_col = [f"{TIME_COL} as {TIME_COL}_tmp", MATERIALIZE_TIME]
             create_time = MATERIALIZE_TIME
             ttl = None
@@ -385,9 +390,9 @@ class FeatureStore:
 
         if all_entity_col:
             sql_join = (
-                Query.from_(Query.from_(table_name).select(Parameter(",".join(entity_name + [TIME_COL]))))
+                Query.from_(Query.from_(table_name).select(Parameter(",".join(entity_names + [TIME_COL]))))
                 .inner_join(df)
-                .using(*(entity_name))
+                .using(*entity_names)
                 .select(Parameter(f"df.*, {TIME_COL}"))
                 .as_("sql_join")
             )
@@ -405,13 +410,13 @@ class FeatureStore:
                 Query.from_(sql_query).select(
                     sql_query.star,
                     Parameter(
-                        f"row_number() over (partition by ({','.join(entity_name + [TIME_COL])}) order by {TIME_COL}_tmp DESC)"
+                        f"row_number() over (partition by ({','.join(entity_names + [TIME_COL])}) order by {TIME_COL}_tmp DESC)"
                     ),
                 )
             )
             .select(
                 Parameter(
-                    ",".join(entity_name + [f"{TIME_COL}", f"{TIME_COL}_tmp as {CREATE_COL}"] + features)
+                    ",".join(entity_names + [f"{TIME_COL}", f"{TIME_COL}_tmp as {CREATE_COL}"] + features)
                 ),
             )
             .where(Parameter("row_number=1"))
@@ -420,19 +425,19 @@ class FeatureStore:
                 Query.from_(sql_query).select(
                     sql_query.star,
                     Parameter(
-                        f"row_number() over (partition by ({','.join(entity_name+ [TIME_COL])}) order by {create_time} DESC, {TIME_COL}_tmp DESC)"
+                        f"row_number() over (partition by ({','.join(entity_names+ [TIME_COL])}) order by {create_time} DESC, {TIME_COL}_tmp DESC)"
                     ),
                 )
             )
             .select(
                 Parameter(
-                    ",".join(entity_name + [f"{TIME_COL}", f"{TIME_COL}_tmp as {CREATE_COL}"] + features)
+                    ",".join(entity_names + [f"{TIME_COL}", f"{TIME_COL}_tmp as {CREATE_COL}"] + features)
                 )
             )
             .where(Parameter("row_number=1"))
         )
 
-        return sql_result, entity_name
+        return sql_result, entity_names
 
     def _get_period_pgsql(
         self,
@@ -444,8 +449,10 @@ class FeatureStore:
         is_label: bool = False,
         entity_columns: list = None,
     ):
-        entity = self._get_available_entity(views)
-        entity_name = [en for en in entity if en in entity_columns]
+        avaliable_entity_names = self._get_available_entity_names(views)
+        entity_names = [
+            entity_name for entity_name in avaliable_entity_names if entity_name in entity_columns
+        ]
         # connect to pgsql db
         period = transform_pgsql_period(period, is_label)
 
@@ -453,7 +460,9 @@ class FeatureStore:
             assert self.sources[
                 views.batch_source
             ].timestamp_field, "View is not time-relevant, no period to get"
-            all_entity_col = [self.entities[en].name + " as " + en for en in entity_name]
+            all_entity_col = [
+                self.entities[entity_name].join_keys[0] + " as " + entity_name for entity_name in entity_names
+            ]
             all_time_col = (
                 [
                     f"{self.sources[views.batch_source].timestamp_field} as {TIME_COL}_tmp",
@@ -469,7 +478,7 @@ class FeatureStore:
                 .as_("df")
             )
         else:
-            all_entity_col = entity_name
+            all_entity_col = entity_names
             all_time_col = [f"{TIME_COL} as {TIME_COL}_tmp", MATERIALIZE_TIME]
             create_time = MATERIALIZE_TIME
             df = (
@@ -480,9 +489,9 @@ class FeatureStore:
 
         if all_entity_col:
             sql_join = (
-                Query.from_(Query.from_(table_name).select(Parameter(",".join(entity_name + [TIME_COL]))))
+                Query.from_(Query.from_(table_name).select(Parameter(",".join(entity_names + [TIME_COL]))))
                 .inner_join(df)
-                .using(*(entity_name))
+                .using(*entity_names)
                 .select(Parameter(f"df.*, {TIME_COL}"))
                 .as_("sql_join")
             )
@@ -499,7 +508,7 @@ class FeatureStore:
             Query.from_(sql_query).select(
                 Parameter(
                     ",".join(
-                        entity_name
+                        entity_names
                         + [f"{TIME_COL} as {QUERY_COL}", f"{TIME_COL}_tmp as {TIME_COL}"]
                         + features
                     )
@@ -511,14 +520,14 @@ class FeatureStore:
                     Query.from_(sql_query).select(
                         sql_query.star,
                         Parameter(
-                            f"row_number() over (partition by ({','.join(entity_name+[TIME_COL,TIME_COL+'_tmp'])}) order by {create_time} DESC)"
+                            f"row_number() over (partition by ({','.join(entity_names+[TIME_COL,TIME_COL+'_tmp'])}) order by {create_time} DESC)"
                         ),
                     )
                 )
                 .select(
                     Parameter(
                         ",".join(
-                            entity_name
+                            entity_names
                             + [f"{TIME_COL} as {QUERY_COL}", f"{TIME_COL}_tmp as {TIME_COL}"]
                             + features
                         )
@@ -527,7 +536,7 @@ class FeatureStore:
                 .where(Parameter("row_number=1"))
             )
         )
-        return sql_result, entity_name
+        return sql_result, entity_names
 
     def _get_period_record(
         self,
@@ -550,42 +559,49 @@ class FeatureStore:
             is_label (bool, optional): LabelViews of not. Defaults to False.
         """
 
-        entity = self._get_available_entity(views)
-        all_entity_col = {self.entities[en].name: en for en in entity if en in list(entity_df.columns[:-1])}
-        entity_name = list(all_entity_col.values())  # entity column name in table
+        avaliable_entity_names = self._get_available_entity_names(views)
+        # TODO: support multi join keys in future
+        # map join key to entity name
+        entity_dict = {
+            self.entities[entity_name].join_keys[0]: entity_name
+            for entity_name in avaliable_entity_names
+            if entity_name in entity_df.columns
+        }
+        entity_names = list(entity_dict.values())  # entity column name in table
+
         if isinstance(views, (FeatureView, LabelView)):
             assert self.sources[
                 views.batch_source
             ].timestamp_field, "View is not time-relevant, no period to get"
-            df_period = self._read_local_file(views, features, all_entity_col)
+            df_period = self._read_local_file(views, features, entity_dict)
             # merge according to `entity`
-            if all_entity_col:
-                df_period = df_period.merge(entity_df[entity_name + [TIME_COL]], on=entity_name, how="inner")
+            if entity_dict:
+                df_period = df_period.merge(
+                    entity_df[entity_names + [TIME_COL]], on=entity_names, how="inner"
+                )
             else:
                 df_period = df_period.merge(entity_df, how="cross")
             # # match time_limit
             df_period = self._get_window_record(df_period, period, is_label, include)
             if CREATE_COL in df_period.columns:  # use`create_timestamp` to remove duplicates
                 df_period.sort_values(by=[CREATE_COL], ascending=False, inplace=True, ignore_index=True)
-                df_period.drop_duplicates(subset=entity_name + [QUERY_COL, TIME_COL], keep="first")
+                df_period.drop_duplicates(subset=entity_names + [QUERY_COL, TIME_COL], keep="first")
             # df_period.sort_values(by=entity_name + [QUERY_COL, TIME_COL], inplace=True, ignore_index=True)
         else:
             df_period = read_file(
                 os.path.join(self.project_folder, views.materialize_path),
                 "parquet",
                 [TIME_COL, MATERIALIZE_TIME],
-                list(all_entity_col.values()),
+                entity_names,
             )
-            df_period = df_period[
-                [col for col in list(all_entity_col.values()) + features + [TIME_COL, MATERIALIZE_TIME]]
-            ]
-            if all_entity_col:
-                df_period = df_period.merge(entity_df, on=entity_name, how="inner")
+            df_period = df_period[[col for col in entity_names + features + [TIME_COL, MATERIALIZE_TIME]]]
+            if entity_dict:
+                df_period = df_period.merge(entity_df, on=entity_names, how="inner")
             else:
                 df_period = df_period.merge(entity_df, how="cross")
             df_period = self._get_window_record(df_period, period, is_label, include)
             df_period.sort_values(by=[MATERIALIZE_TIME], ascending=False, inplace=True, ignore_index=True)
-            df_period.drop_duplicates(subset=entity_name + [QUERY_COL, TIME_COL], keep="first")
+            df_period.drop_duplicates(subset=entity_names + [QUERY_COL, TIME_COL], keep="first")
         # df_period.sort_values(by=entity_name + [QUERY_COL, TIME_COL], inplace=True, ignore_index=True)
         return df_period
 
@@ -713,8 +729,8 @@ class FeatureStore:
             )
             feature_views.append(feature_view_dict)
 
-        all_entities = self._get_available_entity(service)
-        entities_dict = {en: self.entities[en].name for en in all_entities}
+        entity_names = self._get_available_entity_names(service)
+        entities_dict = {entity_name: self.entities[entity_name].name for entity_name in entity_names}
 
         conn = psy_conn(**self.connection.__dict__)
         max_timestamp = Query.from_(service.materialize_path).select(
@@ -770,9 +786,11 @@ class FeatureStore:
         all_features_use = self._get_available_features(service)
         for label_key in service.labels.keys():
             labels = self._get_available_labels(service)
-            all_entities = self._get_available_entity(service)
-            all_entity_col = {self.entities[en].name: en for en in all_entities}
-            joined_frame = self._read_local_file(self.labels[label_key], labels, all_entity_col)
+            avaliable_entity_names = self._get_available_entity_names(service)
+            entity_dict = {
+                self.entities[entity_name].join_keys[0]: entity_name for entity_name in avaliable_entity_names
+            }
+            joined_frame = self._read_local_file(self.labels[label_key], labels, entity_dict)
             joined_frame.drop(columns=[CREATE_COL], inplace=True)  # create timestamp makes no sense to labels
             if isinstance(incremental_begin, dict):
                 incremental_begin = joined_frame[TIME_COL].max() - relativedelta(**incremental_begin)
@@ -787,15 +805,17 @@ class FeatureStore:
                 for item in all_features_use
                 if item in self._get_available_features(feature_view) and item not in joined_frame.columns
             ]
-            fea_entities = self._get_available_entity(feature_view)
-            entity_col = {self.entities[en].name: en for en in fea_entities}
-            tmp_fea = self._read_local_file(feature_view, feature_cols, entity_col)
-            joined_frame = tmp_fea.merge(joined_frame, how="right", on=fea_entities)
+            avaliable_entity_names = self._get_available_entity_names(feature_view)
+            entity_dict = {
+                self.entities[entity_name].join_keys[0]: entity_name for entity_name in avaliable_entity_names
+            }
+            tmp_fea = self._read_local_file(feature_view, feature_cols, entity_dict)
+            joined_frame = tmp_fea.merge(joined_frame, how="right", on=avaliable_entity_names)
             if self.sources[feature_view.batch_source].timestamp_field:  # time relevant features
                 # filter feature timestamp <= label timestamp
                 joined_frame = self._fil_timelimit(include=True, ttl=feature_view.ttl, df=joined_frame)
                 # get the latest record for each label time after filter feature timestamp <= label timestamp
-                joined_frame = get_newest_record(joined_frame, TIME_COL, fea_entities, CREATE_COL)
+                joined_frame = get_newest_record(joined_frame, TIME_COL, avaliable_entity_names, CREATE_COL)
                 # feature timestamp makes no use to result
                 joined_frame.drop(columns=[CREATE_COL], inplace=True)
 
@@ -808,7 +828,7 @@ class FeatureStore:
 
     def _read_local_file(self, view, features, all_entity_col):
         source = cast(FileSource, self.sources[view.batch_source])
-        df = df = read_file(
+        df = read_file(
             os.path.join(self.project_folder, source.path),
             source.file_format,
             [
@@ -923,18 +943,19 @@ class FeatureStore:
             entities = (
                 list(entity_df.columns[:-1])
                 if entity_df.columns[:-1] is not None
-                else self._get_available_entity(views)
+                else self._get_available_entity_names(views)
             )
             start = pd.to_datetime(0, utc=True)
         else:
-            entities = group_key if group_key else self._get_available_entity(views)
+            entities = group_key if group_key else self._get_available_entity_names(views)
             end = pd.to_datetime(end) if end else pd.to_datetime(datetime.now(), utc=True)
             start = pd.to_datetime(start) if start else pd.to_datetime(0, utc=True)
-        all_entity_col = {self.entities[en].name if en in self.entities else en: en for en in entities}
+
+        entity_dict = {self.entities[en].join_keys[0] if en in self.entities else en: en for en in entities}
 
         if keys_only:
             assert fn == "unique", "keys_only=True can only be applied when fn==unique"
-            features = list(all_entity_col.keys())
+            features = list(entity_dict.keys())
 
         if not features:
             features = (
@@ -948,15 +969,15 @@ class FeatureStore:
 
         if self.connection.type == "file":
             if isinstance(views, (FeatureView, LabelView)):
-                df = self._read_local_file(views, features, all_entity_col)
+                df = self._read_local_file(views, features, entity_dict)
             else:
                 df = read_file(
                     os.path.join(self.project_folder, views.materialize_path + ".parquet"),
                     "parquet",
                     [TIME_COL],
-                    list(all_entity_col.values()),
+                    list(entity_dict.values()),
                 )
-            df = df[[col for col in features + list(all_entity_col.values()) + [TIME_COL]]]
+            df = df[[col for col in features + list(entity_dict.values()) + [TIME_COL]]]
             if entity_df is not None and entities:
                 df = df.merge(entity_df, how="right", on=entities)
             elif entity_df is not None:
@@ -983,14 +1004,14 @@ class FeatureStore:
             conn = psy_conn(**self.connection.__dict__)
             if isinstance(views, (FeatureView, LabelView)):
                 if entity_df is not None and entities:
-                    entity_df.rename(columns={v: k for k, v in all_entity_col.items()}, inplace=True)
+                    entity_df.rename(columns={v: k for k, v in entity_dict.items()}, inplace=True)
                     table_suffix = to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
                     q = Query.from_(views.batch_source)
                     q = q.inner_join(
                         Query.from_(f"{TMP_TBL}_{table_suffix}").select(
-                            *list(all_entity_col.keys()), Parameter(f"{TIME_COL} as {TIME_COL}_tmp")
+                            *list(entity_dict.keys()), Parameter(f"{TIME_COL} as {TIME_COL}_tmp")
                         )
-                    ).using(*list(all_entity_col.keys()))
+                    ).using(*list(entity_dict.keys()))
                 elif entity_df is not None:
                     q = Query.from_(views.batch_source)
                     table_suffix = to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
@@ -1004,7 +1025,7 @@ class FeatureStore:
                 q = build_agg_query(
                     q,
                     features,
-                    list(all_entity_col.keys()),
+                    list(entity_dict.keys()),
                     fn,
                     start,
                     end,
@@ -1017,9 +1038,9 @@ class FeatureStore:
                     q = Query.from_(views.materialize_path)
                     q = q.inner_join(
                         Query.from_(f"{TMP_TBL}_{table_suffix}").select(
-                            *list(all_entity_col.values()), Parameter(f"{TIME_COL} as {TIME_COL}_tmp")
+                            *list(entity_dict.values()), Parameter(f"{TIME_COL} as {TIME_COL}_tmp")
                         )
-                    ).using(*list(all_entity_col.values()))
+                    ).using(*list(entity_dict.values()))
                 elif entity_df is not None:
                     q = Query.from_(views.materialize_path)
                     table_suffix = to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
@@ -1030,15 +1051,15 @@ class FeatureStore:
                     ).cross()
                 else:
                     q = Query.from_(views.materialize_path)
-                q = build_agg_query(q, features, list(all_entity_col.values()), fn, start, end, include)
+                q = build_agg_query(q, features, list(entity_dict.values()), fn, start, end, include)
 
             result = pd.DataFrame(
                 sql_df(q.get_sql(), conn),
-                columns=[f"{c}_{fn}" for c in features] + list(all_entity_col.values()),
+                columns=[f"{c}_{fn}" for c in features] + list(entity_dict.values()),
             )
             close_conn(conn, [f"{TMP_TBL}_{table_suffix}"])
             if keys_only:
-                result = list(result.groupby(*list(all_entity_col.values())).groups.keys())
+                result = list(result.groupby(*list(entity_dict.values())).groups.keys())
         return result
 
     def get_latest_entities(self, view, entity: List[str] = []):
@@ -1048,38 +1069,40 @@ class FeatureStore:
             views (List): _description_
         """
         if not entity:
-            entity = self._get_available_entity(view)
-        all_entity_col = {self.entities[en].name if en in self.entities else None: en for en in entity}
+            entity = self._get_available_entity_names(view)
+        entity_dict = {
+            self.entities[en].join_keys[0] if en in self.entities else None: en for en in entity
+        }
 
         if self.connection.type == "file":
             if isinstance(view, (FeatureView, LabelView)):
-                df = self._read_local_file(view, [], all_entity_col)
+                df = self._read_local_file(view, [], entity_dict)
             else:
                 df = read_file(
                     os.path.join(self.project_folder, view.materialize_path + ".parquet"),
                     "parquet",
                     [TIME_COL],
-                    list(all_entity_col.values()),
+                    list(entity_dict.values()),
                 )
-            df = df[list(all_entity_col.values()) + [TIME_COL]]
+            df = df[list(entity_dict.values()) + [TIME_COL]]
             # sort by event_time, decending
             df.sort_values(by=TIME_COL, ascending=False, inplace=True, ignore_index=True)
             # due to `ascending=False`, keep the `first` record means the latest one
-            df = df.drop_duplicates(subset=list(all_entity_col.values()), keep="first")
+            df = df.drop_duplicates(subset=list(entity_dict.values()), keep="first")
         elif self.connection.type == "pgsql":
             conn = psy_conn(**self.connection.__dict__)
             if isinstance(view, (FeatureView, LabelView)):
                 q = Query.from_(view.batch_source)
-                q = q.groupby(*list(all_entity_col.keys())).select(
-                    *list(all_entity_col.keys()),
+                q = q.groupby(*list(entity_dict.keys())).select(
+                    *list(entity_dict.keys()),
                     Parameter(f"max({self.sources[view.batch_source].timestamp_field})"),
                 )
             else:
                 q = Query.from_(view.materialize_path)
-                q = q.groupby(*list(all_entity_col.values())).select(
-                    *list(all_entity_col.values()), Parameter(f"max({TIME_COL})")
+                q = q.groupby(*list(entity_dict.values())).select(
+                    *list(entity_dict.values()), Parameter(f"max({TIME_COL})")
                 )
-            df = pd.DataFrame(sql_df(q.get_sql(), conn), columns=list(all_entity_col.values()) + [TIME_COL])
+            df = pd.DataFrame(sql_df(q.get_sql(), conn), columns=list(entity_dict.values()) + [TIME_COL])
             close_conn(conn)
 
         return df

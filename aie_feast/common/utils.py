@@ -219,11 +219,12 @@ def parse_date(dt):
     return {**transform_freq(dt)} if dt else 0
 
 
-def get_newest_record(df, time_col, entity_id, create_time):
+# TODO: this is confused with get_latest_record
+def get_newest_record(df, time_col, join_keys, create_time):
     if len(df) == 0:
         return get_latest_record(df, time_col, create_time)
     return (
-        df.groupby(entity_id + [time_col + "_y"])
+        df.groupby(join_keys + [time_col + "_y"])
         .apply(get_latest_record, time_col, create_time)
         .reset_index(drop=True)
     )

@@ -1,10 +1,9 @@
 import os
 import glob
 from typing import List, Dict
-from aie_feast.entity import Entity
 from aie_feast.service import Service
 from aie_feast.views import FeatureView, LabelView
-from aie_feast.definitions import OfflineStoreType
+from aie_feast.definitions import OfflineStoreType, Entity
 
 from .connect import ConnectConfig
 from .source import Source, parse_source_yaml
@@ -73,7 +72,7 @@ def get_service_cfg(url: str):
     return service_cfg
 
 
-def get_entity_cfg(url: str):
+def get_entity_cfg(url: str) -> Dict[str, Entity]:
     """get entity config for join
 
     Args:
@@ -81,9 +80,8 @@ def get_entity_cfg(url: str):
     """
     entities = {}
     for filepath in listdir_yamls(url):
-        cfg = read_yml(filepath)
-        entity_cfg = Entity(name=cfg.get("join_keys", [cfg["name"]])[0])
-        entities.update({cfg["name"]: entity_cfg})
+        entity = Entity(**read_yml(filepath))
+        entities[entity.name] = entity
     return entities
 
 
