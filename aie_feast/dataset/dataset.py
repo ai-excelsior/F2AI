@@ -155,7 +155,11 @@ class IterableDataset:
                 for fea in cols:
                     for k, v in fea.items():
                         v = v if v else 0
-                        k = [k] if k != "__all__" else list(self.fs.feature_views[table].features.keys())
+                        k = (
+                            [k]
+                            if k != "__all__"
+                            else [feature.name for feature in self.fs.feature_views[table].schemas]
+                        )
                         if v in period_dict:
                             period_dict[v] = period_dict[v] + k
                         else:

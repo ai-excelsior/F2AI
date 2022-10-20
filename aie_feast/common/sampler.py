@@ -41,7 +41,7 @@ class AbstractSampler:
 
         time_freq = self._time_bucket.split(" ", 1)[1]
 
-        bucket_num = math.ceil(locals()[f"delta_{time_freq}"] / int(self._time_bucket.split(" ", 1)[0]))
+        bucket_num = math.ceil(locals()[f"delta_{time_freq}"] / int(self._time_bucket.split(" ", 1)[0])) + 1
         return bucket_num
 
     def __call__(self):
