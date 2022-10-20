@@ -128,7 +128,7 @@ if __name__ == "__main__":
             "traval_time_prediction_embedding_v1",
         )
 
-    # do_materailize()
+    do_materailize()
 
     def get_period_features_and_labels():
 

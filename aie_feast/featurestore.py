@@ -785,7 +785,9 @@ class FeatureStore:
                 self.entities[entity_name].join_keys[0]: entity_name for entity_name in avaliable_entity_names
             }
             joined_frame = self._read_local_file(self.label_views[label_key], labels, entity_dict)
-            joined_frame.drop(columns=[CREATE_COL], inplace=True)  # create timestamp makes no sense to labels
+            joined_frame.drop(
+                columns=[CREATE_COL], inplace=True, errors="ignore"
+            )  # create timestamp makes no sense to labels
             if isinstance(incremental_begin, dict):
                 incremental_begin = joined_frame[TIME_COL].max() - relativedelta(**incremental_begin)
                 joined_frame = joined_frame[joined_frame[TIME_COL] >= incremental_begin]
