@@ -33,7 +33,7 @@ class SqlSource(Source):
 
 
 def parse_source_yaml(o: Dict, offline_store_type: OfflineStoreType) -> Source:
-    if o["type"] == "request_source":
+    if o.get("type", None) == "request_source":
         return RequestSource(**o)
 
     if offline_store_type == OfflineStoreType.FILE:

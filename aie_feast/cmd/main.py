@@ -205,7 +205,7 @@ if __name__ == "__main__":
         i_ds = ds.to_pytorch()
         next(iter(i_ds))
 
-    # dataset()
+    dataset()
 
     def sample():
         time_bucket = "4 days"
