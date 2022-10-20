@@ -25,6 +25,7 @@ from aie_feast.common.utils import (
     get_stats_result,
     transform_pgsql_period,
     build_agg_query,
+    remove_prefix,
 )
 from aie_feast.common.psl_utils import execute_sql, psy_conn, to_pgsql, close_conn, sql_df
 
@@ -739,17 +740,19 @@ class FeatureStore:
             incremental_begin = incremental_begin
 
         dbt_path = os.path.join(
-            "/", self.project_folder.lstrip("file://"), f"{service.dbt_path}", f"{service.materialize_path}"
+            remove_prefix(self.project_folder, "file://"),
+            f"{service.dbt_path}",
+            f"{service.materialize_path}",
         )
 
-        a = {
+        dict_var = {
             "labelviews": label_view,
             "featureviews": feature_views,
             "entities": entities_dict,
             "increment_begin": str(incremental_begin),
         }
-        b = json.dumps(a)
-        os.system(f"cd {dbt_path} && dbt run --profiles-dir {dbt_path} --vars '{b}' ")
+        json_var = json.dumps(dict_var)
+        os.system(f"cd {dbt_path} && dbt run --profiles-dir {dbt_path} --vars '{json_var}' ")
 
     def _offline_record_materialize(self, service: Service, incremental_begin):
         """materialize offline file
