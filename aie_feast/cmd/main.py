@@ -184,7 +184,7 @@ if __name__ == "__main__":
         #     ),
         # )
         groups = fs.stats(
-            fs.features["gy_link_travel_time_features"],
+            fs.feature_views["gy_link_travel_time_features"],
             group_key=["link"],
             keys_only=True,
             fn="unique",

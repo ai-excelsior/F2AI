@@ -949,7 +949,7 @@ class FeatureStore:
 
         if keys_only:
             assert fn == "unique", "keys_only=True can only be applied when fn==unique"
-            features = list(entity_dict.keys())
+            features = list(entity_dict.values())
 
         if not features:
             features = (
