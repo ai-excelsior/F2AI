@@ -4,7 +4,7 @@ from typing import List, Dict
 from aie_feast.entity import Entity
 from aie_feast.service import Service
 from aie_feast.views import FeatureView, LabelView
-from aie_feast.definations import OfflineStoreType
+from aie_feast.definitions import OfflineStoreType
 
 from .connect import ConnectConfig
 from .source import Source, parse_source_yaml
@@ -87,7 +87,7 @@ def get_entity_cfg(url: str):
     return entities
 
 
-def get_feature_views(url: str):
+def get_feature_views(url: str) -> Dict[str, FeatureView]:
     """get Dict(FeatureViews) from /feature_views/*.yml
 
     Args:
@@ -95,16 +95,8 @@ def get_feature_views(url: str):
     """
     feature_views = {}
     for filepath in listdir_yamls(url):
-        cfg = read_yml(filepath)
-        feature_cfg = FeatureView(
-            entity=cfg["entities"],
-            features=schema_to_dict(cfg["schema"]),
-            batch_source=cfg["batch_source"],
-            ttl=cfg.get("ttl", None),
-            exogenous=cfg.get("tags", {}).get("exogenous", None),
-            request_source=cfg.get("request_source", None),
-        )
-        feature_views.update({cfg["name"]: feature_cfg})
+        feature_view = FeatureView(**read_yml(filepath))
+        feature_views[feature_view.name] = feature_view
     return feature_views
 
 

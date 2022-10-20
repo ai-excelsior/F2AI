@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
 from enum import Enum
-from aie_feast.definations import Feature, OfflineStoreType
+from aie_feast.definitions import Feature, OfflineStoreType
 from .utils import get_default_value
 
 
@@ -27,7 +27,7 @@ class FileSource(Source):
 
 
 class RequestSource(Source):
-    features: List[Feature] = Field(alias="schema")
+    schemas: List[Feature] = Field(alias="schema")
 
 
 class SqlSource(Source):
@@ -35,6 +35,9 @@ class SqlSource(Source):
 
 
 def parse_source_yaml(o: Dict, offline_store_type: OfflineStoreType) -> Source:
+    if o["type"] == "request_source":
+        return RequestSource(**o)
+
     if offline_store_type == OfflineStoreType.FILE:
         return FileSource(**o)
     elif offline_store_type == OfflineStoreType.PGSQL:

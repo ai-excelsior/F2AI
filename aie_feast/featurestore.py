@@ -49,7 +49,7 @@ class FeatureStore:
         self.project_folder = project_folder
         self.sources = get_source_cfg(os.path.join(project_folder, "sources"), self.connection.type)
         self.entities = get_entity_cfg(os.path.join(project_folder, "entities"))
-        self.features = get_feature_views(os.path.join(project_folder, "feature_views"))
+        self.feature_views = get_feature_views(os.path.join(project_folder, "feature_views"))
         self.labels = get_label_views(os.path.join(project_folder, "label_views"))
         self.service = get_service_cfg(os.path.join(project_folder, "services"))
 
@@ -71,33 +71,25 @@ class FeatureStore:
             "unique",
         ], f"{fn}is not a available function, you can use fs.query() to customize your function"
 
-    def _get_available_features(self, view, check_type: bool = False):
+    def _get_available_features(self, view, is_numeric: bool = False) -> List[str]:
+
         if isinstance(view, FeatureView):
-            features = (
-                [k for k, v in view.features.items() if v not in ["string", "bool"]]
-                if check_type
-                else list(view.features.keys())
-            )
+            features = [feature.name for feature in view.schemas if is_numeric and feature.is_numeric()]
         elif isinstance(view, Service):  # Services
             features = []
-            for table, cols in view.features.items():
+            for feature_view_name, cols in view.features.items():
+                feature_view = self.feature_views[feature_view_name]
                 if len(cols) == 1 and "__all__" in cols[0].keys():
-                    features += (
-                        [k for k, v in self.features[table].features.items() if v not in ["string", "bool"]]
-                        if check_type
-                        else list(self.features[table].features.keys())
-                    )
+                    features += [
+                        feature.name
+                        for feature in feature_view.schemas
+                        if is_numeric and feature.is_numeric()
+                    ]
                 else:
                     for col in cols:
-                        features += (
-                            [
-                                k
-                                for k, _ in col.items()
-                                if self.features[table].features[k] not in ["string", "bool"]
-                            ]
-                            if check_type
-                            else list(col.keys())
-                        )
+                        features += [
+                            k for k, _ in col.items() if is_numeric and feature_view.schemas[k].is_numeric()
+                        ]
 
         else:
             raise TypeError("must be FeatureViews or Service")
@@ -134,19 +126,21 @@ class FeatureStore:
             raise TypeError("must be LabelViews or Service")
         return labels
 
-    def _get_available_entity(self, view):
-        entity = []
-        if isinstance(view, (FeatureView, LabelView)):
-            entity = list(view.entity)
+    def _get_available_entity(self, view) -> List[str]:
+        entities = []
+        if isinstance(view, FeatureView):
+            entities = list(view.entities)
+        elif isinstance(view, LabelView):
+            entities = list(view.entity)
         elif isinstance(view, Service):  # Services
             for table, _ in view.features.items():
-                entity += self.features[table].entity
+                entities += self.feature_views[table].entities
             for table, _ in view.labels.items():
-                entity += self.labels[table].entity
-            entity = list(set(entity))
+                entities += self.labels[table].entity
+            entities = list(set(entities))
         else:
             raise TypeError("must be FeatureViews, LabelViews or Service")
-        return entity
+        return entities
 
     def get_features(
         self, feature_view, entity_df: Union[pd.DataFrame, str], features: list = None, include: bool = True
@@ -699,20 +693,25 @@ class FeatureStore:
             }
         )
 
-        feature_views = [self.features[feature_key].__dict__ for feature_key in service.features.keys()]
         all_features_use = self._get_available_features(service)
-        for feature_view in feature_views:
-            feature_view.update(
+
+        feature_views = []
+        for feature_view_name in service.features.keys():
+            feature_view = self.feature_views[feature_view_name]
+            feature_view_dict = feature_view.dict()
+            feature_view_dict.update(
                 {
                     "features": [
-                        feature
-                        for feature in feature_view["features"].keys()
-                        if feature in all_features_use and feature not in label_view["labels"]
+                        feature_name
+                        for feature_name in feature_view.get_feature_names
+                        if feature_name in all_features_use and feature_name not in label_view["labels"]
                     ],
-                    "event_time": self.sources[feature_view["batch_source"]].timestamp_field,
-                    "create_time": self.sources[feature_view["batch_source"]].created_timestamp_field,
+                    "event_time": self.sources[feature_view.batch_source].timestamp_field,
+                    "create_time": self.sources[feature_view.batch_source].created_timestamp_field,
                 }
             )
+            feature_views.append(feature_view_dict)
+
         all_entities = self._get_available_entity(service)
         entities_dict = {en: self.entities[en].name for en in all_entities}
 
@@ -779,7 +778,7 @@ class FeatureStore:
                 joined_frame = joined_frame[joined_frame[TIME_COL] >= incremental_begin]
         # join features dataframe
         for feature_key in service.features.keys():
-            feature_view: FeatureView = self.features[feature_key]
+            feature_view: FeatureView = self.feature_views[feature_key]
             feature_cols = [
                 item
                 for item in all_features_use
