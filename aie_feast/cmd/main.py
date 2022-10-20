@@ -164,46 +164,48 @@ if __name__ == "__main__":
     # get_period_features_and_labels()
 
     def dataset():
-        # groups = fs.stats(
-        #     fs.features["loan_features"],
-        #     group_key=["zipcode", "dob_ssn"],
-        #     keys_only=True,
-        #     fn="unique",
-        #     start="2021-08-24",
-        #     end="2021-08-26",
-        # )
-        # ds = fs.get_dataset(
-        #     service_name="credit_scoring_v1",
-        #     sampler=GroupFixednbrSampler(
-        #         time_bucket="10 days",
-        #         stride=2,
-        #         group_ids=groups,
-        #         group_names=["zipcode", "dob_ssn"],
-        #         start="2020-12-24",
-        #         end="2021-08-26",
-        #     ),
-        # )
         groups = fs.stats(
             fs.feature_views["gy_link_travel_time_features"],
             group_key=["link"],
+        #    fs.feature_views["loan_features"],
+            group_key=["zipcode", "dob_ssn"],
             keys_only=True,
             fn="unique",
-            start="2016-03-01 00:02:00",
-            end="2016-06-30 08:00:00",
+            start="2021-08-24",
+            end="2021-08-26",
         )
         ds = fs.get_dataset(
-            service_name="traval_time_prediction_embedding_v1",
+            service_name="credit_scoring_v1",
             sampler=GroupFixednbrSampler(
-                time_bucket="24 hours",
-                stride=1,
+                time_bucket="10 days",
+                stride=2,
                 group_ids=groups,
-                group_names=["link"],
-                start="2016-03-01",
-                end="2016-07-01",
+                group_names=["zipcode", "dob_ssn"],
+                start="2020-12-24",
+                end="2021-08-26",
             ),
         )
-        i_ds = ds.to_pytorch()
-        next(iter(i_ds))
+        # groups = fs.stats(
+        #     fs.features["gy_link_travel_time_features"],
+        #     group_key=["link"],
+        #     keys_only=True,
+        #     fn="unique",
+        #     start="2016-03-01 00:02:00",
+        #     end="2016-06-30 08:00:00",
+        # )
+        # ds = fs.get_dataset(
+        #     service_name="traval_time_prediction_embedding_v1",
+        #     sampler=GroupFixednbrSampler(
+        #         time_bucket="24 hours",
+        #         stride=1,
+        #         group_ids=groups,
+        #         group_names=["link"],
+        #         start="2016-03-01",
+        #         end="2016-07-01",
+        #     ),
+        # )
+        # i_ds = ds.to_pytorch()
+        # next(iter(i_ds))
 
     dataset()
 

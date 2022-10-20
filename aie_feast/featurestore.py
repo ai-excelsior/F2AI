@@ -813,7 +813,12 @@ class FeatureStore:
                 # feature timestamp makes no use to result
                 joined_frame.drop(columns=[CREATE_COL], inplace=True)
 
+        joined_frame.rename(
+            columns={en: self.entities[en].join_keys[0] for en in self._get_available_entity_names(service)},
+            inplace=True,
+        )
         joined_frame[MATERIALIZE_TIME] = pd.to_datetime(datetime.now(), utc=True)
+
         to_file(
             joined_frame,
             os.path.join(self.project_folder, f"{service.materialize_path}"),
@@ -942,14 +947,14 @@ class FeatureStore:
             start = pd.to_datetime(0, utc=True)
         else:
             entities = group_key if group_key else self._get_available_entity_names(view)
-            end = pd.to_datetime(end) if end else pd.to_datetime(datetime.now(), utc=True)
-            start = pd.to_datetime(start) if start else pd.to_datetime(0, utc=True)
+            end = pd.to_datetime(end, utc=True) if end else pd.to_datetime(datetime.now(), utc=True)
+            start = pd.to_datetime(start, utc=True) if start else pd.to_datetime(0, utc=True)
 
         entity_dict = {self.entities[en].join_keys[0] if en in self.entities else en: en for en in entities}
 
         if keys_only:
             assert fn == "unique", "keys_only=True can only be applied when fn==unique"
-            features = list(entity_dict.values())
+            features = None
 
         if not features:
             features = (

@@ -186,8 +186,12 @@ def build_agg_query(
             )
         )
     elif agg_type == "unique":
-        return q.groupby(*entity_cols).select(
-            *([Parameter(f"distinct({fea})") for fea in features] + entity_cols)
+        return (
+            q.groupby(*entity_cols).select(
+                *([Parameter(f"distinct({fea} as {fea})") for fea in features] + entity_cols)
+            )
+            if features
+            else q.select(Parameter(f"distinct({','.join(entity_cols)})"))
         )
 
 
