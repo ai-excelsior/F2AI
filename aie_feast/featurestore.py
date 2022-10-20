@@ -963,7 +963,7 @@ class FeatureStore:
             )
         if keys_only:
             assert fn == "unique", "keys_only=True can only be applied when fn==unique"
-            features = None
+            features = []
 
         if self.connection.type == "file":
             if isinstance(view, (FeatureView, LabelView)):
