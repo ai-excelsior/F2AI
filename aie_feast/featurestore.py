@@ -952,10 +952,6 @@ class FeatureStore:
 
         entity_dict = {self.entities[en].join_keys[0] if en in self.entities else en: en for en in entities}
 
-        if keys_only:
-            assert fn == "unique", "keys_only=True can only be applied when fn==unique"
-            features = None
-
         if not features:
             features = (
                 self._get_available_features(view, check_type)
@@ -965,6 +961,9 @@ class FeatureStore:
                 else self._get_available_features(view, check_type)
                 + self._get_available_labels(view, check_type)
             )
+        if keys_only:
+            assert fn == "unique", "keys_only=True can only be applied when fn==unique"
+            features = None
 
         if self.connection.type == "file":
             if isinstance(view, (FeatureView, LabelView)):
