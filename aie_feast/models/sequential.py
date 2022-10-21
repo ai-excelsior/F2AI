@@ -31,12 +31,8 @@ if __name__ == "__main__":
     fs = FeatureStore("file:///Users/xuyizhou/Desktop/xyz_warehouse/gitlab/f2ai-credit-scoring")
 
     def cutomized_collet_fn(datas, cont_scalar={}, cat_coder={}, label=[]):
-        # cutomize your collet_fn to adjust SimpleClassify Model
-        # involve pre-process 1. encoder str-like features to numeric;
-        #                     2. scale numeric features, the oveall min/max/avg/std can be accessed by `fs.stats` and transported or written in this func;
-        #                     3. others if need
-        # involve collect method to convert original data format to that used in SimpleClassify.forward and loss calculation
         batches = []
+        # corresspondint to __get_item__ in Dataset
         for data in datas:
             cat_features = torch.stack(
                 [
@@ -66,6 +62,8 @@ if __name__ == "__main__":
             )
             batch = (dict(categorical_features=cat_features, continous_features=cont_features), labels)
             batches.append(batch)
+
+        # corresspondint to _collect_fn_ in Dataset
         categorical_features = torch.stack([batch[0]["categorical_features"] for batch in batches])
         continous_features = torch.stack([batch[0]["continous_features"] for batch in batches])
         labels = torch.stack([batch[1] for batch in batches])
@@ -123,17 +121,12 @@ if __name__ == "__main__":
         drop_last=False,
         sampler=None,
     )
-    # cont_nbr/cat_nbr means the number of continuous/categorical features delivered to model;
-    # max_types means the max different types in all categorical features
-    # emd_dim is a parameter do not matter now
+
     model = SimpleClassify(
         cont_nbr=len(cont_scalar_max), cat_nbr=len(cat_count), emd_dim=4, max_types=max(cat_count.values())
     )
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)  # no need to change
     loss_fn = nn.BCELoss()  # loss function to train a classification model
-
-    def prepare_batch():
-        pass
 
     for epoch in range(10):  # assume 10 epoch
         print(f"epoch: {epoch} begin")
