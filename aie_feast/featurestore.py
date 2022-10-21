@@ -1091,8 +1091,9 @@ class FeatureStore:
                 df = read_file(
                     os.path.join(self.project_folder, view.materialize_path),
                     file_cols=[TIME_COL],
-                    entity_cols=list(entity_dict.values()),
+                    entity_cols=list(entity_dict.keys()),
                 )
+                df.rename(columns=entity_dict, inplace=True)
             df = df[list(entity_dict.values()) + [TIME_COL]]
             # sort by event_time, decending
             df.sort_values(by=TIME_COL, ascending=False, inplace=True, ignore_index=True)
