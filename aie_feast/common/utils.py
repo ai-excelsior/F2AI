@@ -130,37 +130,71 @@ def build_agg_query(
     q = build_filter_time_query(q, start, end, include, timecol)
 
     if agg_type == "mean":
-        return q.groupby(*entity_cols).select(
-            *([fn.Avg(Parameter(fea), fea) for fea in features] + entity_cols)
+        return (
+            q.groupby(*entity_cols).select(*([fn.Avg(Parameter(fea), fea) for fea in features] + entity_cols))
+            if entity_cols
+            else q.select(*([fn.Avg(Parameter(fea), fea) for fea in features] + entity_cols))
         )
     elif agg_type == "sum":
-        return q.groupby(*entity_cols).select(
-            *([fn.Sum(Parameter(fea), fea) for fea in features] + entity_cols)
+        return (
+            q.groupby(*entity_cols).select(*([fn.Sum(Parameter(fea), fea) for fea in features] + entity_cols))
+            if entity_cols
+            else q.select(*([fn.Sum(Parameter(fea), fea) for fea in features] + entity_cols))
         )
     elif agg_type == "max":
-        return q.groupby(*entity_cols).select(
-            *([fn.Max(Parameter(fea), fea) for fea in features] + entity_cols)
+        return (
+            q.groupby(*entity_cols).select(*([fn.Max(Parameter(fea), fea) for fea in features] + entity_cols))
+            if entity_cols
+            else q.select(*([fn.Max(Parameter(fea), fea) for fea in features] + entity_cols))
         )
     elif agg_type == "min":
-        return q.groupby(*entity_cols).select(
-            *([fn.Min(Parameter(fea), fea) for fea in features] + entity_cols)
+        return (
+            q.groupby(*entity_cols).select(*([fn.Min(Parameter(fea), fea) for fea in features] + entity_cols))
+            if entity_cols
+            else q.select(*([fn.Min(Parameter(fea), fea) for fea in features] + entity_cols))
         )
     elif agg_type == "std":
-        return q.groupby(*entity_cols).select(
-            *([fn.Std(Parameter(fea), fea) for fea in features] + entity_cols)
+        return (
+            q.groupby(*entity_cols).select(*([fn.Std(Parameter(fea), fea) for fea in features] + entity_cols))
+            if entity_cols
+            else q.select(*([fn.Std(Parameter(fea), fea) for fea in features] + entity_cols))
         )
     elif agg_type == "mode":
-        return q.groupby(*entity_cols).select(
-            *([Parameter(f"MODE() WITHIN GROUP (ORDER BY {fea}) as {fea}") for fea in features] + entity_cols)
+        return (
+            q.groupby(*entity_cols).select(
+                *(
+                    [Parameter(f"MODE() WITHIN GROUP (ORDER BY {fea}) as {fea}") for fea in features]
+                    + entity_cols
+                )
+            )
+            if entity_cols
+            else q.select(
+                *(
+                    [Parameter(f"MODE() WITHIN GROUP (ORDER BY {fea}) as {fea}") for fea in features]
+                    + entity_cols
+                )
+            )
         )
     elif agg_type == "median":
-        return q.groupby(*entity_cols).select(
-            *(
-                [
-                    Parameter(f"PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY {fea}) as {fea}")
-                    for fea in features
-                ]
-                + entity_cols
+        return (
+            q.groupby(*entity_cols).select(
+                *(
+                    [
+                        Parameter(f"PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY {fea}) as {fea}")
+                        for fea in features
+                    ]
+                    + entity_cols
+                )
+            )
+            if entity_cols
+            else q.select(
+                *(
+                    [
+                        Parameter(f"PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY {fea}) as {fea}")
+                        for fea in features
+                    ]
+                    + entity_cols
+                )
             )
         )
     elif agg_type == "unique":

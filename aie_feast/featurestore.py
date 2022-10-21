@@ -917,7 +917,7 @@ class FeatureStore:
             )
             start = pd.to_datetime(0, utc=True)
         else:
-            entities = group_key if group_key else self._get_available_entity_names(view)
+            entities = group_key if group_key is not None else self._get_available_entity_names(view)
             end = pd.to_datetime(end, utc=True) if end else pd.to_datetime(datetime.now(), utc=True)
             start = pd.to_datetime(start, utc=True) if start else pd.to_datetime(0, utc=True)
 
@@ -962,12 +962,22 @@ class FeatureStore:
                     .groups.keys()
                 )
             else:
-                result = df.groupby(entities).apply(
-                    get_stats_result,
-                    fn,
-                    primary_keys=entities + [TIME_COL + "_x", TIME_COL + "_y"],
-                    include=include,
-                    start=start,
+                result = (
+                    df.groupby(entities).apply(
+                        get_stats_result,
+                        fn,
+                        primary_keys=entities + [TIME_COL + "_x", TIME_COL + "_y"],
+                        include=include,
+                        start=start,
+                    )
+                    if entities
+                    else get_stats_result(
+                        df,
+                        fn,
+                        primary_keys=entities + [TIME_COL + "_x", TIME_COL + "_y"],
+                        include=include,
+                        start=start,
+                    )
                 )
         elif self.connection.type == "pgsql":
             conn = psy_conn(**self.connection.__dict__)
