@@ -1,7 +1,7 @@
 from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
 from enum import Enum
-from aie_feast.definitions import Feature, OfflineStoreType
+from aie_feast.definitions import FeatureSchema, OfflineStoreType
 
 
 class Source(BaseModel):
@@ -25,7 +25,7 @@ class FileSource(Source):
 
 
 class RequestSource(Source):
-    schemas: List[Feature] = Field(alias="schema")
+    schemas: List[FeatureSchema] = Field(alias="schema")
 
 
 class SqlSource(Source):

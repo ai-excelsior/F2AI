@@ -8,7 +8,7 @@ from aie_feast.definitions import OfflineStoreType, Entity
 from .connect import ConnectConfig
 from .source import Source, parse_source_yaml
 from .read_file import read_yml
-from .utils import remove_prefix, service_to_dict
+from .utils import remove_prefix
 
 
 def listdir_with_extensions(path: str, extensions: List[str] = []) -> List[str]:
@@ -52,7 +52,7 @@ def get_conn_cfg(url: str):
     return conn
 
 
-def get_service_cfg(url: str):
+def get_service_cfg(url: str) -> Dict[str, Service]:
     """get forecast config like length of look_back and look_forward, features and labels
 
     Args:
@@ -60,15 +60,8 @@ def get_service_cfg(url: str):
     """
     service_cfg = {}
     for filepath in listdir_yamls(url):
-        cfg = read_yml(filepath)
-        service = Service(
-            features=service_to_dict(cfg["features"]),
-            labels=service_to_dict(cfg["labels"]),
-            materialize_path=cfg.get("materialize", "materialize_table"),
-            materialize_type=cfg.get("type", "file"),
-            dbt_path=cfg.get("dbt", "dbt_path"),
-        )
-        service_cfg.update({cfg["name"]: service})
+        service = Service.from_yaml(read_yml(filepath))
+        service_cfg[service.name] = service
     return service_cfg
 
 

@@ -52,7 +52,7 @@ class FeatureStore:
         self.entities = get_entity_cfg(os.path.join(project_folder, "entities"))
         self.feature_views = get_feature_views(os.path.join(project_folder, "feature_views"))
         self.label_views = get_label_views(os.path.join(project_folder, "label_views"))
-        self.service = get_service_cfg(os.path.join(project_folder, "services"))
+        self.services = get_service_cfg(os.path.join(project_folder, "services"))
 
     def __check_format(self, entity_df):
         if isinstance(entity_df, pd.DataFrame):
@@ -72,62 +72,27 @@ class FeatureStore:
             "unique",
         ], f"{fn}is not a available function, you can use fs.query() to customize your function"
 
-    def _get_available_features(self, view, is_numeric: bool = False) -> List[str]:
-
+    def _get_available_features(
+        self, view: Union[FeatureView, Service], is_numeric: bool = False
+    ) -> List[str]:
         if isinstance(view, FeatureView):
-            features = [
-                feature.name for feature in view.schemas if (feature.is_numeric() if is_numeric else True)
-            ]
-        elif isinstance(view, Service):  # Services
-            features = []
-            for feature_view_name, cols in view.features.items():
-                feature_view = self.feature_views[feature_view_name]
-                if len(cols) == 1 and "__all__" in cols[0].keys():
-                    features += [
-                        feature.name
-                        for feature in feature_view.schemas
-                        if (feature.is_numeric() if is_numeric else True)
-                    ]
-                else:
-                    for col in cols:
-                        features += [
-                            k
-                            for k, _ in col.items()
-                            if (feature_view.schemas[k].is_numeric() if is_numeric else True)
-                        ]
-
+            features = view.get_features(is_numeric)
+        elif isinstance(view, Service):
+            features = view.get_features(self.feature_views, is_numeric)
         else:
             raise TypeError("must be FeatureViews or Service")
-        return features
 
-    def _get_available_labels(self, view, is_numeric: bool = False):
+        return [feature.name for feature in features]
+
+    def _get_available_labels(self, view: Union[LabelView, Service], is_numeric: bool = False):
         if isinstance(view, LabelView):
-            labels = [
-                feature.name for feature in view.schemas if (feature.is_numeric() if is_numeric else True)
-            ]
-        elif isinstance(view, Service):  # Services
-            labels = []
-            for table, cols in view.labels.items():
-                if len(cols) == 1 and "__all__" in cols[0].keys():
-                    labels += (
-                        [k for k, v in self.label_views[table].labels.items() if v not in ["string", "bool"]]
-                        if is_numeric
-                        else list(self.label_views[table].labels.keys())
-                    )
-                else:
-                    for col in cols:
-                        labels += (
-                            [
-                                k
-                                for k, _ in col.items()
-                                if self.label_views[table].labels[k] not in ["string", "bool"]
-                            ]
-                            if is_numeric
-                            else list(col.keys())
-                        )
+            labels = view.get_labels(is_numeric)
+        elif isinstance(view, Service):
+            labels = view.get_labels(self.label_views, is_numeric)
         else:
             raise TypeError("must be LabelViews or Service")
-        return labels
+
+        return [label.name for label in labels]
 
     def _get_available_entity_names(self, view) -> List[str]:
         entities = []
@@ -135,12 +100,8 @@ class FeatureStore:
             entities = list(view.entities)
         elif isinstance(view, LabelView):
             entities = list(view.entities)
-        elif isinstance(view, Service):  # Services
-            for table, _ in view.features.items():
-                entities += self.feature_views[table].entities
-            for table, _ in view.labels.items():
-                entities += self.label_views[table].entities
-            entities = list(set(entities))
+        elif isinstance(view, Service):
+            entities = list(view.get_entities(self.feature_views, self.label_views))
         else:
             raise TypeError("must be FeatureViews, LabelViews or Service")
         return entities
@@ -686,11 +647,11 @@ class FeatureStore:
         """
 
         if self.connection.type == "file":
-            self._offline_record_materialize(self.service[service_name], incremental_begin)
+            self._offline_record_materialize(self.services[service_name], incremental_begin)
         elif self.connection.type == "pgsql":
-            self._offline_pgsql_materialize(self.service[service_name], incremental_begin)
+            self._offline_pgsql_materialize(self.services[service_name], incremental_begin)
 
-    def _offline_pgsql_materialize(self, service, incremental_begin):
+    def _offline_pgsql_materialize(self, service: Service, incremental_begin):
         try:
             incremental_begin = pd.to_datetime(incremental_begin, utc=True) if incremental_begin else None
         except Exception:
@@ -699,31 +660,27 @@ class FeatureStore:
             raise TypeError("please check your `incremental_begin` type")
 
         # dir to store dbt project
-        label_view = self.label_views[list(service.labels.keys())[0]].__dict__
-        label_view.update(
+        label_view: LabelView = service.get_label_view()
+        label_view_dict = label_view.dict()
+        label_view_dict.update(
             {
-                "labels": [
-                    label
-                    for label in label_view["labels"].keys()
-                    if label in self._get_available_labels(service)
-                ],
-                "event_time": self.sources[label_view["batch_source"]].timestamp_field,
-                "create_time": self.sources[label_view["batch_source"]].created_timestamp_field,
+                "labels": [label.name for label in label_view.get_labels()],
+                "event_time": self.sources[label_view.batch_source].timestamp_field,
+                "create_time": self.sources[label_view.batch_source].created_timestamp_field,
             }
         )
 
-        all_features_use = self._get_available_features(service)
+        all_features_use = [feature.name for feature in service.get_features(self.feature_views)]
 
         feature_views = []
-        for feature_view_name in service.features.keys():
-            feature_view = self.feature_views[feature_view_name]
+        for feature_view in service.get_feature_views(self.feature_views):
             feature_view_dict = feature_view.dict()
             feature_view_dict.update(
                 {
                     "features": [
                         feature_name
-                        for feature_name in feature_view.get_feature_names
-                        if feature_name in all_features_use and feature_name not in label_view["labels"]
+                        for feature_name in feature_view.get_feature_names()
+                        if feature_name in all_features_use and feature_name not in label_view_dict["labels"]
                     ],
                     "event_time": self.sources[feature_view.batch_source].timestamp_field,
                     "create_time": self.sources[feature_view.batch_source].created_timestamp_field,
@@ -736,10 +693,10 @@ class FeatureStore:
 
         conn = psy_conn(**self.connection.__dict__)
         max_timestamp = Query.from_(service.materialize_path).select(
-            functions.Max(Parameter(label_view["event_time"]))
+            functions.Max(Parameter(label_view_dict["event_time"]))
         )
-        max_timestamp_label = Query.from_(label_view["batch_source"]).select(
-            functions.Max(Parameter(label_view["event_time"]))
+        max_timestamp_label = Query.from_(label_view.batch_source).select(
+            functions.Max(Parameter(label_view_dict["event_time"]))
         )
 
         label_result = pd.to_datetime(sql_df(max_timestamp_label.get_sql(), conn)[0][0], utc=True)
@@ -764,7 +721,7 @@ class FeatureStore:
         )
 
         dict_var = {
-            "labelviews": label_view,
+            "labelviews": label_view_dict,
             "featureviews": feature_views,
             "entities": entities_dict,
             "increment_begin": str(incremental_begin),
@@ -786,13 +743,13 @@ class FeatureStore:
             raise TypeError("please check your `incremental_begin` type")
 
         all_features_use = self._get_available_features(service)
-        for label_key in service.labels.keys():
+        for label_view in service.get_label_views(self.label_views):
             labels = self._get_available_labels(service)
             avaliable_entity_names = self._get_available_entity_names(service)
             entity_dict = {
                 self.entities[entity_name].join_keys[0]: entity_name for entity_name in avaliable_entity_names
             }
-            joined_frame = self._read_local_file(self.label_views[label_key], labels, entity_dict)
+            joined_frame = self._read_local_file(label_view, labels, entity_dict)
             joined_frame.drop(
                 columns=[CREATE_COL], inplace=True, errors="ignore"
             )  # create timestamp makes no sense to labels
@@ -801,9 +758,9 @@ class FeatureStore:
                 joined_frame = joined_frame[joined_frame[TIME_COL] >= incremental_begin]
             else:
                 joined_frame = joined_frame[joined_frame[TIME_COL] >= incremental_begin]
+
         # join features dataframe
-        for feature_key in service.features.keys():
-            feature_view: FeatureView = self.feature_views[feature_key]
+        for feature_view in service.get_feature_views(self.feature_views):
             feature_cols = [
                 item
                 for item in all_features_use

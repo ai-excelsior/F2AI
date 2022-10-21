@@ -1,37 +1,50 @@
-from typing import List, Optional, Dict
-from aie_feast.definitions import Feature
+from typing import List, Optional, Dict, Set
+
+from aie_feast.definitions import FeatureSchema, Feature, SchemaType
 from pydantic import BaseModel, Field
 
 
-class FeatureView(BaseModel):
+class BaseView(BaseModel):
     name: str
     description: Optional[str]
     entities: List[str] = []
-    schemas: List[Feature] = Field(alias="schema", default=[])
+    schemas: List[FeatureSchema] = Field(alias="schema", default=[])
     batch_source: Optional[str]
     ttl: Optional[str]
     tags: Dict[str, str] = {}
 
+
+class FeatureView(BaseView):
     def get_feature_names(self):
         return [feature.name for feature in self.schemas]
 
+    def get_features(self, is_numeric=False) -> Set[Feature]:
+        return {
+            Feature(
+                name=schema.name,
+                dtype=schema.dtype,
+                schema_type=SchemaType.FEATURE,
+                view_name=self.name,
+            )
+            for schema in self.schemas
+            if (schema.is_numeric() if is_numeric else True)
+        }
 
-class LabelView(BaseModel):
-    name: str
-    description: Optional[str]
-    entities: List[str] = []
-    schemas: List[Feature] = Field(alias="schema", default=[])
-    batch_source: Optional[str]
+
+class LabelView(BaseView):
     request_source: Optional[str]
-    ttl: Optional[str]
 
+    def get_label_names(self):
+        return [label.name for label in self.schemas]
 
-# @dataclass
-# class LabelView:
-#     """realize object using one .yml"""
-
-#     entity: List[str]
-#     labels: List[str]
-#     batch_source: str
-#     ttl: str = field(default_factory=get_default_value)
-#     request_source: str = field(default_factory=get_default_value)
+    def get_labels(self, is_numeric=False) -> Set[Feature]:
+        return {
+            Feature(
+                name=schema.name,
+                dtype=schema.dtype,
+                schema_type=SchemaType.LABEL,
+                view_name=self.name,
+            )
+            for schema in self.schemas
+            if (schema.is_numeric() if is_numeric else True)
+        }

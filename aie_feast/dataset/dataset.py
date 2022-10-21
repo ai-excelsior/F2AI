@@ -1,3 +1,4 @@
+from collections import defaultdict
 import pandas as pd
 from typing import TYPE_CHECKING, Tuple
 from copy import deepcopy
@@ -29,7 +30,7 @@ class IterableDataset:
         self.service_name = service_name
         self.entity_index = entity_index
         self.entity_name = list(self.entity_index.columns[:-1])
-        self.service = self.fs.service[self.service_name]
+        self.service = self.fs.services[self.service_name]
         self.all_features = self.get_feature_period(self.service)
         self.all_labels = self.get_feature_period(self.service, True)
         self.table_suffix = table_suffix
@@ -139,31 +140,18 @@ class IterableDataset:
         Returns:
             Dict: {period1:[fea1,fea2],period2[fea5],0:[fea3,fea4]}, 0 means no period
         """
-        period_dict = {}
+        period_dict = defaultdict(list)
+
         if is_label:
-            for table, cols in service.labels.items():
-                for fea in cols:
-                    for k, v in fea.items():
-                        v = v if v else 0
-                        k = [k] if k != "__all__" else list(self.fs.feature_views[table].labels.keys())
-                        if v in period_dict:
-                            period_dict[v] = period_dict[v] + k
-                        else:
-                            period_dict[v] = k
+            for label in service.get_labels(self.fs.label_views):
+                period = label.period if label.period else 0
+                period_dict[period].append(label.name)
+
         else:
-            for table, cols in service.features.items():
-                for fea in cols:
-                    for k, v in fea.items():
-                        v = v if v else 0
-                        k = (
-                            [k]
-                            if k != "__all__"
-                            else [feature.name for feature in self.fs.feature_views[table].schemas]
-                        )
-                        if v in period_dict:
-                            period_dict[v] = period_dict[v] + k
-                        else:
-                            period_dict[v] = k
+            for feature in service.get_features(self.fs.feature_views):
+                period = feature.period if feature.period else 0
+                period_dict[period].append(feature.name)
+
         return period_dict
 
 
