@@ -807,19 +807,23 @@ class FeatureStore:
                 for item in all_features_use
                 if item in self._get_available_features(feature_view) and item not in joined_frame.columns
             ]
-            avaliable_entity_names = self._get_available_entity_names(feature_view)
-            entity_dict = {
-                self.entities[entity_name].join_keys[0]: entity_name for entity_name in avaliable_entity_names
-            }
-            tmp_fea = self._read_local_file(feature_view, feature_cols, entity_dict)
-            joined_frame = tmp_fea.merge(joined_frame, how="right", on=avaliable_entity_names)
-            if self.sources[feature_view.batch_source].timestamp_field:  # time relevant features
-                # filter feature timestamp <= label timestamp
-                joined_frame = self._fil_timelimit(include=True, ttl=feature_view.ttl, df=joined_frame)
-                # get the latest record for each label time after filter feature timestamp <= label timestamp
-                joined_frame = get_newest_record(joined_frame, TIME_COL, avaliable_entity_names, CREATE_COL)
-                # feature timestamp makes no use to result
-                joined_frame.drop(columns=[CREATE_COL], inplace=True)
+            if feature_cols:  # this view has new features other than those in joined_frame
+                avaliable_entity_names = self._get_available_entity_names(feature_view)
+                entity_dict = {
+                    self.entities[entity_name].join_keys[0]: entity_name
+                    for entity_name in avaliable_entity_names
+                }
+                tmp_fea = self._read_local_file(feature_view, feature_cols, entity_dict)
+                joined_frame = tmp_fea.merge(joined_frame, how="right", on=avaliable_entity_names)
+                if self.sources[feature_view.batch_source].timestamp_field:  # time relevant features
+                    # filter feature timestamp <= label timestamp
+                    joined_frame = self._fil_timelimit(include=True, ttl=feature_view.ttl, df=joined_frame)
+                    # get the latest record for each label time after filter feature timestamp <= label timestamp
+                    joined_frame = get_newest_record(
+                        joined_frame, TIME_COL, avaliable_entity_names, CREATE_COL
+                    )
+                    # feature timestamp makes no use to result
+                    joined_frame.drop(columns=[CREATE_COL], inplace=True)
 
         joined_frame.rename(
             columns={en: self.entities[en].join_keys[0] for en in self._get_available_entity_names(service)},
