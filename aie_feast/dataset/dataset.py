@@ -5,6 +5,7 @@ from copy import deepcopy
 from pypika import Query, Parameter
 from aie_feast.common.psl_utils import to_pgsql
 from aie_feast.common.psl_utils import sql_df, psy_conn
+from torch.utils.data import IterableDataset
 
 if TYPE_CHECKING:
     from aie_feast.featurestore import FeatureStore
@@ -18,7 +19,7 @@ SAM_TBL = "sampler_df"
 ROW = "row_nbr"
 
 
-class IterableDataset:
+class IterableDataset(IterableDataset):
     def __init__(
         self,
         fs: "FeatureStore",
