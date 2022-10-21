@@ -75,7 +75,9 @@ class FeatureStore:
     def _get_available_features(self, view, is_numeric: bool = False) -> List[str]:
 
         if isinstance(view, FeatureView):
-            features = [feature.name for feature in view.schemas if is_numeric and feature.is_numeric()]
+            features = [
+                feature.name for feature in view.schemas if (feature.is_numeric() if is_numeric else True)
+            ]
         elif isinstance(view, Service):  # Services
             features = []
             for feature_view_name, cols in view.features.items():
@@ -84,12 +86,14 @@ class FeatureStore:
                     features += [
                         feature.name
                         for feature in feature_view.schemas
-                        if is_numeric and feature.is_numeric()
+                        if (feature.is_numeric() if is_numeric else True)
                     ]
                 else:
                     for col in cols:
                         features += [
-                            k for k, _ in col.items() if is_numeric and feature_view.schemas[k].is_numeric()
+                            k
+                            for k, _ in col.items()
+                            if (feature_view.schemas[k].is_numeric() if is_numeric else True)
                         ]
 
         else:
@@ -98,7 +102,9 @@ class FeatureStore:
 
     def _get_available_labels(self, view, is_numeric: bool = False):
         if isinstance(view, LabelView):
-            labels = [feature.name for feature in view.schemas if is_numeric and feature.is_numeric()]
+            labels = [
+                feature.name for feature in view.schemas if (feature.is_numeric() if is_numeric else True)
+            ]
         elif isinstance(view, Service):  # Services
             labels = []
             for table, cols in view.labels.items():
