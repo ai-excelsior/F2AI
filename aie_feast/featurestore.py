@@ -162,7 +162,7 @@ class FeatureStore:
             features = self._get_available_features(feature_view)
 
         if self.connection.type == "file":
-            return self._get_point_record(feature_view, entity_df, features, include)[0]
+            return self._get_point_record(feature_view, entity_df, features, include)
         elif self.connection.type == "pgsql":
             table_suffix = to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
             # connect to pgsql db
@@ -329,8 +329,9 @@ class FeatureStore:
             df = read_file(
                 os.path.join(self.project_folder, view.materialize_path),
                 time_cols=[TIME_COL, MATERIALIZE_TIME],
-                entity_cols=entity_names,
+                entity_cols=list(join_key_to_entity_names.keys()),
             )
+            df.rename(columns=join_key_to_entity_names, inplace=True)
             df = df[[col for col in entity_names + [TIME_COL, MATERIALIZE_TIME] + features]]
             if join_key_to_entity_names:
                 df = df.merge(entity_df, on=entity_names, how="inner")
@@ -592,8 +593,9 @@ class FeatureStore:
             df_period = read_file(
                 os.path.join(self.project_folder, view.materialize_path),
                 time_cols=[TIME_COL, MATERIALIZE_TIME],
-                entity_cols=entity_names,
+                entity_cols=list(entity_dict.keys()),
             )
+            df_period.rename(columns=entity_dict, inplace=True)
             df_period = df_period[[col for col in entity_names + features + [TIME_COL, MATERIALIZE_TIME]]]
             if entity_dict:
                 df_period = df_period.merge(entity_df, on=entity_names, how="inner")

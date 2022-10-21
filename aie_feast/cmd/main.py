@@ -116,7 +116,7 @@ if __name__ == "__main__":
             }
         )  # 19991113_3598 has duplicates, due to the original data
 
-        # fs.get_labels(fs.service["credit_scoring_v1"], entity_dobssn_period, "365 days")
+        fs.get_labels(fs.service["credit_scoring_v1"], entity_dobssn_period, "365 days")
         # fs.get_period_features(fs.features["gy_link_travel_time_features"], entity_link, period="5 hours")
         # fs.get_features(fs.features["zipcode_features"], entity_loan)
         # fs.get_labels(fs.service["credit_scoring_v1"], entity_dobssn_period)
@@ -125,10 +125,10 @@ if __name__ == "__main__":
 
     def do_materailize():
         fs.materialize(
-            "traval_time_prediction_embedding_v1",
+            "credit_scoring_v1",
         )
 
-    do_materailize()
+    # do_materailize()
 
     def get_period_features_and_labels():
 
@@ -164,16 +164,6 @@ if __name__ == "__main__":
     # get_period_features_and_labels()
 
     def dataset():
-        # groups = fs.stats(
-        #     fs.feature_views["gy_link_travel_time_features"],
-        #     group_key=["link"],
-        #     #    fs.feature_views["loan_features"],
-        #     # group_key=["zipcode", "dob_ssn"],
-        #     keys_only=True,
-        #     fn="unique",
-        #     start="2021-08-24",
-        #     end="2021-08-26",
-        # )
         # ds = fs.get_dataset(
         #     service_name="credit_scoring_v1",
         #     sampler=GroupFixednbrSampler(
@@ -185,23 +175,33 @@ if __name__ == "__main__":
         #         end="2021-08-26",
         #     ),
         # )
+        # groups = fs.stats(
+        #     fs.feature_views["gy_link_travel_time_features"],
+        #     group_key=["link"],
+        #     keys_only=True,
+        #     fn="unique",
+        #     start="2016-03-01 00:02:00",
+        #     end="2016-06-30 08:00:00",
+        # )
         groups = fs.stats(
-            fs.feature_views["gy_link_travel_time_features"],
-            group_key=["link"],
+            fs.feature_views["loan_features"],
+            group_key=["loan", "dob_ssn"],
+            #    fs.feature_views["loan_features"],
+            # group_key=["zipcode", "dob_ssn"],
             keys_only=True,
             fn="unique",
-            start="2016-03-01 00:02:00",
-            end="2016-06-30 08:00:00",
+            start="2021-08-24",
+            end="2021-08-26",
         )
         ds = fs.get_dataset(
-            service_name="traval_time_prediction_embedding_v1",
+            service_name="credit_scoring_v1",
             sampler=GroupFixednbrSampler(
-                time_bucket="24 hours",
+                time_bucket="10 days",
                 stride=1,
                 group_ids=groups,
-                group_names=["link"],
-                start="2016-03-01",
-                end="2016-07-01",
+                group_names=["loan", "dob_ssn"],
+                start="2020-08-01",
+                end="2021-09-30",
             ),
         )
         i_ds = ds.to_pytorch()
