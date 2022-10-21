@@ -273,7 +273,7 @@ class FeatureStore:
             if entity_name in entity_df.columns
         }
         entity_names = list(join_key_to_entity_names.values())
-
+        pd.DataFrame.merge
         if isinstance(view, (FeatureView, LabelView)):  # read from single view
             df = self._read_local_file(view, features, join_key_to_entity_names)
             # rename entity columns
