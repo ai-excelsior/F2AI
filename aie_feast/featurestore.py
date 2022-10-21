@@ -689,7 +689,7 @@ class FeatureStore:
             feature_views.append(feature_view_dict)
 
         entity_names = self._get_available_entity_names(service)
-        entities_dict = {entity_name: self.entities[entity_name].name for entity_name in entity_names}
+        entities_dict = {entity_name: self.entities[entity_name].join_keys[0] for entity_name in entity_names}
 
         conn = psy_conn(**self.connection.__dict__)
         max_timestamp = Query.from_(service.materialize_path).select(
