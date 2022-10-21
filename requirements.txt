@@ -5,3 +5,4 @@ psycopg2-binary==2.8.6
 torch==1.11.0
 SQLAlchemy==1.4.31
 pypika==0.48.9
+dill
