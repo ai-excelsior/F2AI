@@ -986,8 +986,9 @@ class FeatureStore:
                 df = read_file(
                     os.path.join(self.project_folder, view.materialize_path),
                     time_cols=[TIME_COL],
-                    entity_cols=list(entity_dict.values()),
+                    entity_cols=list(entity_dict.keys()),
                 )
+                df.rename(columns=entity_dict, inplace=True)
             df = df[[col for col in features + list(entity_dict.values()) + [TIME_COL]]]
             if entity_df is not None and entities:
                 df = df.merge(entity_df, how="right", on=entities)
