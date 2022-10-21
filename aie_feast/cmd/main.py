@@ -124,11 +124,9 @@ if __name__ == "__main__":
     # get_features()
 
     def do_materailize():
-        fs.materialize(
-            "credit_scoring_v1",
-        )
+        fs.materialize("traval_time_prediction_embedding_v1", incremental_begin="'2016-06-30 07:50:00'")
 
-    # do_materailize()
+    do_materailize()
 
     def get_period_features_and_labels():
 
@@ -207,7 +205,7 @@ if __name__ == "__main__":
         i_ds = ds.to_pytorch()
         next(iter(i_ds))
 
-    dataset()
+    # dataset()
 
     def sample():
         time_bucket = "4 days"

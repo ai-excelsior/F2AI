@@ -660,7 +660,7 @@ class FeatureStore:
             raise TypeError("please check your `incremental_begin` type")
 
         # dir to store dbt project
-        label_view: LabelView = service.get_label_view()
+        label_view: LabelView = service.get_label_view(self.label_views)
         label_view_dict = label_view.dict()
         label_view_dict.update(
             {
