@@ -11,7 +11,7 @@ def test_get_features_from_service():
             SchemaAnchor(view_name="fv", schema_name="foo"),
         ],
     )
-    feature_views = [FeatureView(name="fv", schema=[FeatureSchema(name="f1", dtype="string")])]
+    feature_views = {"fv": FeatureView(name="fv", schema=[FeatureSchema(name="f1", dtype="string")])}
 
     features = service.get_features(feature_views)
 
