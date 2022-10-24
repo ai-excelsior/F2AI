@@ -244,6 +244,7 @@ if __name__ == "__main__":
         fs.services["traval_time_prediction_embedding_v1"], fn="min", group_key=[], start="2020-08-01", end="2021-09-30"
     ).to_dict()
     cont_scalar = {key: [cont_scalar_min[key], cont_scalar_max[key]] for key in cont_scalar_min.keys()}
+    label = fs._get_available_labels(fs.services["traval_time_prediction_embedding_v1"]),
 
     i_ds = dataset.to_pytorch()
     test_data_loader = DataLoader(  
@@ -252,7 +253,7 @@ if __name__ == "__main__":
             x,
             cont_scalar=cont_scalar,
             categoricals=cat_unique,           
-            label=fs._get_available_labels(fs.services["traval_time_prediction_embedding_v1"]),
+            label=label,
         ),
         batch_size=8,
         drop_last=False,
@@ -260,15 +261,16 @@ if __name__ == "__main__":
     )
 
     model = NbeatsNetwork(
-        targets=[],
+        targets=label,
         prediction_length= 0,
-        context_length= 0,
-        covariate_number = 0,
-        encoder_cont = [],
-        decoder_cont = [],
-        x_categoricals = [],
+        context_length= 0, # TODO set paras 周期的获取
+        covariate_number = len(cont_scalar),
+        encoder_cont = list(cont_scalar.keys()) + label,
+        decoder_cont = list(cont_scalar.keys()),
+        x_categoricals = features_cat,
         output_size=1,
-    )  # TODO set paras
+    ) 
+
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)  
     loss_fn = MeanAbsoluteError() 
 
