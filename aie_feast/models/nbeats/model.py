@@ -1,8 +1,12 @@
 import torch
 import pandas as pd
 from torch import nn
-from typing import List, Dict, Tuple, Iterator
+from torchmetrics import MeanAbsoluteError
+from typing import List, Dict, Tuple
 from torch.utils.data import DataLoader
+from aie_feast.featurestore import FeatureStore
+from aie_feast.common.sampler import GroupFixednbrSampler
+from aie_feast.common.collecy_fn import nbeats_collet_fn
 
 from submodules import NBEATSGenericBlock, NBEATSSeasonalBlock, NBEATSTrendBlock, MultiEmbedding
 
@@ -202,246 +206,81 @@ class NbeatsNetwork(nn.Module):
             ),
         }
 
-    @classmethod
-    def from_dataset(cls, dataset: TimeSeriesDataset, **kwargs) -> "NbeatsNetwork":
-        """
-
-        Args:
-            dataset (TimeSeriesDataSet): dataset where sole predictor is the target.
-            **kwargs: additional arguments to be passed to ``__init__`` method.
-
-        Returns:
-            NBeats
-        """
-        # assert dataset.max_encoder_length%dataset.max_prediction_length==0 and dataset.max_enco
-        # der_length<=10*dataset.max_prediction_length,"look back length should be 1-10 t
-        # imes of prediction length"
-        desired_embedding_sizes = kwargs.pop("embedding_sizes", {})
-        embedding_sizes = {}
-        for k, v in dataset.embedding_sizes.items():
-            if k in dataset.encoder_cat:
-                embedding_sizes[k] = v
-        for name, size in desired_embedding_sizes.items():
-            cat_size, _ = embedding_sizes[name]
-            embedding_sizes[name] = (cat_size, size)
-
-        return cls(
-            dataset.targets,
-            encoder_cont=dataset.encoder_cont + dataset.time_features + dataset.encoder_lag_features,
-            decoder_cont=dataset.decoder_cont + dataset.time_features + dataset.decoder_lag_features,
-            embedding_sizes=embedding_sizes,
-            # only for cont, cat will be added in __init__
-            covariate_number=len(dataset.encoder_cont + dataset.time_features + dataset.encoder_lag_features)
-            - dataset.n_targets,
-            x_categoricals=dataset.categoricals,
-            context_length=dataset.get_parameters().get("indexer").get("params").get("look_back"),
-            prediction_length=dataset.get_parameters().get("indexer").get("params").get("look_forward"),
-            **kwargs,
-        )
-
 
 if __name__ == "__main__":
-    test_data = Iterator(  # just example, use your data to replace;
-        pd.DataFrame(
-            columns=[
-                "cont_fea1",
-                "cont_fea2",
-                "cont_fea3",
-                "cont_fea4",
-                "cont_fea5",
-                "cat_fea1",
-                "cat_fea2",
-                "label",
-            ]
-        )
+
+    fs = FeatureStore("file:///Users/xuyizhou/Desktop/xyz_warehouse/gitlab/f2ai-credit-scoring")
+
+    dataset = fs.get_dataset(
+        service_name="traval_time_prediction_embedding_v1",
+        sampler=GroupFixednbrSampler( 
+            time_bucket="10 days",
+            stride=1,
+            group_ids=None,
+            group_names=None,
+            start="2020-08-01",
+            end="2021-09-30",  #set paras
+        ),
     )
 
-    def __getitem__(self, idx: int):
-        index = self._indexer[idx]
-        encoder_idx = index["encoder_idx"]
-        decoder_idx = index["decoder_idx"]
-        # to filter data dont belong to current group
-        encoder_idx_range = index["encoder_idx_range"]
-        decoder_idx_range = index["decoder_idx_range"]
-        encoder_period: pd.DataFrame = self._data[self._data[TIME_IDX].isin(encoder_idx_range)].loc[
-            encoder_idx
-        ]
-        decoder_period: pd.DataFrame = self._data[self._data[TIME_IDX].isin(decoder_idx_range)].loc[
-            decoder_idx
-        ]
+    features_cat = [
+        fea
+        for fea in fs._get_available_features(fs.services["traval_time_prediction_embedding_v1"])
+        if fea not in fs._get_available_features(fs.services["traval_time_prediction_embedding_v1"], True)
+    ]
+    cat_unique = fs.stats(
+        fs.services["traval_time_prediction_embedding_v1"],
+        fn="unique",
+        group_key=[],
+        start="2020-08-01",
+        end="2021-09-30",
+        features=features_cat,
+    ).to_dict()
+    cat_count = {key: len(cat_unique[key]) for key in cat_unique.keys()}
+    cont_scalar_max = fs.stats(
+        fs.services["traval_time_prediction_embedding_v1"], fn="max", group_key=[], start="2020-08-01", end="2021-09-30"
+    ).to_dict()
+    cont_scalar_min = fs.stats(
+        fs.services["traval_time_prediction_embedding_v1"], fn="min", group_key=[], start="2020-08-01", end="2021-09-30"
+    ).to_dict()
+    cont_scalar = {key: [cont_scalar_min[key], cont_scalar_max[key]] for key in cont_scalar_min.keys()}
 
-        # TODO 缺失值是个值得研究的主题
-        encoder_cont = torch.tensor(encoder_period[self.encoder_cont].to_numpy(np.float64), dtype=torch.float)
-        encoder_cat = torch.tensor(encoder_period[self.encoder_cat].to_numpy(np.int64), dtype=torch.int)
-        encoder_time_idx = encoder_period[TIME_IDX]
-        time_idx_start = encoder_time_idx.min()
-        encoder_time_idx = torch.tensor(
-            (encoder_time_idx - time_idx_start).to_numpy(np.int64), dtype=torch.long
-        )
-        encoder_target = torch.tensor(encoder_period[self.targets].to_numpy(np.float64), dtype=torch.float)
-        encoder_time_features = torch.tensor(
-            encoder_period[self.time_features].to_numpy(np.float64), dtype=torch.float
-        )
-        encoder_lag_features = torch.tensor(
-            encoder_period[self.encoder_lag_features].to_numpy(np.float64),
-            dtype=torch.float,
-        )
-
-        decoder_cont = torch.tensor(decoder_period[self.decoder_cont].to_numpy(np.float64), dtype=torch.float)
-        decoder_cat = torch.tensor(decoder_period[self.decoder_cat].to_numpy(np.float64), dtype=torch.int)
-        decoder_time_idx = decoder_period[TIME_IDX]
-        decoder_time_idx = torch.tensor(
-            (decoder_time_idx - time_idx_start).to_numpy(np.int64), dtype=torch.long
-        )
-
-        decoder_target = torch.tensor(decoder_period[self.targets].to_numpy(np.float64), dtype=torch.float)
-        decoder_time_features = torch.tensor(
-            decoder_period[self.time_features].to_numpy(np.float64), dtype=torch.float
-        )
-        decoder_lag_features = torch.tensor(
-            decoder_period[self.decoder_lag_features].to_numpy(np.float64),
-            dtype=torch.float,
-        )
-        targets = torch.tensor(decoder_period[self.targets].to_numpy(np.float64), dtype=torch.float)
-
-        target_scales = torch.stack(
-            [
-                torch.tensor(self._target_normalizers[i].get_norm(decoder_period), dtype=torch.float)
-                for i, _ in enumerate(self.targets)
-            ],
-            dim=-1,
-        )
-        target_scales_back = torch.stack(
-            [
-                torch.tensor(self._target_normalizers[i].get_norm(encoder_period), dtype=torch.float)
-                for i, _ in enumerate(self.targets)
-            ],
-            dim=-1,
-        )
-
-        return (
-            dict(  # batch[0]
-                encoder_cont=encoder_cont,
-                encoder_cat=encoder_cat,
-                encoder_time_idx=encoder_time_idx,
-                encoder_idx=torch.tensor(encoder_idx, dtype=torch.long),
-                encoder_idx_range=torch.tensor(encoder_idx_range, dtype=torch.long),
-                encoder_target=encoder_target,
-                encoder_time_features=encoder_time_features,
-                encoder_lag_features=encoder_lag_features,
-                decoder_cont=decoder_cont,
-                decoder_cat=decoder_cat,
-                decoder_time_idx=decoder_time_idx,
-                decoder_idx=torch.tensor(decoder_idx, dtype=torch.long),
-                decoder_idx_range=torch.tensor(decoder_idx_range, dtype=torch.long),
-                decoder_target=decoder_target,
-                decoder_time_features=decoder_time_features,
-                decoder_lag_features=decoder_lag_features,
-                target_scales=target_scales,
-                target_scales_back=target_scales_back,
-            ),
-            targets,  # batch[1]
-        )
-
-    def _collate_fn(self, batches):
-        encoder_cont = torch.stack([batch[0]["encoder_cont"] for batch in batches])
-        encoder_cat = torch.stack([batch[0]["encoder_cat"] for batch in batches])
-        encoder_time_idx = torch.stack([batch[0]["encoder_time_idx"] for batch in batches])
-        encoder_idx = torch.stack([batch[0]["encoder_idx"] for batch in batches])
-        encoder_idx_range = torch.stack([batch[0]["encoder_idx_range"] for batch in batches])
-        encoder_target = torch.stack([batch[0]["encoder_target"] for batch in batches])
-        encoder_length = torch.tensor([len(batch[0]["encoder_target"]) for batch in batches])
-
-        decoder_cont = torch.stack([batch[0]["decoder_cont"] for batch in batches])
-        decoder_cat = torch.stack([batch[0]["decoder_cat"] for batch in batches])
-        decoder_time_idx = torch.stack([batch[0]["decoder_time_idx"] for batch in batches])
-        decoder_idx = torch.stack([batch[0]["decoder_idx"] for batch in batches])
-        decoder_idx_range = torch.stack([batch[0]["decoder_idx_range"] for batch in batches])
-        decoder_target = torch.stack([batch[0]["decoder_target"] for batch in batches])
-        decoder_length = torch.tensor([len(batch[0]["decoder_target"]) for batch in batches])
-
-        target_scales = torch.stack([batch[0]["target_scales"] for batch in batches])
-        target_scales_back = torch.stack([batch[0]["target_scales_back"] for batch in batches])
-        targets = torch.stack([batch[1] for batch in batches])
-        encoder_time_features = torch.stack([batch[0]["encoder_time_features"] for batch in batches])
-        decoder_time_features = torch.stack([batch[0]["decoder_time_features"] for batch in batches])
-        encoder_lag_features = torch.stack([batch[0]["encoder_lag_features"] for batch in batches])
-        decoder_lag_features = torch.stack([batch[0]["decoder_lag_features"] for batch in batches])
-        return (
-            dict(
-                encoder_cont=encoder_cont,
-                encoder_cat=encoder_cat,
-                encoder_time_idx=encoder_time_idx,
-                encoder_idx=encoder_idx,
-                encoder_idx_range=encoder_idx_range,
-                encoder_target=encoder_target,
-                encoder_length=encoder_length,
-                decoder_cont=decoder_cont,
-                decoder_cat=decoder_cat,
-                decoder_time_idx=decoder_time_idx,
-                decoder_idx=decoder_idx,
-                decoder_idx_range=decoder_idx_range,
-                decoder_target=decoder_target,
-                decoder_length=decoder_length,
-                target_scales=target_scales,
-                target_scales_back=target_scales_back,
-                encoder_time_features=encoder_time_features,
-                decoder_time_features=decoder_time_features,
-                encoder_lag_features=encoder_lag_features,
-                decoder_lag_features=decoder_lag_features,
-            ),
-            dict(
-                encoder_cont=encoder_cont + encoder_time_features + encoder_lag_features,
-                decoder_cont=decoder_cont + decoder_time_features + decoder_lag_features,
-                embedding_sizes=embedding_sizes,
-                # only for cont, cat will be added in __init__
-                covariate_number=len(encoder_cont + encoder_time_features + encoder_lag_features) - 1,
-                x_categoricals=categoricals,
-                context_length=72,
-                prediction_length=24,
-            ),
-            targets,
-        )
-
-    # return cls(
-    #         dataset.targets,
-    #         encoder_cont=dataset.encoder_cont + dataset.time_features + dataset.encoder_lag_features,
-    #         decoder_cont=dataset.decoder_cont + dataset.time_features + dataset.decoder_lag_features,
-    #         embedding_sizes=embedding_sizes,
-    #         # only for cont, cat will be added in __init__
-    #         covariate_number=len(dataset.encoder_cont + dataset.time_features + dataset.encoder_lag_features)
-    #         - dataset.n_targets,
-    #         x_categoricals=dataset.categoricals,
-    #         context_length=dataset.get_parameters().get("indexer").get("params").get("look_back"),
-    #         prediction_length=dataset.get_parameters().get("indexer").get("params").get("look_forward"),
-    #         **kwargs,
-    #     )
-
-    def cutomized_collet_fn(scale_boudary={}):
-        # cutomize your collet_fn to adjust SimpleClassify Model
-        # involve pre-process 1. encoder str-like features to numeric;
-        #                     2. scale numeric features, the oveall min/max/avg/std can be accessed by `fs.stats` and transported or written in this func;
-        #                     3. others if need
-        # involve collect method to convert original data format to that used in SimpleClassify.forward and loss calculation
-        pass
-
-    test_data_loader = DataLoader(  # `batch_siz`e and `drop_last`` do not matter now, `sampler`` set it to be None cause `test_data`` is a Iterator
-        test_data, collate_fn=cutomized_collet_fn, batch_size=4, drop_last=False, sampler=None
+    i_ds = dataset.to_pytorch()
+    test_data_loader = DataLoader(  
+        i_ds,
+        collate_fn=lambda x: nbeats_collet_fn(
+            x,
+            cont_scalar=cont_scalar,
+            categoricals=cat_unique,           
+            label=fs._get_available_labels(fs.services["traval_time_prediction_embedding_v1"]),
+        ),
+        batch_size=8,
+        drop_last=False,
+        sampler=None,
     )
-    # cont_nbr/cat_nbr means the number of continuous/categorical features delivered to model;
-    # max_types means the max different types in all categorical features
-    # emd_dim is a parameter do not matter now
-    # model = SimpleClassify(cont_nbr=5, cat_nbr=2, emd_dim=2, max_types=6)
-    model = NbeatsNetwork()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)  # no need to change
-    loss_fn = nn.BCELoss()  # loss function to train a classification model
+
+    model = NbeatsNetwork(
+        targets=[],
+        prediction_length= 0,
+        context_length= 0,
+        covariate_number = 0,
+        encoder_cont = [],
+        decoder_cont = [],
+        x_categoricals = [],
+        output_size=1,
+    )  # TODO set paras
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)  
+    loss_fn = MeanAbsoluteError() 
 
     for epoch in range(10):  # assume 10 epoch
         print(f"epoch: {epoch} begin")
-        pred_label = model(test_data_loader)
-        true_label = test_data["labels"]
-        loss = loss_fn(pred_label, true_label)
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+        for x, y in test_data_loader:
+            pred_label = model(x)
+            true_label = y
+            loss = loss_fn(pred_label, true_label)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
         print(f"epoch: {epoch} done, loss: {loss}")
+
+    

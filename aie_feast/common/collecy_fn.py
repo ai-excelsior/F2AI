@@ -1,5 +1,6 @@
 import torch
 import pandas as pd
+import numpy as np
 from models.encoder import LabelEncoder
 from models.normalizer import MinMaxNormalizer
 
@@ -58,4 +59,74 @@ def classify_collet_fn(datas, cont_scalar={}, cat_coder={}, label=[]):
             continous_features=continous_features,
         ),
         labels,
+    )
+
+
+def nbeats_collet_fn(
+    datas,
+    cont_scalar={},
+    categoricals={},
+    label={},
+):
+
+    batches = []
+    for data in datas:
+
+        all_cont = torch.stack(
+            [
+                torch.tensor(
+                    MinMaxNormalizer(cont)
+                    .fit_self(pd.Series(cont_scalar[cont]))
+                    .transform_self(data[0][cont]),
+                    dtype=torch.float16,
+                )
+                for cont in cont_scalar.keys()
+            ],
+            dim=-1,
+        )
+
+        all_categoricals = torch.stack(
+            [
+                torch.tensor(
+                    LabelEncoder(cat).fit_self(pd.Series(categoricals[cat])).transform_self(data[0][cat]),
+                    dtype=torch.int,
+                )
+                for cat in categoricals.keys()
+            ],
+            dim=-1,
+        )
+
+        targets = torch.stack(
+            [torch.tensor(data[1][lab], dtype=torch.float) for lab in label],
+            dim=-1,
+        )
+
+        batch = (
+            dict(
+                encoder_cont=all_cont + targets,
+                decoder_cont=all_cont,
+                categoricals=all_categoricals,
+            ),
+            targets,
+        )
+        batches.append(batch)
+
+    encoder_cont = torch.stack([batch[0]["encoder_cont"] for batch in batches])
+    decoder_cont = torch.stack([batch[0]["decoder_cont"] for batch in batches])
+    categoricals = torch.stack([batch[0]["categoricals"] for batch in batches])
+    targets = torch.stack([batch[1] for batch in batches])
+    context_length = len(batches[0][0])
+    prediction_length = len(data[0][1])
+    n_targets = 1
+
+    return (
+        dict(
+            encoder_cont=encoder_cont,
+            decoder_cont=decoder_cont,
+            covariate_number=len(encoder_cont) - n_targets,
+            x_categoricals=categoricals,
+            context_length=context_length,
+            prediction_length=prediction_length,
+        ),
+        targets,
     )
