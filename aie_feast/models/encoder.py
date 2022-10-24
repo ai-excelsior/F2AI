@@ -20,6 +20,10 @@ def map_to_integer(values, uniques):
 
 
 class LabelEncoder:
+    """encode categorical features into int number by their appearance order,
+    will always  set 0 to be UNKNOWN_CAT automatically
+    """
+
     def __init__(self, feature_name=None):
         self.feature_name = feature_name
 
@@ -30,7 +34,6 @@ class LabelEncoder:
 
     def transform_self(self, y: pd.Series) -> pd.Series:
         y = column_or_1d(y, warn=True)
-        # transform of empty array is empty array
         if len(y) == 0:
             return np.array([])
         y = map_to_integer(y, self._state)

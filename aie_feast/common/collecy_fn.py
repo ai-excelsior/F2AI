@@ -5,9 +5,20 @@ from models.normalizer import MinMaxNormalizer
 
 
 def classify_collet_fn(datas, cont_scalar={}, cat_coder={}, label=[]):
+    """_summary_
+
+    Args:
+        datas (_type_): datas to be processed, the length equals to batch_size
+        cont_scalar (dict, optional):  normalize continous features, the key is feature name and value is scales corresponding to method using. Defaults to {}.
+        cat_coder (dict, optional): encode categorical features, the key is feature name and value is scales corresponding to method using. Defaults to {}.
+        label (list, optional): column name of label. Defaults to [].
+
+    Returns:
+        tuple: the first element is features and the second is label
+    """
     batches = []
     # corresspondint to __get_item__ in Dataset
-    for data in datas:
+    for data in datas:  # data[0]:features, data[1]:labels
         cat_features = torch.stack(
             [
                 torch.tensor(
