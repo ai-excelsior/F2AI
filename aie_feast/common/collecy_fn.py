@@ -1,8 +1,8 @@
 import torch
 import pandas as pd
 import numpy as np
-from models.encoder import LabelEncoder
-from models.normalizer import MinMaxNormalizer
+from aie_feast.models.encoder import LabelEncoder
+from aie_feast.models.normalizer import MinMaxNormalizer
 
 
 def classify_collet_fn(datas, cont_scalar={}, cat_coder={}, label=[]):
@@ -103,7 +103,7 @@ def nbeats_collet_fn(
 
         batch = (
             dict(
-                encoder_cont=all_cont + targets,
+                encoder_cont=all_cont,
                 decoder_cont=all_cont,
                 categoricals=all_categoricals,
             ),
@@ -115,18 +115,12 @@ def nbeats_collet_fn(
     decoder_cont = torch.stack([batch[0]["decoder_cont"] for batch in batches])
     categoricals = torch.stack([batch[0]["categoricals"] for batch in batches])
     targets = torch.stack([batch[1] for batch in batches])
-    context_length = len(batches[0][0])
-    prediction_length = len(data[0][1])
-    n_targets = 1
 
     return (
         dict(
-            encoder_cont=encoder_cont,
+            encoder_cont=encoder_cont + targets,
             decoder_cont=decoder_cont,
-            covariate_number=len(encoder_cont) - n_targets,
             x_categoricals=categoricals,
-            context_length=context_length,
-            prediction_length=prediction_length,
         ),
         targets,
     )

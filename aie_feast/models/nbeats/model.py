@@ -209,7 +209,7 @@ class NbeatsNetwork(nn.Module):
 
 if __name__ == "__main__":
 
-    fs = FeatureStore("file:///Users/xuyizhou/Desktop/xyz_warehouse/gitlab/guizhou_traffic")
+    fs = FeatureStore("file:///Users/zhao123456/Desktop/gitlab/guizhou_traffic")
     
     dataset = fs.get_dataset(
         service_name="traval_time_prediction_embedding_v1",
@@ -218,8 +218,8 @@ if __name__ == "__main__":
             stride=1,
             group_ids=None,
             group_names=None,
-            start="2020-08-01",
-            end="2021-09-30",  #set paras
+            start="2020-03-01",
+            end="2021-07-01",  #set paras
         ),
     )
 
@@ -232,16 +232,16 @@ if __name__ == "__main__":
         fs.services["traval_time_prediction_embedding_v1"],
         fn="unique",
         group_key=[],
-        start="2020-08-01",
-        end="2021-09-30",
+        start="2020-03-01",
+        end="2021-07-01",
         features=features_cat,
     ).to_dict()
     cat_count = {key: len(cat_unique[key]) for key in cat_unique.keys()}
     cont_scalar_max = fs.stats(
-        fs.services["traval_time_prediction_embedding_v1"], fn="max", group_key=[], start="2020-08-01", end="2021-09-30"
+        fs.services["traval_time_prediction_embedding_v1"], fn="max", group_key=[], start="2020-03-01", end="2021-07-01"
     ).to_dict()
     cont_scalar_min = fs.stats(
-        fs.services["traval_time_prediction_embedding_v1"], fn="min", group_key=[], start="2020-08-01", end="2021-09-30"
+        fs.services["traval_time_prediction_embedding_v1"], fn="min", group_key=[], start="2020-03-01", end="2021-07-01"
     ).to_dict()
     cont_scalar = {key: [cont_scalar_min[key], cont_scalar_max[key]] for key in cont_scalar_min.keys()}
     label = fs._get_available_labels(fs.services["traval_time_prediction_embedding_v1"]),
@@ -251,7 +251,7 @@ if __name__ == "__main__":
         i_ds,
         collate_fn=lambda x: nbeats_collet_fn(
             x,
-            cont_scalar=cont_scalar,
+            cont_scalar=cont_scalar.pop(label[0]),
             categoricals=cat_unique,           
             label=label,
         ),
@@ -262,11 +262,11 @@ if __name__ == "__main__":
 
     model = NbeatsNetwork(
         targets=label,
-        prediction_length= 0,
-        context_length= 0, # TODO set paras 周期的获取
-        covariate_number = len(cont_scalar),
-        encoder_cont = list(cont_scalar.keys()) + label,
-        decoder_cont = list(cont_scalar.keys()),
+        prediction_length= fs.services["traval_time_prediction_embedding_v1"]['labels'].period,
+        context_length= fs.services["traval_time_prediction_embedding_v1"]['features'].period, 
+        covariate_number = len(cont_scalar) - 1,
+        encoder_cont = list(cont_scalar.keys()),
+        decoder_cont = list(cont_scalar.keys()).remove(label[0]), 
         x_categoricals = features_cat,
         output_size=1,
     ) 
