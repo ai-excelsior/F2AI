@@ -209,8 +209,8 @@ class NbeatsNetwork(nn.Module):
 
 if __name__ == "__main__":
 
-    fs = FeatureStore("file:///Users/xuyizhou/Desktop/xyz_warehouse/gitlab/f2ai-credit-scoring")
-
+    fs = FeatureStore("file:///Users/xuyizhou/Desktop/xyz_warehouse/gitlab/guizhou_traffic")
+    
     dataset = fs.get_dataset(
         service_name="traval_time_prediction_embedding_v1",
         sampler=GroupFixednbrSampler( 
