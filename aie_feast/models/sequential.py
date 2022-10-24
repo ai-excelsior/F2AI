@@ -1,11 +1,7 @@
-from multiprocessing.spawn import prepare
-from sklearn.preprocessing import MinMaxScaler
+from aie_feast.common.collecy_fn import classify_collet_fn
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
-import pandas as pd
-from encoder import LabelEncoder
-from normalizer import MinMaxNormalizer
 from aie_feast.featurestore import FeatureStore
 from aie_feast.common.sampler import GroupFixednbrSampler
 
@@ -29,51 +25,6 @@ class SimpleClassify(nn.Module):
 
 if __name__ == "__main__":
     fs = FeatureStore("file:///Users/xuyizhou/Desktop/xyz_warehouse/gitlab/f2ai-credit-scoring")
-
-    def cutomized_collet_fn(datas, cont_scalar={}, cat_coder={}, label=[]):
-        batches = []
-        # corresspondint to __get_item__ in Dataset
-        for data in datas:
-            cat_features = torch.stack(
-                [
-                    torch.tensor(
-                        LabelEncoder(cat).fit_self(pd.Series(cat_coder[cat])).transform_self(data[0][cat]),
-                        dtype=torch.int,
-                    )
-                    for cat in cat_coder.keys()
-                ],
-                dim=-1,
-            )
-            cont_features = torch.stack(
-                [
-                    torch.tensor(
-                        MinMaxNormalizer(cont)
-                        .fit_self(pd.Series(cont_scalar[cont]))
-                        .transform_self(data[0][cont]),
-                        dtype=torch.float16,
-                    )
-                    for cont in cont_scalar.keys()
-                ],
-                dim=-1,
-            )
-            labels = torch.stack(
-                [torch.tensor(data[1][lab], dtype=torch.float) for lab in label],
-                dim=-1,
-            )
-            batch = (dict(categorical_features=cat_features, continous_features=cont_features), labels)
-            batches.append(batch)
-
-        # corresspondint to _collect_fn_ in Dataset
-        categorical_features = torch.stack([batch[0]["categorical_features"] for batch in batches])
-        continous_features = torch.stack([batch[0]["continous_features"] for batch in batches])
-        labels = torch.stack([batch[1] for batch in batches])
-        return (
-            dict(
-                categorical_features=categorical_features,
-                continous_features=continous_features,
-            ),
-            labels,
-        )
 
     ds = fs.get_dataset(
         service_name="credit_scoring_v1",
@@ -111,7 +62,7 @@ if __name__ == "__main__":
     i_ds = ds.to_pytorch()
     test_data_loader = DataLoader(  # `batch_siz`e and `drop_last`` do not matter now, `sampler`` set it to be None cause `test_data`` is a Iterator
         i_ds,
-        collate_fn=lambda x: cutomized_collet_fn(
+        collate_fn=lambda x: classify_collet_fn(
             x,
             cat_coder=cat_unique,
             cont_scalar=cont_scalar,
