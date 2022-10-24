@@ -71,14 +71,3 @@ class Service(BaseModel):
 
     def get_label_view(self, label_views: Dict[str, LabelView]) -> LabelView:
         return self.get_label_views(label_views)[0]
-
-
-# @dataclass
-# class Service:
-#     """compose of FeatureViews and LabelViews used in service for non-time-series task"""
-
-#     features: Dict
-#     labels: Dict
-#     materialize_path: str = field(default_factory=get_default_value)
-#     materialize_type: str = field(default_factory=get_default_value)
-#     dbt_path: str = field(default_factory=get_default_value)

@@ -1,11 +1,13 @@
 import os
 import glob
 from typing import List, Dict
+from aie_feast.offline_stores.offline_file_store import OfflineFileStore
+from aie_feast.offline_stores.offline_postgres_store import OfflinePostgresStore
+from aie_feast.offline_stores.offline_spark_store import OfflineSparkStore
 from aie_feast.service import Service
 from aie_feast.views import FeatureView, LabelView
 from aie_feast.definitions import OfflineStoreType, Entity
 
-from .connect import ConnectConfig
 from .source import Source, parse_source_yaml
 from .read_file import read_yml
 from .utils import remove_prefix
@@ -25,7 +27,7 @@ def listdir_yamls(path: str) -> List[str]:
     return listdir_with_extensions(path, extensions=["yml", "yaml"])
 
 
-def get_conn_cfg(url: str):
+def get_offline_store_from_cfg(url: str):
     """connect to pgsql using configs in feature_store.yml
 
     Args:
@@ -33,23 +35,15 @@ def get_conn_cfg(url: str):
     """
     cfg = read_yml(url)
     if cfg["offline_store"]["type"] == OfflineStoreType.FILE:
-        conn = ConnectConfig(type=cfg["offline_store"]["type"])
+        offline_store = OfflineFileStore()
     elif cfg["offline_store"]["type"] == OfflineStoreType.PGSQL:
-        conn = ConnectConfig(
-            type=cfg["offline_store"]["type"],
-            user=cfg["offline_store"]["pgsql_conf"].get("user", "postgres"),
-            passwd=cfg["offline_store"]["pgsql_conf"].get("password", "password"),
-            host=cfg["offline_store"]["pgsql_conf"]["host"],
-            port=cfg["offline_store"]["pgsql_conf"].get("port", "5432"),
-            database=cfg["offline_store"]["pgsql_conf"]["database"],
-            schema=cfg["offline_store"]["pgsql_conf"].get("schema", "public"),
-        )
+        offline_store = OfflinePostgresStore(**cfg["offline_store"]["pgsql_conf"])
     elif cfg["offline_store"]["type"] == OfflineStoreType.SPARK:
-        conn = ConnectConfig(type=cfg["offline_store"]["type"])  # TODO:will be implemented in future
+        offline_store = OfflineSparkStore(type=cfg["offline_store"]["type"])
     else:
         raise TypeError("offline_store must be one of [file, influxdb, pgsql]")
-    # TODO:assert
-    return conn
+
+    return offline_store
 
 
 def get_service_cfg(url: str) -> Dict[str, Service]:

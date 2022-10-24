@@ -1,17 +1,19 @@
 import psycopg2
-from sqlalchemy import create_engine
+import pandas as pd
 import datetime
+from sqlalchemy import create_engine
+
+from aie_feast.offline_stores.offline_postgres_store import OfflinePostgresStore
 
 
-def psy_conn(user, passwd, host, port, database, **kwargs):
-    conn = psycopg2.connect(
-        user=user,
-        password=passwd,
-        host=host,
-        port=port,
-        dbname=database,
+def psy_conn(store: OfflinePostgresStore):
+    return psycopg2.connect(
+        user=store.user,
+        password=store.password,
+        host=store.host,
+        port=store.port,
+        dbname=store.database,
     )
-    return conn
 
 
 def close_conn(conn, tables: list = None):
@@ -26,12 +28,12 @@ def execute_sql(sql, conn):
     return cursor
 
 
-def to_pgsql(df, tbl_name, **kwagrs):
+def to_pgsql(df: pd.DataFrame, tbl_name, store: OfflinePostgresStore):
     engine = create_engine(
-        f"postgresql+psycopg2://{kwagrs.get('user')}:{kwagrs.get('passwd')}@{kwagrs.get('host')}:{kwagrs.get('port')}/{kwagrs.get('database')}"
+        f"postgresql+psycopg2://{store.user}:{store.password}@{store.host}:{store.port}/{store.database}"
     )
     suffix = str(datetime.datetime.now())
-    df.to_sql(f"{tbl_name}_{suffix}", engine, schema=kwagrs.get("schema"), if_exists="replace")
+    df.to_sql(f"{tbl_name}_{suffix}", engine, schema=store.db_schema, if_exists="replace")
     return suffix
 
 

@@ -10,7 +10,7 @@ from aie_feast.views import FeatureView, LabelView
 from aie_feast.service import Service
 from aie_feast.dataset.dataset import Dataset
 from aie_feast.common.get_config import (
-    get_conn_cfg,
+    get_offline_store_from_cfg,
     get_service_cfg,
     get_entity_cfg,
     get_label_views,
@@ -40,7 +40,7 @@ MATERIALIZE_TIME = "materialize_time"  # timestamp to done materialize, only use
 class FeatureStore:
     def __init__(self, project_folder=None, url=None, token=None, projectID=None):
         if project_folder:
-            self.connection = get_conn_cfg(os.path.join(project_folder, "feature_store.yml"))
+            self.offline_store = get_offline_store_from_cfg(os.path.join(project_folder, "feature_store.yml"))
         elif url and token and projectID:
             pass  # TODO: realize in future
         else:
@@ -48,7 +48,7 @@ class FeatureStore:
 
         # init each object using .yml in corresponding folders
         self.project_folder = project_folder
-        self.sources = get_source_cfg(os.path.join(project_folder, "sources"), self.connection.type)
+        self.sources = get_source_cfg(os.path.join(project_folder, "sources"), self.offline_store.type)
         self.entities = get_entity_cfg(os.path.join(project_folder, "entities"))
         self.feature_views = get_feature_views(os.path.join(project_folder, "feature_views"))
         self.label_views = get_label_views(os.path.join(project_folder, "label_views"))
@@ -122,12 +122,12 @@ class FeatureStore:
         if not features:
             features = self._get_available_features(feature_view)
 
-        if self.connection.type == "file":
+        if self.offline_store.type == "file":
             return self._get_point_record(feature_view, entity_df, features, include)
-        elif self.connection.type == "pgsql":
-            table_suffix = to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
+        elif self.offline_store.type == "pgsql":
+            table_suffix = to_pgsql(entity_df, TMP_TBL, self.offline_store)
             # connect to pgsql db
-            conn = psy_conn(**self.connection.__dict__)
+            conn = psy_conn(self.offline_store)
             sql_result, entity_name = self._get_point_pgsql(
                 feature_view, f"{TMP_TBL}_{table_suffix}", features, include, list(entity_df.columns[:-1])
             )
@@ -136,7 +136,10 @@ class FeatureStore:
             )
             # remove entity_df and close connection
             close_conn(
-                conn, tables=[f"{self.connection.database}.{self.connection.schema}.{TMP_TBL}_{table_suffix}"]
+                conn,
+                tables=[
+                    f"{self.offline_store.database}.{self.offline_store.db_schema}.{TMP_TBL}_{table_suffix}"
+                ],
             )
             return result
 
@@ -161,12 +164,12 @@ class FeatureStore:
         if not features:
             features = self._get_available_features(feature_view)
 
-        if self.connection.type == "file":
+        if self.offline_store.type == "file":
             return self._get_period_record(feature_view, entity_df, period, features, include, is_label=False)
-        elif self.connection.type == "pgsql":
-            table_suffix = to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
+        elif self.offline_store.type == "pgsql":
+            table_suffix = to_pgsql(entity_df, TMP_TBL, self.offline_store)
             # connect to pgsql db
-            conn = psy_conn(**self.connection.__dict__)
+            conn = psy_conn(self.offline_store)
             sql_result, entity_name = self._get_period_pgsql(
                 feature_view,
                 f"{TMP_TBL}_{table_suffix}",
@@ -181,7 +184,10 @@ class FeatureStore:
             )
             # remove entity_df and close connection
             close_conn(
-                conn, tables=[f"{self.connection.database}.{self.connection.schema}.{TMP_TBL}_{table_suffix}"]
+                conn,
+                tables=[
+                    f"{self.offline_store.database}.{self.offline_store.db_schema}.{TMP_TBL}_{table_suffix}"
+                ],
             )
             return result
 
@@ -196,12 +202,12 @@ class FeatureStore:
         self.__check_format(entity_df)
         labels = self._get_available_labels(label_view)
 
-        if self.connection.type == "file":
+        if self.offline_store.type == "file":
             return self._get_point_record(label_view, entity_df, labels, include)
-        elif self.connection.type == "pgsql":
-            table_suffix = to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
+        elif self.offline_store.type == "pgsql":
+            table_suffix = to_pgsql(entity_df, TMP_TBL, self.offline_store)
             # connect to pgsql db
-            conn = psy_conn(**self.connection.__dict__)
+            conn = psy_conn(self.offline_store)
             sql_result, entity_name = self._get_point_pgsql(
                 label_view, f"{TMP_TBL}_{table_suffix}", labels, include, list(entity_df.columns[:-1])
             )
@@ -210,7 +216,10 @@ class FeatureStore:
             )
             # remove entity_df and close connection
             close_conn(
-                conn, tables=[f"{self.connection.database}.{self.connection.schema}.{TMP_TBL}_{table_suffix}"]
+                conn,
+                tables=[
+                    f"{self.offline_store.database}.{self.offline_store.db_schema}.{TMP_TBL}_{table_suffix}"
+                ],
             )
             return result
 
@@ -232,12 +241,12 @@ class FeatureStore:
         self.__check_format(entity_df)
         labels = self._get_available_labels(label_view)
 
-        if self.connection.type == "file":
+        if self.offline_store.type == "file":
             return self._get_period_record(label_view, entity_df, period, labels, include, is_label=True)
-        elif self.connection.type == "pgsql":
-            table_suffix = to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
+        elif self.offline_store.type == "pgsql":
+            table_suffix = to_pgsql(entity_df, TMP_TBL, self.offline_store)
             # connect to pgsql db
-            conn = psy_conn(**self.connection.__dict__)
+            conn = psy_conn(self.offline_store)
             sql_result, entity_name = self._get_period_pgsql(
                 label_view,
                 f"{TMP_TBL}_{table_suffix}",
@@ -252,7 +261,10 @@ class FeatureStore:
             )
             # remove entity_df and close connection
             close_conn(
-                conn, tables=[f"{self.connection.database}.{self.connection.schema}.{TMP_TBL}_{table_suffix}"]
+                conn,
+                tables=[
+                    f"{self.offline_store.database}.{self.offline_store.db_schema}.{TMP_TBL}_{table_suffix}"
+                ],
             )
             return result
 
@@ -273,7 +285,7 @@ class FeatureStore:
             if entity_name in entity_df.columns
         }
         entity_names = list(join_key_to_entity_names.values())
-        pd.DataFrame.merge
+
         if isinstance(view, (FeatureView, LabelView)):  # read from single view
             df = self._read_local_file(view, features, join_key_to_entity_names)
             # rename entity columns
@@ -646,9 +658,9 @@ class FeatureStore:
 
         """
 
-        if self.connection.type == "file":
+        if self.offline_store.type == "file":
             self._offline_record_materialize(self.services[service_name], incremental_begin)
-        elif self.connection.type == "pgsql":
+        elif self.offline_store.type == "pgsql":
             self._offline_pgsql_materialize(self.services[service_name], incremental_begin)
 
     def _offline_pgsql_materialize(self, service: Service, incremental_begin):
@@ -691,7 +703,7 @@ class FeatureStore:
         entity_names = self._get_available_entity_names(service)
         entities_dict = {entity_name: self.entities[entity_name].join_keys[0] for entity_name in entity_names}
 
-        conn = psy_conn(**self.connection.__dict__)
+        conn = psy_conn(self.offline_store)
         max_timestamp = Query.from_(service.materialize_path).select(
             functions.Max(Parameter(label_view_dict["event_time"]))
         )
@@ -936,7 +948,7 @@ class FeatureStore:
             assert fn == "unique", "keys_only=True can only be applied when fn==unique"
             features = []
 
-        if self.connection.type == "file":
+        if self.offline_store.type == "file":
             if isinstance(view, (FeatureView, LabelView)):
                 df = self._read_local_file(view, features, entity_dict)
             else:
@@ -979,12 +991,12 @@ class FeatureStore:
                         start=start,
                     )
                 )
-        elif self.connection.type == "pgsql":
-            conn = psy_conn(**self.connection.__dict__)
+        elif self.offline_store.type == "pgsql":
+            conn = psy_conn(self.offline_store)
             if isinstance(view, (FeatureView, LabelView)):
                 if entity_df is not None and entities:
                     entity_df.rename(columns={v: k for k, v in entity_dict.items()}, inplace=True)
-                    table_suffix = to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
+                    table_suffix = to_pgsql(entity_df, TMP_TBL, self.offline_store)
                     q = Query.from_(view.batch_source)
                     q = q.inner_join(
                         Query.from_(f"{TMP_TBL}_{table_suffix}").select(
@@ -993,7 +1005,7 @@ class FeatureStore:
                     ).using(*list(entity_dict.keys()))
                 elif entity_df is not None:
                     q = Query.from_(view.batch_source)
-                    table_suffix = to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
+                    table_suffix = to_pgsql(entity_df, TMP_TBL, self.offline_store)
                     q = q.cross_join(
                         Query.from_(f"{TMP_TBL}_{table_suffix}").select(
                             Parameter(f"{TIME_COL} as {TIME_COL}_tmp")
@@ -1013,7 +1025,7 @@ class FeatureStore:
                 )
             else:
                 if entity_df is not None and entities:
-                    table_suffix = to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
+                    table_suffix = to_pgsql(entity_df, TMP_TBL, self.offline_store)
                     q = Query.from_(view.materialize_path)
                     q = q.inner_join(
                         Query.from_(f"{TMP_TBL}_{table_suffix}").select(
@@ -1022,7 +1034,7 @@ class FeatureStore:
                     ).using(*list(entity_dict.values()))
                 elif entity_df is not None:
                     q = Query.from_(view.materialize_path)
-                    table_suffix = to_pgsql(entity_df, TMP_TBL, **self.connection.__dict__)
+                    table_suffix = to_pgsql(entity_df, TMP_TBL, self.offline_store)
                     q = q.cross_join(
                         Query.from_(f"{TMP_TBL}_{table_suffix}").select(
                             Parameter(f"{TIME_COL} as {TIME_COL}_tmp")
@@ -1051,7 +1063,7 @@ class FeatureStore:
             entity = self._get_available_entity_names(view)
         entity_dict = {self.entities[en].join_keys[0] if en in self.entities else None: en for en in entity}
 
-        if self.connection.type == "file":
+        if self.offline_store.type == "file":
             if isinstance(view, (FeatureView, LabelView)):
                 df = self._read_local_file(view, [], entity_dict)
             else:
@@ -1066,8 +1078,8 @@ class FeatureStore:
             df.sort_values(by=TIME_COL, ascending=False, inplace=True, ignore_index=True)
             # due to `ascending=False`, keep the `first` record means the latest one
             df = df.drop_duplicates(subset=list(entity_dict.values()), keep="first")
-        elif self.connection.type == "pgsql":
-            conn = psy_conn(**self.connection.__dict__)
+        elif self.offline_store.type == "pgsql":
+            conn = psy_conn(self.offline_store)
             if isinstance(view, (FeatureView, LabelView)):
                 q = Query.from_(view.batch_source)
                 q = q.groupby(*list(entity_dict.keys())).select(
@@ -1108,10 +1120,10 @@ class FeatureStore:
             query (str, optional): full sql query to execute in db
         """
         assert (
-            self.connection.type != "file"
+            self.offline_store.type != "file"
         ), "query doesnt work for file type project, you can manualy read local files in pandas"
-        if self.connection.type == "pgsql":
-            conn = psy_conn(**self.connection.__dict__)
+        if self.offline_store.type == "pgsql":
+            conn = psy_conn(self.offline_store)
             if return_df:
                 result = pd.DataFrame(sql_df(query, conn))
             else:

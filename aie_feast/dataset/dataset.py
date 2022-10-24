@@ -45,7 +45,7 @@ class IterableDataset(IterableDataset):
     def get_context(self, i: int) -> Tuple[pd.DataFrame, pd.DataFrame]:
         feature_list = []
         label_list = []
-        if self.fs.connection.type == "file":
+        if self.fs.offline_store.type == "file":
             entity = self.entity_index.iloc[[i]]
             feature_views_pd = deepcopy(entity)
             label_views_pd = deepcopy(entity)
@@ -71,8 +71,8 @@ class IterableDataset(IterableDataset):
                 label_list += features
             label_views_pd = label_views_pd[list(entity.columns) + label_list]
 
-        elif self.fs.connection.type == "pgsql":
-            conn = psy_conn(**self.fs.connection.__dict__)
+        elif self.fs.offline_store.type == "pgsql":
+            conn = psy_conn(self.fs.offline_store)
             entity = (
                 Query.from_(f"{SAM_TBL}_{self.table_suffix}")
                 .select(*self.entity_name)
@@ -171,9 +171,9 @@ class Dataset:
         """convert to iterablt pytorch dataset really hold data"""
         entity_index = self.sampler()
         table_suffix = None
-        if self.fs.connection.type == "pgsql":
+        if self.fs.offline_store.type == "pgsql":
             entity_index[ROW] = range(len(entity_index))
-            table_suffix = to_pgsql(entity_index, SAM_TBL, **self.fs.connection.__dict__)
+            table_suffix = to_pgsql(entity_index, SAM_TBL, self.fs.offline_store)
         return IterableDataset(
             self.fs,
             self.service_name,
