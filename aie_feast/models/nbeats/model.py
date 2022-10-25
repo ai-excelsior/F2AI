@@ -208,18 +208,23 @@ class NbeatsNetwork(nn.Module):
 
 
 if __name__ == "__main__":
+    TIME_COL ="event_timestamp"
+
+    # data = pd.read_csv("/Users/zhao123456/Desktop/gitlab/guizhou_traffic/guizhou_traffic.csv")
+    # data = data.iloc[:20000,:]
+    # data.to_csv("/Users/zhao123456/Desktop/gitlab/guizhou_traffic/guizhou_traffic_20000.csv")
 
     fs = FeatureStore("file:///Users/zhao123456/Desktop/gitlab/guizhou_traffic")
     
     dataset = fs.get_dataset(
         service_name="traval_time_prediction_embedding_v1",
         sampler=GroupFixednbrSampler( 
-            time_bucket="10 days",
+            time_bucket="10 minutes",
             stride=1,
             group_ids=None,
             group_names=None,
-            start="2016-03-01",
-            end="2016-07-01",  #set paras
+            start=fs.get_latest_entities(fs.services["traval_time_prediction_embedding_v1"])[TIME_COL].min(),
+            end=fs.get_latest_entities(fs.services["traval_time_prediction_embedding_v1"])[TIME_COL].max(),  
         ),
     )
 
@@ -232,16 +237,16 @@ if __name__ == "__main__":
         fs.services["traval_time_prediction_embedding_v1"],
         fn="unique",
         group_key=[],
-        start="2016-03-01",
-        end="2016-07-01",
+        start=fs.get_latest_entities(fs.services["traval_time_prediction_embedding_v1"])[TIME_COL].min(),
+        end=fs.get_latest_entities(fs.services["traval_time_prediction_embedding_v1"])[TIME_COL].max(),
         features=features_cat,
     ).to_dict()
     cat_count = {key: len(cat_unique[key]) for key in cat_unique.keys()}
     cont_scalar_max = fs.stats(
-        fs.services["traval_time_prediction_embedding_v1"], fn="max", group_key=[], start="2016-03-01", end="2016-07-01"
+        fs.services["traval_time_prediction_embedding_v1"], fn="max", group_key=[], start=fs.get_latest_entities(fs.services["traval_time_prediction_embedding_v1"])[TIME_COL].min(), end=fs.get_latest_entities(fs.services["traval_time_prediction_embedding_v1"])[TIME_COL].max()
     ).to_dict()
     cont_scalar_min = fs.stats(
-        fs.services["traval_time_prediction_embedding_v1"], fn="min", group_key=[], start="2016-03-01", end="2016-07-01"
+        fs.services["traval_time_prediction_embedding_v1"], fn="min", group_key=[], start=fs.get_latest_entities(fs.services["traval_time_prediction_embedding_v1"])[TIME_COL].min(), end=fs.get_latest_entities(fs.services["traval_time_prediction_embedding_v1"])[TIME_COL].max()
     ).to_dict()
     cont_scalar = {key: [cont_scalar_min[key], cont_scalar_max[key]] for key in cont_scalar_min.keys()}
     
