@@ -56,6 +56,7 @@ class FeatureStore:
 
     def __check_format(self, entity_df):
         if isinstance(entity_df, pd.DataFrame):
+            # TODO: Remove this constraint in future
             assert (
                 len(entity_df.columns) >= 1 and entity_df.columns[-1] == TIME_COL
             ), "Check entity_df make sure it has at least 1 columns and event_timestamp at the last column"
