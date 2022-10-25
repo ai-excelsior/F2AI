@@ -54,7 +54,8 @@ class IterableDataset(IterableDataset):
             for period, features in self.all_features.items():
                 if period:
                     tmp_result = self.fs.get_period_features(self.service, entity, period, features, True)
-                    tmp_result.rename({QUERY_COL: TIME_COL}, inplace=True)  # always merge on TIME_COL
+                    tmp_result.drop(columns=[TIME_COL], inplace=True)
+                    tmp_result.rename(columns={QUERY_COL: TIME_COL}, inplace=True)  # always merge on TIME_COL
                 else:
                     tmp_result = self.fs.get_features(self.service, entity, features, True)
                 feature_views_pd = feature_views_pd.merge(tmp_result, how="inner", on=list(entity.columns))
@@ -64,7 +65,8 @@ class IterableDataset(IterableDataset):
             for period, features in self.all_labels.items():
                 if period:
                     tmp_result = self.fs.get_period_labels(self.service, entity, period, False)
-                    tmp_result.rename({QUERY_COL: TIME_COL}, inplace=True)  # always merge on TIME_COL
+                    tmp_result.drop(columns=[TIME_COL], inplace=True)
+                    tmp_result.rename(columns={QUERY_COL: TIME_COL}, inplace=True)  # always merge on TIME_COL
                 else:
                     tmp_result = self.fs.get_labels(self.service, entity, True)
                 label_views_pd = label_views_pd.merge(tmp_result, how="inner", on=list(entity.columns))

@@ -108,7 +108,11 @@ class FeatureStore:
         return entities
 
     def get_features(
-        self, feature_view, entity_df: Union[pd.DataFrame, str], features: list = None, include: bool = True
+        self,
+        feature_view: str,
+        entity_df: Union[pd.DataFrame, str],
+        features: list = None,
+        include: bool = True,
     ):
         """non-series prediction use: get `features` of `entity_df` from `feature_views`
 
@@ -118,8 +122,17 @@ class FeatureStore:
             features (List, optional): features to return. Defaults to None means all features.
             include (bool, optional):  include timestamp defined in `entity_df` or not. Defaults to True.
         """
+        if feature_view in self.feature_views.keys():
+            return self.feature_views[feature_view]
+        elif feature_view in self.label_views.keys():
+            return self.feature_views[feature_view]
+        elif feature_view in self.services.keys():
+            return self.services[feature_view]
+        else:
+            raise ValueError("Can't find any views/services")
 
         self.__check_format(entity_df)
+
         if not features:
             features = self._get_available_features(feature_view)
 
@@ -1070,7 +1083,7 @@ class FeatureStore:
             else:
                 df = read_file(
                     os.path.join(self.project_folder, view.materialize_path),
-                    file_cols=[TIME_COL],
+                    time_cols=[TIME_COL],
                     entity_cols=list(entity_dict.keys()),
                 )
                 df.rename(columns=entity_dict, inplace=True)

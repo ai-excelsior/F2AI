@@ -1,9 +1,10 @@
-from typing import List, Union
+from typing import List, Union, Tuple
 import pandas as pd
 from pypika import functions as fn, Parameter
 from pypika.queries import QueryBuilder
 from pandas._libs.tslibs.timestamps import Timestamp
-
+import oss2
+import os
 
 FSKEY = "__FS__"
 TIME_COL = "event_timestamp"
@@ -281,3 +282,25 @@ def get_stats_result(data, fn, primary_keys, include, start):
         return data[(data[TIME_COL + "_x"] <= data[TIME_COL + "_y"]) & (data[TIME_COL + "_x"] >= start)][
             [fea for fea in data.columns if fea not in primary_keys]
         ].apply(lambda x: getattr(pd.Series, fn)(x), axis=0)
+
+
+def get_bucket(bucket, endpoint=None):
+    key_id = os.environ.get("OSS_ACCESS_KEY_ID")
+    key_secret = os.environ.get("OSS_ACCESS_KEY_SECRET")
+    endpoint = endpoint or os.environ.get("OSS_ENDPOINT")
+
+    return oss2.Bucket(oss2.Auth(key_id, key_secret), endpoint, bucket)
+
+
+def parse_oss_url(url: str) -> Tuple[str, str, str]:
+    """
+    url format:  oss://{bucket}/{key}
+    """
+    url = remove_prefix(url, "oss://")
+    components = url.split("/")
+    return components[0], "/".join(components[1:])
+
+
+def get_bucket_from_oss_url(url: str):
+    bucket_name, key = parse_oss_url(url)
+    return get_bucket(bucket_name), key

@@ -1,6 +1,5 @@
 import torch
 import pandas as pd
-import numpy as np
 from aie_feast.models.encoder import LabelEncoder
 from aie_feast.models.normalizer import MinMaxNormalizer
 

@@ -82,9 +82,10 @@ if __name__ == "__main__":
                 ],
             }
         )
-        fs.stats(fs.service["credit_scoring_v1"], entity_df=entity_dobssn_period, fn="mean")
+        # fs.stats(fs.services["credit_scoring_v1"], fn="max", group_key=[], features=["event_timestamp"])
+        fs.get_latest_entities(fs.services["credit_scoring_v1"])
 
-    # stats()
+    stats()
 
     def get_features():
         entity_link = pd.DataFrame.from_dict(

@@ -4,8 +4,8 @@
 *.pdf
 *.h5
 *.dump
-*.ipynb
 .env
+*.pk
 **.yaml
 **/*.pyc
 **/**/*.pyc

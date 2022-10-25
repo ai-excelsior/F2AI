@@ -4,6 +4,7 @@ import math
 import pandas as pd
 import warnings
 from typing import Union, List
+import datetime
 
 TIME_COL = "event_timestamp"
 
@@ -24,9 +25,9 @@ class AbstractSampler:
         self._stride = stride
 
         assert self._end > self._start, "end should be greater than start!"
-        assert self._stride < int(
+        assert self._stride <= int(
             self._time_bucket.split(" ", 1)[0]
-        ), "time_bucket should be grater than stride!"
+        ), "time_bucket should be no less than stride!"
 
     def time_bucket_num(self):
 
