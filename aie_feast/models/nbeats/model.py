@@ -218,8 +218,8 @@ if __name__ == "__main__":
             stride=1,
             group_ids=None,
             group_names=None,
-            start="2020-03-01",
-            end="2021-07-01",  #set paras
+            start="2016-03-01",
+            end="2016-07-01",  #set paras
         ),
     )
 
@@ -232,26 +232,28 @@ if __name__ == "__main__":
         fs.services["traval_time_prediction_embedding_v1"],
         fn="unique",
         group_key=[],
-        start="2020-03-01",
-        end="2021-07-01",
+        start="2016-03-01",
+        end="2016-07-01",
         features=features_cat,
     ).to_dict()
     cat_count = {key: len(cat_unique[key]) for key in cat_unique.keys()}
     cont_scalar_max = fs.stats(
-        fs.services["traval_time_prediction_embedding_v1"], fn="max", group_key=[], start="2020-03-01", end="2021-07-01"
+        fs.services["traval_time_prediction_embedding_v1"], fn="max", group_key=[], start="2016-03-01", end="2016-07-01"
     ).to_dict()
     cont_scalar_min = fs.stats(
-        fs.services["traval_time_prediction_embedding_v1"], fn="min", group_key=[], start="2020-03-01", end="2021-07-01"
+        fs.services["traval_time_prediction_embedding_v1"], fn="min", group_key=[], start="2016-03-01", end="2016-07-01"
     ).to_dict()
     cont_scalar = {key: [cont_scalar_min[key], cont_scalar_max[key]] for key in cont_scalar_min.keys()}
-    label = fs._get_available_labels(fs.services["traval_time_prediction_embedding_v1"]),
+    
+    label = fs._get_available_labels(fs.services["traval_time_prediction_embedding_v1"])
+    del cont_scalar[label[0]]
 
     i_ds = dataset.to_pytorch()
     test_data_loader = DataLoader(  
         i_ds,
         collate_fn=lambda x: nbeats_collet_fn(
             x,
-            cont_scalar=cont_scalar.pop(label[0]),
+            cont_scalar=cont_scalar,
             categoricals=cat_unique,           
             label=label,
         ),
@@ -262,11 +264,13 @@ if __name__ == "__main__":
 
     model = NbeatsNetwork(
         targets=label,
-        prediction_length= fs.services["traval_time_prediction_embedding_v1"]['labels'].period,
-        context_length= fs.services["traval_time_prediction_embedding_v1"]['features'].period, 
-        covariate_number = len(cont_scalar) - 1,
-        encoder_cont = list(cont_scalar.keys()),
-        decoder_cont = list(cont_scalar.keys()).remove(label[0]), 
+        # prediction_length= fs.services["traval_time_prediction_embedding_v1"].labels[0].period,
+        # context_length= max([feature.period for feature in fs.services["traval_time_prediction_embedding_v1"].features if feature.period is not None]), 
+        prediction_length= 30,
+        context_length= 60,        
+        covariate_number = len(cont_scalar),
+        encoder_cont = list(cont_scalar.keys()) + label,
+        decoder_cont = list(cont_scalar.keys()), 
         x_categoricals = features_cat,
         output_size=1,
     ) 
