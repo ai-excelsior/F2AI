@@ -53,22 +53,24 @@ class IterableDataset(IterableDataset):
 
             for period, features in self.all_features.items():
                 if period:
-                    tmp_result = self.fs.get_period_features(self.service, entity, period, features, True)
+                    tmp_result = self.fs.get_period_features(
+                        self.service_name, entity, period, features, True
+                    )
                     tmp_result.drop(columns=[TIME_COL], inplace=True)
                     tmp_result.rename(columns={QUERY_COL: TIME_COL}, inplace=True)  # always merge on TIME_COL
                 else:
-                    tmp_result = self.fs.get_features(self.service, entity, features, True)
+                    tmp_result = self.fs.get_features(self.service_name, entity, features, True)
                 feature_views_pd = feature_views_pd.merge(tmp_result, how="inner", on=list(entity.columns))
                 feature_list += features
             feature_views_pd = feature_views_pd[list(entity.columns) + feature_list]
 
             for period, features in self.all_labels.items():
                 if period:
-                    tmp_result = self.fs.get_period_labels(self.service, entity, period, False)
+                    tmp_result = self.fs.get_period_labels(self.service_name, entity, period, False)
                     tmp_result.drop(columns=[TIME_COL], inplace=True)
                     tmp_result.rename(columns={QUERY_COL: TIME_COL}, inplace=True)  # always merge on TIME_COL
                 else:
-                    tmp_result = self.fs.get_labels(self.service, entity, True)
+                    tmp_result = self.fs.get_labels(self.service_name, entity, True)
                 label_views_pd = label_views_pd.merge(tmp_result, how="inner", on=list(entity.columns))
                 label_list += features
             label_views_pd = label_views_pd[list(entity.columns) + label_list]

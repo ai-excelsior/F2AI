@@ -107,6 +107,16 @@ class FeatureStore:
             raise TypeError("must be FeatureViews, LabelViews or Service")
         return entities
 
+    def _get_views(self, view_name):
+        if view_name in self.feature_views.keys():
+            return self.feature_views[view_name]
+        elif view_name in self.label_views.keys():
+            return self.label_views[view_name]
+        elif view_name in self.services.keys():
+            return self.services[view_name]
+        else:
+            raise ValueError("Can't find any views/services")
+
     def get_features(
         self,
         feature_view: str,
@@ -117,21 +127,14 @@ class FeatureStore:
         """non-series prediction use: get `features` of `entity_df` from `feature_views`
 
         Args:
-            feature_view : Single FeatureViews or Service(after materialzed) to lookup. Defaults to None.
+            feature_view : Single FeatureViews or Service(after materialzed) name to lookup. Defaults to None.
             entity_df (pd.DataFrame): condition. Defaults to None.
             features (List, optional): features to return. Defaults to None means all features.
             include (bool, optional):  include timestamp defined in `entity_df` or not. Defaults to True.
         """
-        if feature_view in self.feature_views.keys():
-            return self.feature_views[feature_view]
-        elif feature_view in self.label_views.keys():
-            return self.feature_views[feature_view]
-        elif feature_view in self.services.keys():
-            return self.services[feature_view]
-        else:
-            raise ValueError("Can't find any views/services")
 
         self.__check_format(entity_df)
+        feature_view = self._get_views(feature_view)
 
         if not features:
             features = self._get_available_features(feature_view)
@@ -174,6 +177,7 @@ class FeatureStore:
             features (List, optional): features to return. Defaults to None means all features.
             include (bool, optional): include timestamp defined in `entity_df` or not. Defaults to True.
         """
+        feature_view = self._get_views(feature_view)
         self.__check_format(entity_df)
         if not features:
             features = self._get_available_features(feature_view)
@@ -209,11 +213,12 @@ class FeatureStore:
         """non-time series prediction use: get labels of `entity_df` from `label_views`
 
         Args:
-            label_views:Single LabelViews or Service(after materialzed) to lookup. Defaults to None.
+            label_views:Single LabelViews or Service(after materialzed) name to lookup. Defaults to None.
             entity_df (pd.DataFrame): condition
             include (bool, optional): include timestamp defined in `entity_df` or not. Defaults to False.
         """
         self.__check_format(entity_df)
+        label_view = self._get_views(label_view)
         labels = self._get_available_labels(label_view)
 
         if self.offline_store.type == "file":
@@ -247,12 +252,13 @@ class FeatureStore:
         """time series prediction use: get from `start` to `end` length labels of `entity_df` from `label_views`
 
         Args:
-            label_views:Single LabelViews or Service(after materialzed) to lookup. Defaults to None.
+            label_views:Single LabelViews or Service(after materialzed) name to lookup. Defaults to None.
             entity_df (pd.DataFrame): condition
             period (str): length of look_forward
             include (bool, optional): include timestamp defined in `entity_df` or not. Defaults to False.
         """
         self.__check_format(entity_df)
+        label_view = self._get_views(label_view)
         labels = self._get_available_labels(label_view)
 
         if self.offline_store.type == "file":
@@ -909,7 +915,7 @@ class FeatureStore:
 
     def stats(
         self,
-        view,
+        view: str,
         entity_df: pd.DataFrame = None,
         features: List[str] = None,
         group_key: List[str] = None,
@@ -922,7 +928,7 @@ class FeatureStore:
         """get from `start` to `end` statistical `fn` results of `entity_df` from `views`, only work for numeric features varied with time
 
         Args:
-            views (List): _description_
+            views (List): name of view to look up
             entity_df (pd.DataFrame,optional), if given, ignore `start` and `end`. Defaults to None, has the supreme priority.
             group_key (list): joined-columns to do stats,  only works when `entity_df` is None, if None, means do stats on joined-entities.
             fn (str, optional): statistical method, min, max, std, avg, mode, median. Defaults to "mean".
@@ -932,6 +938,7 @@ class FeatureStore:
             keys_only(bool,optional): whether to take action on keys
         """
         self.__check_fns(fn)
+        view = self._get_views(view)
         check_type = True if fn != "unique" else False
         if entity_df is not None:
             self.__check_format(entity_df)
@@ -1067,12 +1074,13 @@ class FeatureStore:
                 result = list(result.groupby(*list(entity_dict.values())).groups.keys())
         return result
 
-    def get_latest_entities(self, view, entity: List[str] = []):
+    def get_latest_entities(self, view: str, entity: List[str] = []):
         """get latest entity and its timestamp from a single FeatureViews/LabelViews or a materialzed Service
 
         Args:
-            views (List): _description_
+            views (List): view to look up
         """
+        view = self._get_views(view)
         if not entity:
             entity = self._get_available_entity_names(view)
         entity_dict = {self.entities[en].join_keys[0] if en in self.entities else None: en for en in entity}
