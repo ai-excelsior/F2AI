@@ -14579,7 +14579,74 @@ body[data-format='mobile'] .jp-OutputArea-child .jp-OutputArea-output {
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
-<p>Example: Credit Score Classification</p>
+<p><font size=6>Example: Credit Score Classification</font></p>
+
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
+<p><font size=2>`FeatureStore` is a model-agnostic tool aiming to help data scientists and algorithm engineers get rid of tiring data storing and merging tasks.
+<br>`FeatureStore` not only work on single-dimension data such as classification and prediction, but also work on time-series data.
+ <br>After collecting data, all you need to do is config several straight-forward .yml files, then you can focus on  models/algorithms and leave all exhausting preparation to `FeatureStore`.</font>
+ <font size=4><br><br>Here we present credit scoring mission as a single-dimension data demo, it takes features like wages, loan records to decide whether to grant credit or not.</font></p>
+
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
+<p><font size=4>Import packages</font></p>
+
+</div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[&nbsp;]:</div>
+<div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+     <div class="CodeMirror cm-s-jupyter">
+<div class=" highlight hl-ipython3"><pre><span></span><span class="kn">import</span> <span class="nn">torch</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">zipfile</span>
+<span class="kn">import</span> <span class="nn">tempfile</span>
+<span class="kn">from</span> <span class="nn">torch</span> <span class="kn">import</span> <span class="n">nn</span>
+<span class="kn">from</span> <span class="nn">torch.utils.data</span> <span class="kn">import</span> <span class="n">DataLoader</span>
+<span class="kn">from</span> <span class="nn">aie_feast.featurestore</span> <span class="kn">import</span> <span class="n">FeatureStore</span>
+<span class="kn">from</span> <span class="nn">aie_feast.common.sampler</span> <span class="kn">import</span> <span class="n">GroupFixednbrSampler</span>
+<span class="kn">from</span> <span class="nn">aie_feast.common.collect_fn</span> <span class="kn">import</span> <span class="n">classify_collet_fn</span>
+<span class="kn">from</span> <span class="nn">aie_feast.common.utils</span> <span class="kn">import</span> <span class="n">get_bucket_from_oss_url</span>
+<span class="kn">from</span> <span class="nn">aie_feast.models.earlystop</span> <span class="kn">import</span> <span class="n">EarlyStopping</span>    
+<span class="kn">from</span> <span class="nn">aie_feast.models.sequential</span> <span class="kn">import</span> <span class="n">SimpleClassify</span>
+</pre></div>
+
+     </div>
+</div>
+</div>
+</div>
+
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
+<p><font size=4>Download demo project files from `OSS` </font></p>
 
 </div>
 </div>
@@ -14592,24 +14659,16 @@ body[data-format='mobile'] .jp-OutputArea-child .jp-OutputArea-output {
 <div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[&nbsp;]:</div>
 <div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
      <div class="CodeMirror cm-s-jupyter">
-<div class=" highlight hl-ipython3"><pre><span></span><span class="kn">import</span> <span class="nn">torch</span>
-<span class="kn">import</span> <span class="nn">os</span>
-<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
-<span class="kn">from</span> <span class="nn">torch</span> <span class="kn">import</span> <span class="n">nn</span>
-<span class="kn">from</span> <span class="nn">torch.utils.data</span> <span class="kn">import</span> <span class="n">DataLoader</span>
-<span class="kn">from</span> <span class="nn">aie_feast.featurestore</span> <span class="kn">import</span> <span class="n">FeatureStore</span>
-<span class="kn">from</span> <span class="nn">aie_feast.common.sampler</span> <span class="kn">import</span> <span class="n">GroupFixednbrSampler</span>
-<span class="kn">from</span> <span class="nn">aie_feast.common.collect_fn</span> <span class="kn">import</span> <span class="n">classify_collet_fn</span>
-<span class="kn">from</span> <span class="nn">aie_feast.models.earlystop</span> <span class="kn">import</span> <span class="n">EarlyStopping</span>    
-<span class="kn">from</span> <span class="nn">aie_feast.models.sequential</span> <span class="kn">import</span> <span class="n">SimpleClassify</span>
-
-<span class="n">TIME_COL</span> <span class="o">=</span> <span class="s1">&#39;event_timestamp&#39;</span>
-<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
-    <span class="c1"># initialize FeatureStore</span>
-    <span class="n">fs</span> <span class="o">=</span> <span class="n">FeatureStore</span><span class="p">(</span><span class="s2">&quot;file:///Users/xuyizhou/Desktop/xyz_warehouse/gitlab/f2ai-credit-scoring&quot;</span><span class="p">)</span>
-    <span class="c1">#get time range</span>
-    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;earliest timestamp: </span><span class="si">{</span><span class="n">fs</span><span class="o">.</span><span class="n">get_latest_entities</span><span class="p">(</span><span class="n">fs</span><span class="o">.</span><span class="n">services</span><span class="p">[</span><span class="s2">&quot;credit_scoring_v1&quot;</span><span class="p">])[</span><span class="n">TIME_COL</span><span class="p">]</span><span class="o">.</span><span class="n">min</span><span class="p">()</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
-    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;latest timestamp: </span><span class="si">{</span><span class="n">fs</span><span class="o">.</span><span class="n">get_latest_entities</span><span class="p">(</span><span class="n">fs</span><span class="o">.</span><span class="n">services</span><span class="p">[</span><span class="s2">&quot;credit_scoring_v1&quot;</span><span class="p">])[</span><span class="n">TIME_COL</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+<div class=" highlight hl-ipython3"><pre><span></span><span class="n">download_from</span> <span class="o">=</span> <span class="s2">&quot;oss://aiexcelsior-shanghai-test/xyz_test_data/credit_score.zip&quot;</span>
+<span class="n">save_path</span> <span class="o">=</span> <span class="s1">&#39;/tmp/&#39;</span>
+<span class="n">save_dir</span> <span class="o">=</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">mkdtemp</span><span class="p">(</span><span class="n">prefix</span><span class="o">=</span><span class="n">save_path</span><span class="p">)</span>
+<span class="n">bucket</span><span class="p">,</span> <span class="n">key</span> <span class="o">=</span> <span class="n">get_bucket_from_oss_url</span><span class="p">(</span><span class="n">download_from</span><span class="p">)</span>
+<span class="n">dest_zip_filepath</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">save_dir</span><span class="p">,</span><span class="n">key</span><span class="p">)</span>
+<span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">dest_zip_filepath</span><span class="p">),</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">bucket</span><span class="o">.</span><span class="n">get_object_to_file</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">dest_zip_filepath</span><span class="p">)</span>
+<span class="n">zipfile</span><span class="o">.</span><span class="n">ZipFile</span><span class="p">(</span><span class="n">dest_zip_filepath</span><span class="p">)</span><span class="o">.</span><span class="n">extractall</span><span class="p">(</span><span class="n">dest_zip_filepath</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span><span class="mi">1</span><span class="p">)[</span><span class="mi">0</span><span class="p">])</span>
+<span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">dest_zip_filepath</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Project downloaded and saved in </span><span class="si">{</span><span class="n">dest_zip_filepath</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span><span class="mi">1</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </pre></div>
 
      </div>
@@ -14631,8 +14690,7 @@ body[data-format='mobile'] .jp-OutputArea-child .jp-OutputArea-output {
 
 
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain">
-<pre>earliest timestamp: 2020-08-25 20:34:41.361000+00:00
-latest timestamp: 2021-08-25 20:34:41.361000+00:00
+<pre>Project downloaded and saved in /tmp/v6tc4uau/xyz_test_data
 </pre>
 </div>
 </div>
@@ -14641,6 +14699,18 @@ latest timestamp: 2021-08-25 20:34:41.361000+00:00
 
 </div>
 
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
+<p><font size=4>Initialize `FeatureStore`</font></p>
+
+</div>
+</div>
+</div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
 <div class="jp-Cell-inputWrapper">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
@@ -14649,8 +14719,128 @@ latest timestamp: 2021-08-25 20:34:41.361000+00:00
 <div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[&nbsp;]:</div>
 <div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
      <div class="CodeMirror cm-s-jupyter">
-<div class=" highlight hl-ipython3"><pre><span></span><span class="c1">#split dataset in train/valid/test at approximately 7/2/1</span>
-<span class="n">ds_train</span> <span class="o">=</span> <span class="n">fs</span><span class="o">.</span><span class="n">get_dataset</span><span class="p">(</span>
+<div class=" highlight hl-ipython3"><pre><span></span><span class="n">TIME_COL</span> <span class="o">=</span> <span class="s1">&#39;event_timestamp&#39;</span>
+<span class="n">fs</span> <span class="o">=</span> <span class="n">FeatureStore</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;file://</span><span class="si">{</span><span class="n">save_dir</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">key</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s1">&#39;.zip&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
+
+     </div>
+</div>
+</div>
+</div>
+
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[&nbsp;]:</div>
+<div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+     <div class="CodeMirror cm-s-jupyter">
+<div class=" highlight hl-ipython3"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;All features are: </span><span class="si">{</span><span class="n">fs</span><span class="o">.</span><span class="n">_get_available_features</span><span class="p">(</span><span class="n">fs</span><span class="o">.</span><span class="n">services</span><span class="p">[</span><span class="s1">&#39;credit_scoring_v1&#39;</span><span class="p">])</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
+
+     </div>
+</div>
+</div>
+</div>
+
+<div class="jp-Cell-outputWrapper">
+<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
+</div>
+
+
+<div class="jp-OutputArea jp-Cell-outputArea">
+
+<div class="jp-OutputArea-child">
+
+    
+    <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
+
+
+<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain">
+<pre>All features are: [&#39;missed_payments_1y&#39;, &#39;loan_int_rate&#39;, &#39;city&#39;, &#39;student_loan_due&#39;, &#39;vehicle_loan_due&#39;, &#39;credit_card_due&#39;, &#39;loan_intent&#39;, &#39;missed_payments_2y&#39;, &#39;person_home_ownership&#39;, &#39;person_emp_length&#39;, &#39;total_wages&#39;, &#39;missed_payments_6m&#39;, &#39;loan_amnt&#39;, &#39;tax_returns_filed&#39;, &#39;state&#39;, &#39;hard_pulls&#39;, &#39;person_income&#39;, &#39;population&#39;, &#39;person_age&#39;, &#39;bankruptcies&#39;, &#39;location_type&#39;, &#39;mortgage_due&#39;]
+</pre>
+</div>
+</div>
+
+</div>
+
+</div>
+
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
+<p><font size=4>Get the time range of available data</font></p>
+
+</div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[&nbsp;]:</div>
+<div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+     <div class="CodeMirror cm-s-jupyter">
+<div class=" highlight hl-ipython3"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Earliest timestamp: </span><span class="si">{</span><span class="n">fs</span><span class="o">.</span><span class="n">get_latest_entities</span><span class="p">(</span><span class="s2">&quot;credit_scoring_v1&quot;</span><span class="p">)[</span><span class="n">TIME_COL</span><span class="p">]</span><span class="o">.</span><span class="n">min</span><span class="p">()</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Latest timestamp: </span><span class="si">{</span><span class="n">fs</span><span class="o">.</span><span class="n">get_latest_entities</span><span class="p">(</span><span class="s2">&quot;credit_scoring_v1&quot;</span><span class="p">)[</span><span class="n">TIME_COL</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+</pre></div>
+
+     </div>
+</div>
+</div>
+</div>
+
+<div class="jp-Cell-outputWrapper">
+<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
+</div>
+
+
+<div class="jp-OutputArea jp-Cell-outputArea">
+
+<div class="jp-OutputArea-child">
+
+    
+    <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
+
+
+<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain">
+<pre>Earliest timestamp: 2020-08-25 20:34:41.361000+00:00
+Latest timestamp: 2021-08-25 20:34:41.361000+00:00
+</pre>
+</div>
+</div>
+
+</div>
+
+</div>
+
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
+<p><font size=4>Split the train / valid / test data at approximately 7/2/1, use `GroupFixednbrSampler` to downsample original data and return a `torch.IterableDataset`</font></p>
+
+</div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[&nbsp;]:</div>
+<div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+     <div class="CodeMirror cm-s-jupyter">
+<div class=" highlight hl-ipython3"><pre><span></span><span class="n">ds_train</span> <span class="o">=</span> <span class="n">fs</span><span class="o">.</span><span class="n">get_dataset</span><span class="p">(</span>
         <span class="n">service_name</span><span class="o">=</span><span class="s2">&quot;credit_scoring_v1&quot;</span><span class="p">,</span>
         <span class="n">sampler</span><span class="o">=</span><span class="n">GroupFixednbrSampler</span><span class="p">(</span>
             <span class="n">time_bucket</span><span class="o">=</span><span class="s2">&quot;5 days&quot;</span><span class="p">,</span>
@@ -14690,7 +14880,19 @@ latest timestamp: 2021-08-25 20:34:41.361000+00:00
 </div>
 </div>
 
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
+<p><font size=4>Using `FeatureStore.stats` to obtain `statistical results` for data processing</font></p>
+
+</div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
 <div class="jp-Cell-inputWrapper">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -14698,22 +14900,23 @@ latest timestamp: 2021-08-25 20:34:41.361000+00:00
 <div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[&nbsp;]:</div>
 <div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
      <div class="CodeMirror cm-s-jupyter">
-<div class=" highlight hl-ipython3"><pre><span></span><span class="c1"># get catgorical features</span>
+<div class=" highlight hl-ipython3"><pre><span></span><span class="c1"># catgorical features</span>
 <span class="n">features_cat</span> <span class="o">=</span> <span class="p">[</span>  
     <span class="n">fea</span>
     <span class="k">for</span> <span class="n">fea</span> <span class="ow">in</span> <span class="n">fs</span><span class="o">.</span><span class="n">_get_available_features</span><span class="p">(</span><span class="n">fs</span><span class="o">.</span><span class="n">services</span><span class="p">[</span><span class="s2">&quot;credit_scoring_v1&quot;</span><span class="p">])</span>
-    <span class="k">if</span> <span class="n">fea</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">fs</span><span class="o">.</span><span class="n">_get_available_features</span><span class="p">(</span><span class="n">fs</span><span class="o">.</span><span class="n">services</span><span class="p">[</span><span class="s2">&quot;credit_scoring_v1&quot;</span><span class="p">],</span> <span class="kc">True</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">fea</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">fs</span><span class="o">.</span><span class="n">_get_available_features</span><span class="p">(</span><span class="n">fs</span><span class="o">.</span><span class="n">services</span><span class="p">[</span><span class="s2">&quot;credit_scoring_v1&quot;</span><span class="p">],</span> <span class="n">is_numeric</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="p">]</span>
 <span class="c1"># get unique item number to do labelencoder</span>
 <span class="n">cat_unique</span> <span class="o">=</span> <span class="n">fs</span><span class="o">.</span><span class="n">stats</span><span class="p">(</span>
-    <span class="n">fs</span><span class="o">.</span><span class="n">services</span><span class="p">[</span><span class="s2">&quot;credit_scoring_v1&quot;</span><span class="p">],</span>
+    <span class="s2">&quot;credit_scoring_v1&quot;</span><span class="p">,</span>
     <span class="n">fn</span><span class="o">=</span><span class="s2">&quot;unique&quot;</span><span class="p">,</span>
     <span class="n">group_key</span><span class="o">=</span><span class="p">[],</span>
     <span class="n">start</span><span class="o">=</span><span class="s2">&quot;2020-08-01&quot;</span><span class="p">,</span>
-    <span class="n">end</span><span class="o">=</span><span class="s2">&quot;2021-09-30&quot;</span><span class="p">,</span>
+    <span class="n">end</span><span class="o">=</span><span class="s2">&quot;2021-04-30&quot;</span><span class="p">,</span>
     <span class="n">features</span><span class="o">=</span><span class="n">features_cat</span><span class="p">,</span>
 <span class="p">)</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span>
 <span class="n">cat_count</span> <span class="o">=</span> <span class="p">{</span><span class="n">key</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">cat_unique</span><span class="p">[</span><span class="n">key</span><span class="p">])</span> <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">cat_unique</span><span class="o">.</span><span class="n">keys</span><span class="p">()}</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Number of unique values of categorical features are: </span><span class="si">{</span><span class="n">cat_count</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </pre></div>
 
      </div>
@@ -14721,7 +14924,30 @@ latest timestamp: 2021-08-25 20:34:41.361000+00:00
 </div>
 </div>
 
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
+<div class="jp-Cell-outputWrapper">
+<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
+</div>
+
+
+<div class="jp-OutputArea jp-Cell-outputArea">
+
+<div class="jp-OutputArea-child">
+
+    
+    <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
+
+
+<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain">
+<pre>Number of unique values of categorical features are: {&#39;city&#39;: 8166, &#39;loan_intent&#39;: 6, &#39;person_home_ownership&#39;: 4, &#39;state&#39;: 51, &#39;location_type&#39;: 1}
+</pre>
+</div>
+</div>
+
+</div>
+
+</div>
+
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
 <div class="jp-Cell-inputWrapper">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -14729,14 +14955,15 @@ latest timestamp: 2021-08-25 20:34:41.361000+00:00
 <div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[&nbsp;]:</div>
 <div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
      <div class="CodeMirror cm-s-jupyter">
-<div class=" highlight hl-ipython3"><pre><span></span><span class="c1"># get min and max for each contiouns features to do MinMax normalization</span>
+<div class=" highlight hl-ipython3"><pre><span></span><span class="c1"># contiouns features </span>
 <span class="n">cont_scalar_max</span> <span class="o">=</span> <span class="n">fs</span><span class="o">.</span><span class="n">stats</span><span class="p">(</span>
-    <span class="n">fs</span><span class="o">.</span><span class="n">services</span><span class="p">[</span><span class="s2">&quot;credit_scoring_v1&quot;</span><span class="p">],</span> <span class="n">fn</span><span class="o">=</span><span class="s2">&quot;max&quot;</span><span class="p">,</span> <span class="n">group_key</span><span class="o">=</span><span class="p">[],</span> <span class="n">start</span><span class="o">=</span><span class="s2">&quot;2020-08-01&quot;</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="s2">&quot;2021-09-30&quot;</span>
+    <span class="s2">&quot;credit_scoring_v1&quot;</span><span class="p">,</span> <span class="n">fn</span><span class="o">=</span><span class="s2">&quot;max&quot;</span><span class="p">,</span> <span class="n">group_key</span><span class="o">=</span><span class="p">[],</span> <span class="n">start</span><span class="o">=</span><span class="s2">&quot;2020-08-01&quot;</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="s2">&quot;2021-04-30&quot;</span>
 <span class="p">)</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span>
 <span class="n">cont_scalar_min</span> <span class="o">=</span> <span class="n">fs</span><span class="o">.</span><span class="n">stats</span><span class="p">(</span>
-    <span class="n">fs</span><span class="o">.</span><span class="n">services</span><span class="p">[</span><span class="s2">&quot;credit_scoring_v1&quot;</span><span class="p">],</span> <span class="n">fn</span><span class="o">=</span><span class="s2">&quot;min&quot;</span><span class="p">,</span> <span class="n">group_key</span><span class="o">=</span><span class="p">[],</span> <span class="n">start</span><span class="o">=</span><span class="s2">&quot;2020-08-01&quot;</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="s2">&quot;2021-09-30&quot;</span>
+    <span class="s2">&quot;credit_scoring_v1&quot;</span><span class="p">,</span> <span class="n">fn</span><span class="o">=</span><span class="s2">&quot;min&quot;</span><span class="p">,</span> <span class="n">group_key</span><span class="o">=</span><span class="p">[],</span> <span class="n">start</span><span class="o">=</span><span class="s2">&quot;2020-08-01&quot;</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="s2">&quot;2021-04-30&quot;</span>
 <span class="p">)</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span>
 <span class="n">cont_scalar</span> <span class="o">=</span> <span class="p">{</span><span class="n">key</span><span class="p">:</span> <span class="p">[</span><span class="n">cont_scalar_min</span><span class="p">[</span><span class="n">key</span><span class="p">],</span> <span class="n">cont_scalar_max</span><span class="p">[</span><span class="n">key</span><span class="p">]]</span> <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">cont_scalar_min</span><span class="o">.</span><span class="n">keys</span><span class="p">()}</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Min-Max boundary of continuous features are: </span><span class="si">{</span><span class="n">cont_scalar</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </pre></div>
 
      </div>
@@ -14744,6 +14971,42 @@ latest timestamp: 2021-08-25 20:34:41.361000+00:00
 </div>
 </div>
 
+<div class="jp-Cell-outputWrapper">
+<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
+</div>
+
+
+<div class="jp-OutputArea jp-Cell-outputArea">
+
+<div class="jp-OutputArea-child">
+
+    
+    <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
+
+
+<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain">
+<pre>Min-Max boundary of continuous features are: {&#39;person_income&#39;: [4000.0, 6000000.0], &#39;missed_payments_1y&#39;: [0.0, 3.0], &#39;person_age&#39;: [20.0, 144.0], &#39;loan_amnt&#39;: [500.0, 35000.0], &#39;population&#39;: [272.0, 88503.0], &#39;loan_int_rate&#39;: [5.42, 23.22], &#39;student_loan_due&#39;: [0.0, 49997.0], &#39;person_emp_length&#39;: [0.0, 41.0], &#39;vehicle_loan_due&#39;: [1.0, 29998.0], &#39;bankruptcies&#39;: [0.0, 2.0], &#39;tax_returns_filed&#39;: [250.0, 47778.0], &#39;credit_card_due&#39;: [0.0, 9998.0], &#39;mortgage_due&#39;: [33.0, 1999896.0], &#39;total_wages&#39;: [0.0, 2132869892.0], &#39;missed_payments_6m&#39;: [0.0, 1.0], &#39;hard_pulls&#39;: [0.0, 10.0], &#39;missed_payments_2y&#39;: [0.0, 7.0]}
+</pre>
+</div>
+</div>
+
+</div>
+
+</div>
+
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
+<p><font size=4>Construct `torch.DataLoader` from  `torch.IterableDataset` for modelling</font>
+<font size = 3><br>Here we compose data-preprocess in `collect_fn`, so the time range of `statistical results` used to `.fit()` should be corresponding to `train` data only so as to avoid information leakage. </font></p>
+
+</div>
+</div>
+</div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
 <div class="jp-Cell-inputWrapper">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
@@ -14752,7 +15015,8 @@ latest timestamp: 2021-08-25 20:34:41.361000+00:00
 <div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[&nbsp;]:</div>
 <div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
      <div class="CodeMirror cm-s-jupyter">
-<div class=" highlight hl-ipython3"><pre><span></span><span class="c1">#construct dataloader</span>
+<div class=" highlight hl-ipython3"><pre><span></span><span class="n">batch_size</span><span class="o">=</span><span class="mi">16</span>
+
 <span class="n">train_dataloader</span> <span class="o">=</span> <span class="n">DataLoader</span><span class="p">(</span>  
     <span class="n">ds_train</span><span class="o">.</span><span class="n">to_pytorch</span><span class="p">(),</span>
     <span class="n">collate_fn</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">classify_collet_fn</span><span class="p">(</span>
@@ -14761,7 +15025,7 @@ latest timestamp: 2021-08-25 20:34:41.361000+00:00
         <span class="n">cont_scalar</span><span class="o">=</span><span class="n">cont_scalar</span><span class="p">,</span>
         <span class="n">label</span><span class="o">=</span><span class="n">fs</span><span class="o">.</span><span class="n">_get_available_labels</span><span class="p">(</span><span class="n">fs</span><span class="o">.</span><span class="n">services</span><span class="p">[</span><span class="s2">&quot;credit_scoring_v1&quot;</span><span class="p">]),</span>
     <span class="p">),</span>
-    <span class="n">batch_size</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span>
+    <span class="n">batch_size</span><span class="o">=</span><span class="n">batch_size</span><span class="p">,</span>
     <span class="n">drop_last</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
 <span class="p">)</span>
 
@@ -14773,7 +15037,7 @@ latest timestamp: 2021-08-25 20:34:41.361000+00:00
         <span class="n">cont_scalar</span><span class="o">=</span><span class="n">cont_scalar</span><span class="p">,</span>
         <span class="n">label</span><span class="o">=</span><span class="n">fs</span><span class="o">.</span><span class="n">_get_available_labels</span><span class="p">(</span><span class="n">fs</span><span class="o">.</span><span class="n">services</span><span class="p">[</span><span class="s2">&quot;credit_scoring_v1&quot;</span><span class="p">]),</span>
     <span class="p">),</span>
-    <span class="n">batch_size</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span>
+    <span class="n">batch_size</span><span class="o">=</span><span class="n">batch_size</span><span class="p">,</span>
     <span class="n">drop_last</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
 <span class="p">)</span>
 
@@ -14785,7 +15049,6 @@ latest timestamp: 2021-08-25 20:34:41.361000+00:00
         <span class="n">cont_scalar</span><span class="o">=</span><span class="n">cont_scalar</span><span class="p">,</span>
         <span class="n">label</span><span class="o">=</span><span class="n">fs</span><span class="o">.</span><span class="n">_get_available_labels</span><span class="p">(</span><span class="n">fs</span><span class="o">.</span><span class="n">services</span><span class="p">[</span><span class="s2">&quot;credit_scoring_v1&quot;</span><span class="p">]),</span>
     <span class="p">),</span>
-    <span class="n">batch_size</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
     <span class="n">drop_last</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
 <span class="p">)</span>
 </pre></div>
@@ -14795,6 +15058,18 @@ latest timestamp: 2021-08-25 20:34:41.361000+00:00
 </div>
 </div>
 
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
+<p><font size=4>Customize `model`, `optimizer` and `loss` function suitable to task</font></p>
+
+</div>
+</div>
+</div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
 <div class="jp-Cell-inputWrapper">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
@@ -14803,12 +15078,11 @@ latest timestamp: 2021-08-25 20:34:41.361000+00:00
 <div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[&nbsp;]:</div>
 <div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
      <div class="CodeMirror cm-s-jupyter">
-<div class=" highlight hl-ipython3"><pre><span></span><span class="c1">#initialize model, optimizer and loss function</span>
-<span class="n">model</span> <span class="o">=</span> <span class="n">SimpleClassify</span><span class="p">(</span>
+<div class=" highlight hl-ipython3"><pre><span></span><span class="n">model</span> <span class="o">=</span> <span class="n">SimpleClassify</span><span class="p">(</span>
     <span class="n">cont_nbr</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">cont_scalar_max</span><span class="p">),</span> <span class="n">cat_nbr</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">cat_count</span><span class="p">),</span> <span class="n">emd_dim</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">max_types</span><span class="o">=</span><span class="nb">max</span><span class="p">(</span><span class="n">cat_count</span><span class="o">.</span><span class="n">values</span><span class="p">()),</span><span class="n">hidden_size</span><span class="o">=</span><span class="mi">4</span>
 <span class="p">)</span>
 <span class="n">optimizer</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">optim</span><span class="o">.</span><span class="n">Adam</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">parameters</span><span class="p">(),</span> <span class="n">lr</span><span class="o">=</span><span class="mf">0.001</span><span class="p">)</span> 
-<span class="n">loss_fn</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">BCELoss</span><span class="p">()</span>  <span class="c1"># loss function to train a classification model</span>
+<span class="n">loss_fn</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">BCELoss</span><span class="p">()</span>  
 </pre></div>
 
      </div>
@@ -14816,6 +15090,18 @@ latest timestamp: 2021-08-25 20:34:41.361000+00:00
 </div>
 </div>
 
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
+<p><font size=4>Use `train_dataloader` to train while `valie_dataloader` to guide `earlystop`</font></p>
+
+</div>
+</div>
+</div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
 <div class="jp-Cell-inputWrapper">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
@@ -14824,12 +15110,12 @@ latest timestamp: 2021-08-25 20:34:41.361000+00:00
 <div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[&nbsp;]:</div>
 <div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
      <div class="CodeMirror cm-s-jupyter">
-<div class=" highlight hl-ipython3"><pre><span></span><span class="c1"># you can use any ready-to-use training frame like ignite, pytorch-lightening...</span>
-<span class="n">save_path</span><span class="o">=</span><span class="s1">&#39;/Users/xuyizhou/Desktop/xyz_warehouse/gitlab/f2ai/use_cases/credit_score/&#39;</span>
-<span class="n">early_stop</span> <span class="o">=</span> <span class="n">EarlyStopping</span><span class="p">(</span><span class="n">save_path</span><span class="o">=</span><span class="n">save_path</span><span class="p">,</span><span class="n">patience</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span><span class="n">delta</span><span class="o">=</span><span class="mf">1e-6</span><span class="p">)</span>
+<div class=" highlight hl-ipython3"><pre><span></span><span class="c1"># you can also use any ready-to-use training frame like ignite, pytorch-lightening...</span>
+<span class="n">early_stop</span> <span class="o">=</span> <span class="n">EarlyStopping</span><span class="p">(</span><span class="n">save_path</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">save_dir</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">key</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s1">&#39;.zip&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span><span class="n">patience</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span><span class="n">delta</span><span class="o">=</span><span class="mf">1e-6</span><span class="p">)</span>
 <span class="k">for</span> <span class="n">epoch</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">50</span><span class="p">):</span>
     <span class="n">train_loss</span> <span class="o">=</span> <span class="p">[]</span>
     <span class="n">valid_loss</span> <span class="o">=</span> <span class="p">[]</span>
+    
     <span class="n">model</span><span class="o">.</span><span class="n">train</span><span class="p">()</span>
     <span class="k">for</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="ow">in</span> <span class="n">train_dataloader</span><span class="p">:</span>
         <span class="n">pred_label</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
@@ -14873,35 +15159,26 @@ latest timestamp: 2021-08-25 20:34:41.361000+00:00
 
 
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain">
-<pre>epoch: 0 done, train loss: 0.9986488322416941, valid loss: 0.9497556924819947
-epoch: 1 done, train loss: 0.9216254899899164, valid loss: 0.8794667482376098
-epoch: 2 done, train loss: 0.8509579251209894, valid loss: 0.8129744291305542
-epoch: 3 done, train loss: 0.7856883058945338, valid loss: 0.7431707620620728
-epoch: 4 done, train loss: 0.7062025815248489, valid loss: 0.6729946732521057
-epoch: 5 done, train loss: 0.6380854249000549, valid loss: 0.6068387746810913
-epoch: 6 done, train loss: 0.5836321140329043, valid loss: 0.5526727557182312
-epoch: 7 done, train loss: 0.5385952144861221, valid loss: 0.5134452044963836
-epoch: 8 done, train loss: 0.5191488787531853, valid loss: 0.48656659126281737
-epoch: 9 done, train loss: 0.5079621349771818, valid loss: 0.4697109878063202
-epoch: 10 done, train loss: 0.5154527276754379, valid loss: 0.4602841556072235
-epoch: 11 done, train loss: 0.47064677129189175, valid loss: 0.4540950536727905
-epoch: 12 done, train loss: 0.4607185423374176, valid loss: 0.44947787523269656
-epoch: 13 done, train loss: 0.5025100484490395, valid loss: 0.44621201753616335
-epoch: 14 done, train loss: 0.44037671387195587, valid loss: 0.4433596432209015
-epoch: 15 done, train loss: 0.4236380284031232, valid loss: 0.4399350047111511
-epoch: 16 done, train loss: 0.4310169219970703, valid loss: 0.4377620339393616
-epoch: 17 done, train loss: 0.4307169516881307, valid loss: 0.43680116534233093
-epoch: 18 done, train loss: 0.44415266066789627, valid loss: 0.43674659729003906
-epoch: 19 done, train loss: 0.42286471277475357, valid loss: 0.43675698041915895
+<pre>epoch: 0 done, train loss: 0.5457816099127134, valid loss: 0.5164944291114807
+epoch: 1 done, train loss: 0.5107613255580267, valid loss: 0.4875011324882507
+epoch: 2 done, train loss: 0.482652281721433, valid loss: 0.46836462020874026
+epoch: 3 done, train loss: 0.4625305086374283, valid loss: 0.45708905458450316
+epoch: 4 done, train loss: 0.4575968583424886, valid loss: 0.4514279544353485
+epoch: 5 done, train loss: 0.4426721011598905, valid loss: 0.44881240129470823
+epoch: 6 done, train loss: 0.4327094616989295, valid loss: 0.4476616203784943
+epoch: 7 done, train loss: 0.43204356357455254, valid loss: 0.44734528064727785
+epoch: 8 done, train loss: 0.41324341421326, valid loss: 0.4469992458820343
+epoch: 9 done, train loss: 0.4199388821919759, valid loss: 0.44723341464996336
 EarlyStopping counter: 1 out of 5
-epoch: 20 done, train loss: 0.44232317556937534, valid loss: 0.4374496877193451
+epoch: 10 done, train loss: 0.39054058616360027, valid loss: 0.44767376184463503
 EarlyStopping counter: 2 out of 5
-epoch: 21 done, train loss: 0.4040483087301254, valid loss: 0.4353731989860535
-epoch: 22 done, train loss: 0.4245692516366641, valid loss: 0.4335453748703003
-epoch: 23 done, train loss: 0.4054244856039683, valid loss: 0.43369582295417786
-EarlyStopping counter: 1 out of 5
-epoch: 24 done, train loss: 0.40369586398204166, valid loss: 0.4353326141834259
-EarlyStopping counter: 2 out of 5
+epoch: 11 done, train loss: 0.41189128657182056, valid loss: 0.44872903227806094
+EarlyStopping counter: 3 out of 5
+epoch: 12 done, train loss: 0.3885562780002753, valid loss: 0.4505809545516968
+EarlyStopping counter: 4 out of 5
+epoch: 13 done, train loss: 0.3874293739597003, valid loss: 0.45241581797599795
+EarlyStopping counter: 5 out of 5
+Trigger earlystop, stop epoch at 13
 </pre>
 </div>
 </div>
@@ -14910,6 +15187,18 @@ EarlyStopping counter: 2 out of 5
 
 </div>
 
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
+<p><font size=4>Get prediction result of `test_dataloader`</font></p>
+
+</div>
+</div>
+</div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
 <div class="jp-Cell-inputWrapper">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
@@ -14918,27 +15207,15 @@ EarlyStopping counter: 2 out of 5
 <div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[&nbsp;]:</div>
 <div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
      <div class="CodeMirror cm-s-jupyter">
-<div class=" highlight hl-ipython3"><pre><span></span><span class="c1"># Test</span>
-<span class="n">model</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">save_path</span><span class="p">,</span><span class="s1">&#39;best_chekpnt.pk&#39;</span><span class="p">))</span>
+<div class=" highlight hl-ipython3"><pre><span></span><span class="n">model</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">save_dir</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">key</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s1">&#39;.zip&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span><span class="s1">&#39;best_chekpnt.pk&#39;</span><span class="p">))</span>
 <span class="n">model</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>
-<span class="n">acc</span><span class="o">=</span><span class="p">[]</span>
-<span class="n">tp</span><span class="o">=</span><span class="p">[]</span>
-<span class="n">fp</span><span class="o">=</span><span class="p">[]</span>
-<span class="n">tn</span><span class="o">=</span><span class="p">[]</span>
-<span class="n">fn</span><span class="o">=</span><span class="p">[]</span>
 <span class="n">preds</span><span class="o">=</span><span class="p">[]</span>
+<span class="n">trues</span><span class="o">=</span><span class="p">[]</span>
 <span class="k">for</span> <span class="n">x</span><span class="p">,</span><span class="n">y</span> <span class="ow">in</span> <span class="n">test_dataloader</span><span class="p">:</span>
     <span class="n">pred</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-    <span class="n">pred</span> <span class="o">=</span> <span class="n">pred</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span>
-    <span class="n">preds</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">pred</span><span class="p">)</span>
-    <span class="n">pred_label</span> <span class="o">=</span> <span class="mi">1</span> <span class="k">if</span> <span class="n">pred</span><span class="o">&gt;</span><span class="mf">0.5</span> <span class="k">else</span> <span class="mi">0</span>
-    <span class="n">acc</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="mi">1</span> <span class="k">if</span> <span class="n">pred_label</span><span class="o">==</span><span class="n">y</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span> <span class="k">else</span> <span class="mi">0</span><span class="p">)</span>
-    <span class="n">tp</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="mi">1</span> <span class="k">if</span> <span class="p">(</span><span class="n">pred_label</span><span class="o">==</span><span class="mi">1</span> <span class="ow">and</span> <span class="n">pred_label</span><span class="o">==</span><span class="n">y</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">())</span> <span class="k">else</span> <span class="mi">0</span><span class="p">)</span>
-    <span class="n">fp</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="mi">1</span> <span class="k">if</span> <span class="p">(</span><span class="n">pred_label</span><span class="o">==</span><span class="mi">1</span> <span class="ow">and</span> <span class="n">pred_label</span><span class="o">!=</span><span class="n">y</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">())</span> <span class="k">else</span> <span class="mi">0</span><span class="p">)</span>
-    <span class="n">tn</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="mi">1</span> <span class="k">if</span> <span class="p">(</span><span class="n">pred_label</span><span class="o">==</span><span class="mi">0</span> <span class="ow">and</span> <span class="n">pred_label</span><span class="o">==</span><span class="n">y</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">())</span> <span class="k">else</span> <span class="mi">0</span><span class="p">)</span>
-    <span class="n">fn</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="mi">1</span> <span class="k">if</span> <span class="p">(</span><span class="n">pred_label</span><span class="o">==</span><span class="mi">0</span> <span class="ow">and</span> <span class="n">pred_label</span><span class="o">!=</span><span class="n">y</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">())</span> <span class="k">else</span> <span class="mi">0</span><span class="p">)</span>
-<span class="n">acc</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">acc</span><span class="p">)</span><span class="o">/</span><span class="nb">len</span><span class="p">(</span><span class="n">acc</span><span class="p">)</span>
-<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;accuray of test set is </span><span class="si">{</span><span class="n">acc</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">tp</span><span class="p">)</span><span class="si">}</span><span class="s2">,</span><span class="si">{</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">fp</span><span class="p">)</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">tn</span><span class="p">)</span><span class="si">}</span><span class="s2">,</span><span class="si">{</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">fn</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="n">pred_label</span> <span class="o">=</span> <span class="mi">1</span> <span class="k">if</span> <span class="n">pred</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span> <span class="o">&gt;</span><span class="mf">0.5</span> <span class="k">else</span> <span class="mi">0</span>
+    <span class="n">preds</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">pred_label</span><span class="p">)</span>
+    <span class="n">trues</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">y</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">())</span>
 </pre></div>
 
      </div>
@@ -14946,7 +15223,19 @@ EarlyStopping counter: 2 out of 5
 </div>
 </div>
 
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
+<p><font size =4>Model Evaluation</font></p>
+
+</div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
 <div class="jp-Cell-inputWrapper">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -14954,7 +15243,9 @@ EarlyStopping counter: 2 out of 5
 <div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[&nbsp;]:</div>
 <div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
      <div class="CodeMirror cm-s-jupyter">
-<div class=" highlight hl-ipython3"><pre><span></span><span class="n">preds</span>
+<div class=" highlight hl-ipython3"><pre><span></span><span class="c1"># accuracy</span>
+<span class="n">acc</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span> <span class="k">if</span> <span class="n">preds</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">==</span><span class="n">trues</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">else</span> <span class="mi">0</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">trues</span><span class="p">))]</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Accuracy: </span><span class="si">{</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">acc</span><span class="p">)</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">acc</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </pre></div>
 
      </div>
@@ -14962,20 +15253,27 @@ EarlyStopping counter: 2 out of 5
 </div>
 </div>
 
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
-<div class="jp-Cell-inputWrapper">
-<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+<div class="jp-Cell-outputWrapper">
+<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
 </div>
-<div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[&nbsp;]:</div>
-<div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
-     <div class="CodeMirror cm-s-jupyter">
-<div class=" highlight hl-ipython3"><pre><span></span> 
-</pre></div>
 
-     </div>
+
+<div class="jp-OutputArea jp-Cell-outputArea">
+
+<div class="jp-OutputArea-child">
+
+    
+    <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
+
+
+<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain">
+<pre>Accuracy: 0.8378378378378378
+</pre>
 </div>
 </div>
+
+</div>
+
 </div>
 
 </div>
