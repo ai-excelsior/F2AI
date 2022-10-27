@@ -103,3 +103,55 @@ def test_point_in_time_join_with_join_keys():
         mock_entity_df, mock_source_df, timestamp_field="event_timestamp", join_keys=["join_key"]
     )
     assert len(result_df) == 3
+
+
+def test_point_in_time_join_with_ttl():
+    result_df = OfflineFileStore.point_in_time_join(
+        mock_entity_df,
+        mock_source_df,
+        timestamp_field="event_timestamp",
+        join_keys=["join_key"],
+        ttl="2 seconds",
+    )
+    assert len(result_df) == 2
+
+
+def test_point_in_time_join_with_extra_entities_in_source():
+    result_df = OfflineFileStore.point_in_time_join(
+        pd.DataFrame(
+            {
+                "join_key": ["A"],
+                "event_timestamp": [pd.Timestamp("2021-08-25 20:16:18")],
+                "request_feature": [6],
+            }
+        ),
+        mock_source_df,
+        timestamp_field="event_timestamp",
+        join_keys=["join_key"],
+    )
+    assert len(result_df) == 1
+
+
+def test_point_in_time_join_with_created_timestamp():
+    result_df = OfflineFileStore.point_in_time_join(
+        mock_entity_df,
+        pd.DataFrame(
+            {
+                "join_key": ["A", "A"],
+                "event_timestamp": [
+                    pd.Timestamp("2021-08-25 20:16:18"),
+                    pd.Timestamp("2021-08-25 20:16:18"),
+                ],
+                "created_timestamp": [
+                    pd.Timestamp("2021-08-25 20:16:21"),
+                    pd.Timestamp("2021-08-25 20:16:20"),
+                ],
+                "feature": [5, 6],
+            },
+        ),
+        timestamp_field="event_timestamp",
+        created_timestamp_field="created_timestamp",
+        join_keys=["join_key"],
+        ttl="2 seconds",
+    )
+    assert all(result_df["feature"] == [5, 5])
