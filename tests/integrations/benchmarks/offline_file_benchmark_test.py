@@ -3,7 +3,7 @@ import timeit
 from os import path
 from aie_feast import FeatureStore
 
-LINE_LIMIT = 1000
+LINE_LIMIT = 10
 
 
 def get_credit_score_entities(project_folder: str):
@@ -24,6 +24,8 @@ def test_get_features(make_credit_score):
     project_folder = make_credit_score("file")
     entity_df = get_credit_score_entities(project_folder)
     store = FeatureStore(project_folder)
+    store.get_features(store.feature_views["zipcode_features"], entity_df)
+
     measured_time = timeit.timeit(
         lambda: store.get_features(store.feature_views["zipcode_features"], entity_df), number=10
     )
