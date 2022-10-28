@@ -614,6 +614,16 @@ class FeatureStore:
         )
 
         """
+        entity_dict = {
+            self.entities[entity_name].join_keys[0]: entity_name
+            for entity_name in avaliable_entity_names
+            if entity_name in entity_df.columns
+        }
+        entity_names = list(entity_dict.values()) 
+
+            for entity_name in avaliable_entity_names
+            if entity_name in entity_df.columns
+            }
         if isinstance(view, (FeatureView, LabelView)):
             assert self.sources[
                 view.batch_source

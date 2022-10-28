@@ -43,6 +43,51 @@ def test_point_in_time_filter_with_ttl():
     assert result_df["_source_event_timestamp_"].min() == pd.Timestamp("2021-08-25 20:16:19")
 
 
+###
+def test_point_on_time_filter_simple():
+    result_df = OfflineFileStore.point_on_time_filter(
+        mock_point_in_time_filter_df, "2 seconds", is_label=False, include=True
+    )
+    assert len(result_df) == 2
+    assert result_df["_source_event_timestamp_"].max() == pd.Timestamp("2021-08-25 20:16:20")
+    assert result_df["_source_event_timestamp_"].min() == pd.Timestamp("2021-08-25 20:16:19")
+
+
+def test_point_on_time_filter_simple_label():
+    result_df = OfflineFileStore.point_on_time_filter(
+        mock_point_in_time_filter_df, "2 seconds", is_label=True, include=True
+    )
+    assert len(result_df) == 2
+    assert result_df["_source_event_timestamp_"].max() == pd.Timestamp("2021-08-25 20:16:21")
+    assert result_df["_source_event_timestamp_"].min() == pd.Timestamp("2021-08-25 20:16:20")
+
+
+def test_point_on_time_filter_not_include():
+    result_df = OfflineFileStore.point_on_time_filter(
+        mock_point_in_time_filter_df, "2 seconds", is_label=False, include=False
+    )
+    assert len(result_df) == 2
+    assert result_df["_source_event_timestamp_"].max() == pd.Timestamp("2021-08-25 20:16:19")
+    assert result_df["_source_event_timestamp_"].min() == pd.Timestamp("2021-08-25 20:16:18")
+
+
+def test_point_on_time_filter_not_include_label():
+    result_df = OfflineFileStore.point_on_time_filter(
+        mock_point_in_time_filter_df, "2 seconds", is_label=True, include=False
+    )
+    assert len(result_df) == 1
+    assert result_df["_source_event_timestamp_"].max() == pd.Timestamp("2021-08-25 20:16:21")
+
+
+def test_point_on_time_filter_with_ttl():
+    result_df = OfflineFileStore.point_on_time_filter(
+        mock_point_in_time_filter_df, "3 seconds", ttl="2 seconds", is_label=False, include=True
+    )
+    assert len(result_df) == 2
+    assert result_df["_source_event_timestamp_"].max() == pd.Timestamp("2021-08-25 20:16:20")
+    assert result_df["_source_event_timestamp_"].min() == pd.Timestamp("2021-08-25 20:16:19")
+
+
 mock_point_in_time_latest_df = pd.DataFrame(
     {
         "join_key": ["A", "A", "B", "B"],
@@ -155,3 +200,87 @@ def test_point_in_time_join_with_created_timestamp():
         ttl="2 seconds",
     )
     assert all(result_df["feature"] == [5, 5])
+
+
+def test_point_on_time_join_with_join_keys():
+    result_df = OfflineFileStore.point_on_time_join(
+        mock_entity_df,
+        mock_source_df,
+        period="2 seconds",
+        timestamp_field="event_timestamp",
+        join_keys=["join_key"],
+        include=False,
+    )
+    assert len(result_df) == 1
+    assert result_df["join_key"].values == "A"
+
+
+def test_point_on_time_join_with_join_keys_label():
+    result_df = OfflineFileStore.point_on_time_join(
+        mock_entity_df,
+        mock_source_df,
+        period="2 seconds",
+        timestamp_field="event_timestamp",
+        join_keys=["join_key"],
+        is_label=True,
+    )
+    assert len(result_df) == 4
+
+
+def test_point_on_time_join_with_ttl():
+    result_df = OfflineFileStore.point_on_time_join(
+        mock_entity_df,
+        mock_source_df,
+        timestamp_field="event_timestamp",
+        join_keys=["join_key"],
+        ttl="2 seconds",
+        period="10 seconds",
+    )
+    assert len(result_df) == 3
+    assert "B" not in result_df["join_key"].values
+
+
+def test_point_on_time_join_with_extra_entities_in_source():
+    result_df = OfflineFileStore.point_on_time_join(
+        pd.DataFrame(
+            {
+                "join_key": ["A"],
+                "event_timestamp": [pd.Timestamp("2021-08-25 20:16:22")],
+                "request_feature": [6],
+            }
+        ),
+        mock_source_df,
+        period="3 seconds",
+        timestamp_field="event_timestamp",
+        join_keys=["join_key"],
+    )
+    assert len(result_df) == 0
+
+
+def test_point_on_time_join_with_created_timestamp():
+    result_df = OfflineFileStore.point_on_time_join(
+        mock_entity_df,
+        pd.DataFrame(
+            {
+                "join_key": ["A", "A", "A", "A"],
+                "event_timestamp": [
+                    pd.Timestamp("2021-08-25 20:16:16"),
+                    pd.Timestamp("2021-08-25 20:16:17"),
+                    pd.Timestamp("2021-08-25 20:16:18"),
+                    pd.Timestamp("2021-08-25 20:16:18"),
+                ],
+                "materialize_time": [
+                    pd.Timestamp("2021-08-25 20:16:17"),
+                    pd.Timestamp("2021-08-25 20:16:19"),
+                    pd.Timestamp("2021-08-25 20:16:21"),
+                    pd.Timestamp("2021-08-25 20:16:20"),
+                ],
+                "feature": [3, 4, 5, 6],
+            },
+        ),
+        timestamp_field="event_timestamp",
+        created_timestamp_field="materialize_time",
+        join_keys=["join_key"],
+        period="2 seconds",
+    )
+    assert all(result_df["feature"] == [4, 5, 5])
