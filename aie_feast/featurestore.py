@@ -6,6 +6,7 @@ import json
 from dateutil.relativedelta import relativedelta
 from pypika import Query, Parameter, functions
 from aie_feast.common.source import FileSource
+from aie_feast.offline_stores.offline_file_store import OfflineFileStore
 from aie_feast.views import FeatureView, LabelView
 from aie_feast.service import Service
 from aie_feast.dataset.dataset import Dataset
@@ -53,6 +54,11 @@ class FeatureStore:
         self.feature_views = get_feature_views(os.path.join(project_folder, "feature_views"))
         self.label_views = get_label_views(os.path.join(project_folder, "label_views"))
         self.services = get_service_cfg(os.path.join(project_folder, "services"))
+
+        # for file source, modify the path if it is not a absolute path
+        for name, source in self.sources.items():
+            if isinstance(source, FileSource) and not os.path.isabs(source.path):
+                source.path = os.path.join(self.project_folder, source.path)
 
     def __check_format(self, entity_df):
         if isinstance(entity_df, pd.DataFrame):
@@ -209,7 +215,7 @@ class FeatureStore:
             )
             return result
 
-    def get_labels(self, label_view, entity_df: pd.DataFrame, include: bool = False):
+    def get_labels(self, label_view, entity_df: pd.DataFrame, include: bool = True):
         """non-time series prediction use: get labels of `entity_df` from `label_views`
 
         Args:
@@ -297,44 +303,51 @@ class FeatureStore:
             features(list):columns to select besides times and entities
             include (bool, optional): include timestamp defined in `entity_df` or not. Defaults to True.
         """
-        avaliable_entity_names = self._get_available_entity_names(view)
-        # TODO: support multi join keys in future
-        join_key_to_entity_names = {
-            self.entities[entity_name].join_keys[0]: entity_name
-            for entity_name in avaliable_entity_names
-            if entity_name in entity_df.columns
-        }
-        entity_names = list(join_key_to_entity_names.values())
+        assert isinstance(
+            view, (FeatureView, LabelView, Service)
+        ), "only allowed FeatureView, LabelView and Service"
+        assert isinstance(self.offline_store, OfflineFileStore), "only OfflineFileStore supportted "
 
-        if isinstance(view, (FeatureView, LabelView)):  # read from single view
-            df = self._read_local_file(view, features, join_key_to_entity_names)
-            # rename entity columns
-            if join_key_to_entity_names:
-                df = df.merge(entity_df[entity_names + [TIME_COL]], on=entity_names, how="inner")
-            else:
-                df = df.merge(entity_df, how="cross")
-            if self.sources[view.batch_source].timestamp_field:  # time-relavent features
-                # match time_limit
-                df = self._fil_timelimit(include, view.ttl, df)
-                # newest record
-                df = get_newest_record(df, TIME_COL, entity_names, CREATE_COL)
-        else:  # `Service`, read from materialized table
-            df = read_file(
-                os.path.join(self.project_folder, view.materialize_path),
-                time_cols=[TIME_COL, MATERIALIZE_TIME],
-                entity_cols=list(join_key_to_entity_names.keys()),
+        avaliable_entity_names = self._get_available_entity_names(view)
+        join_keys = list(
+            {
+                join_key
+                for entity_name in avaliable_entity_names
+                for join_key in self.entities[entity_name].join_keys
+                if join_key in entity_df.columns
+            }
+        )
+
+        if isinstance(view, (FeatureView, LabelView)):
+            source = self.sources[view.batch_source]
+            assert isinstance(source, FileSource), "only work for file source in _get_point_record"
+        else:
+            source = FileSource(
+                name=f"{view.name}_source",
+                path=os.path.join(self.project_folder, view.materialize_path),
+                timestamp_field=TIME_COL,
+                created_timestamp_field=MATERIALIZE_TIME,
             )
-            df.rename(columns=join_key_to_entity_names, inplace=True)
-            df = df[[col for col in entity_names + [TIME_COL, MATERIALIZE_TIME] + features]]
-            if join_key_to_entity_names:
-                df = df.merge(entity_df, on=entity_names, how="inner")
-            else:
-                df = df.merge(entity_df, how="cross")
-            # match time_limit
-            df = self._fil_timelimit(include, None, df)
-            # newest record
-            df = get_newest_record(df, TIME_COL, entity_names, CREATE_COL)
-        return df
+
+        if isinstance(view, FeatureView):
+            buildin_features = view.get_features()
+        elif isinstance(view, LabelView):
+            buildin_features = view.get_labels()
+        else:
+            buildin_features = view.get_features(self.feature_views)
+
+        if features:
+            features = set(features)
+            features = [feature for feature in buildin_features if feature.name in features]
+
+        return self.offline_store.get_features(
+            entity_df=entity_df,
+            features=features,
+            source=source,
+            join_keys=join_keys,
+            ttl=view.ttl,
+            include=include,
+        )
 
     def _get_point_pgsql(
         self,

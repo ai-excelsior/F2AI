@@ -16,4 +16,4 @@ def test_get_features_from_service():
     features = service.get_features(feature_views)
 
     assert len(features) == 1
-    assert features[0].name == "f1"
+    assert list(features)[0].name == "f1"

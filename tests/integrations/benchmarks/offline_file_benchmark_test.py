@@ -3,7 +3,7 @@ import timeit
 from os import path
 from aie_feast import FeatureStore
 
-LINE_LIMIT = 10
+LINE_LIMIT = 1000
 
 
 def get_credit_score_entities(project_folder: str):
@@ -20,16 +20,21 @@ def get_credit_score_entities(project_folder: str):
     )
 
 
-def test_get_features(make_credit_score):
+def test_get_features_from_feature_view(make_credit_score):
     project_folder = make_credit_score("file")
     entity_df = get_credit_score_entities(project_folder)
     store = FeatureStore(project_folder)
-    store.get_features(store.feature_views["zipcode_features"], entity_df)
+    store.get_features("zipcode_features", entity_df)
 
-    measured_time = timeit.timeit(
-        lambda: store.get_features(store.feature_views["zipcode_features"], entity_df), number=10
-    )
+    measured_time = timeit.timeit(lambda: store.get_features("zipcode_features", entity_df), number=10)
     print(f"get_features performance: {measured_time}s")
+
+
+def test_get_labels_from_label_views(make_credit_score):
+    project_folder = make_credit_score("file")
+    entity_df = get_credit_score_entities(project_folder)
+    store = FeatureStore(project_folder)
+    store.get_labels("loan_label_view", entity_df)
 
 
 def test_materialize(make_credit_score):

@@ -20,7 +20,7 @@ class FileFormatEnum(str, Enum):
 
 
 class FileSource(Source):
-    file_format: FileFormatEnum
+    file_format: FileFormatEnum = FileFormatEnum.CSV
     path: str
 
 

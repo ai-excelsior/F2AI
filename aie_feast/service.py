@@ -10,6 +10,7 @@ class Service(BaseModel):
     description: Optional[str]
     features: List[SchemaAnchor] = []
     labels: List[SchemaAnchor] = []
+    ttl: Optional[str] = None
 
     # TODO: remove below configs in future
     materialize_path: Optional[str] = Field(alias="materialize", default="materialize_table")
@@ -26,13 +27,11 @@ class Service(BaseModel):
         """
         get features based on features' schema anchor
         """
-        return list(
-            {
-                feature
-                for schema_anchor in self.features
-                for feature in schema_anchor.get_features_from_views(feature_views, is_numeric)
-            }
-        )
+        return {
+            feature
+            for schema_anchor in self.features
+            for feature in schema_anchor.get_features_from_views(feature_views, is_numeric)
+        }
 
     def get_labels(self, label_views: Dict[str, LabelView], is_numeric=False) -> Set[Feature]:
         """

@@ -22,6 +22,7 @@ def schema_to_dict(schema):
     return {item["name"]: item.get("dtype", "string") for item in schema}
 
 
+# TODO: refactor this to speedup column oriented file format
 def read_file(path, file_format=None, time_cols=None, entity_cols=None):
     time_cols = [i for i in time_cols if i]
     path = remove_prefix(path, "file://")

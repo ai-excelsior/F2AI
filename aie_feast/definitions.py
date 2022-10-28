@@ -23,6 +23,7 @@ class FeatureDataTypes(str, Enum):
     FLOAT64 = "float64"
     STRING = "string"
     BOOLEAN = "bool"
+    UNKNOWN = "unknown"
 
 
 class SchemaType(str, Enum):

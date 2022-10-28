@@ -1,11 +1,13 @@
 import pandas as pd
-from typing import List, Optional
+from typing import List, Optional, Set
 from dateutil.relativedelta import relativedelta
+from aie_feast.common.utils import parse_date, read_file
+from aie_feast.definitions import Feature
+from aie_feast.common.source import FileSource
 from .offline_store import OfflineStore, OfflineStoreType
-from aie_feast.common.utils import parse_date
 
 
-# DEFAULT_TIMESTAMP_FIELD = "event_timestamp"
+DEFAULT_TIMESTAMP_FIELD = "event_timestamp"
 # DEFAULT_CREATED_TIMESTAMP_FIELD = "created_timestamp"
 ENTITY_EVENT_TIMESTAMP_FIELD = "_entity_event_timestamp_"
 SOURCE_EVENT_TIMESTAMP_FIELD = "_source_event_timestamp_"
@@ -14,6 +16,41 @@ SOURCE_CREATED_TIMESTAMP_FIELD = "_created_timestamp_"
 
 class OfflineFileStore(OfflineStore):
     type: OfflineStoreType = OfflineStoreType.FILE
+
+    def read(self, source: FileSource, features: Set[Feature] = {}, join_keys: List[str] = []):
+        time_columns = [source.timestamp_field]
+        if source.created_timestamp_field:
+            time_columns.append(source.created_timestamp_field)
+
+        feature_columns = [feature.name for feature in features]
+        all_columns = time_columns + join_keys + feature_columns
+
+        return read_file(
+            source.path, file_format=source.file_format, time_cols=time_columns, entity_cols=join_keys
+        )[all_columns]
+
+        pass
+
+    def get_features(
+        self,
+        entity_df: pd.DataFrame,
+        features: Set[Feature],
+        source: FileSource,
+        join_keys: List[str] = [],
+        ttl: Optional[str] = None,
+        include: bool = True,
+    ):
+        source_df = self.read(source=source, features=features, join_keys=join_keys)
+
+        return self.point_in_time_join(
+            entity_df=entity_df,
+            source_df=source_df,
+            timestamp_field=source.timestamp_field,
+            created_timestamp_field=source.created_timestamp_field,
+            ttl=ttl,
+            join_keys=join_keys,
+            include=include,
+        )
 
     @classmethod
     def point_in_time_join(
@@ -30,6 +67,9 @@ class OfflineFileStore(OfflineStore):
         if timestamp_field:
             entity_df = entity_df.rename(columns={timestamp_field: ENTITY_EVENT_TIMESTAMP_FIELD})
             source_df = source_df.rename(columns={timestamp_field: SOURCE_EVENT_TIMESTAMP_FIELD})
+
+        if created_timestamp_field and created_timestamp_field in entity_df.columns:
+            entity_df = entity_df.drop(columns=[created_timestamp_field])
 
         # pre filter source_df by ttl
         if ttl:
