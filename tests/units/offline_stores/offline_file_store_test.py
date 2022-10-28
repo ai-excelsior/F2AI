@@ -202,6 +202,7 @@ def test_point_in_time_join_with_created_timestamp():
     assert all(result_df["feature"] == [5, 5])
 
 
+###
 def test_point_on_time_join_with_join_keys():
     result_df = OfflineFileStore.point_on_time_join(
         mock_entity_df,
@@ -284,3 +285,5 @@ def test_point_on_time_join_with_created_timestamp():
         period="2 seconds",
     )
     assert all(result_df["feature"] == [4, 5, 5])
+    assert result_df[result_df["event_timestamp"] == pd.Timestamp("2021-08-25 20:16:18")].shape == (2, 6)
+    assert pd.Timestamp("2021-08-25 20:16:20") not in result_df["event_timestamp"]
