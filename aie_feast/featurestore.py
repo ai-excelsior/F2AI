@@ -746,9 +746,9 @@ class FeatureStore:
             functions.Max(Parameter(label_view_dict["event_time"]))
         )
 
-        label_result = pd.to_datetime(sql_df(max_timestamp_label.get_sql(), conn)[0][0], utc=True)
+        label_result = pd.to_datetime(sql_df(max_timestamp_label.get_sql(), conn)[0][0])
         try:
-            result = pd.to_datetime(sql_df(max_timestamp.get_sql(), conn)[0][0], utc=True)
+            result = pd.to_datetime(sql_df(max_timestamp.get_sql(), conn)[0][0])
         except:
             result = pd.to_datetime("1970-01-01 00:00:00", utc=True)
 

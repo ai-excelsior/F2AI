@@ -85,7 +85,7 @@ if __name__ == "__main__":
         # fs.stats(fs.services["credit_scoring_v1"], fn="max", group_key=[], features=["event_timestamp"])
         fs.get_latest_entities(fs.services["credit_scoring_v1"])
 
-    stats()
+    # stats()
 
     def get_features():
         entity_link = pd.DataFrame.from_dict(
@@ -125,7 +125,9 @@ if __name__ == "__main__":
     # get_features()
 
     def do_materailize():
-        fs.materialize("traval_time_prediction_embedding_v1", incremental_begin="'2016-06-30 07:50:00'")
+        # fs.materialize("traval_time_prediction_embedding_v1", incremental_begin="2016-06-30 07:50:00")
+        # fs.materialize("traval_time_prediction_embedding_v1")
+        fs.materialize("traval_time_prediction_embedding_v1", incremental_begin="3 minutes")
 
     do_materailize()
 
