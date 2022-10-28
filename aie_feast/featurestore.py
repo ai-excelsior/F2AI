@@ -579,8 +579,10 @@ class FeatureStore:
             # # match time_limit
             df_period = self._get_window_record(df_period, period, is_label, include)
             if CREATE_COL in df_period.columns:  # use`create_timestamp` to remove duplicates
-                df_period.sort_values(by=[CREATE_COL], ascending=False, inplace=True, ignore_index=True)
-                df_period.drop_duplicates(subset=entity_names + [QUERY_COL, TIME_COL], keep="first")
+                df_period.sort_values(by=[CREATE_COL], ascending=False, ignore_index=True, inplace=True)
+                df_period.drop_duplicates(
+                    subset=entity_names + [QUERY_COL, TIME_COL], keep="first", inplace=True
+                )
             # df_period.sort_values(by=entity_name + [QUERY_COL, TIME_COL], inplace=True, ignore_index=True)
         else:
             df_period = read_file(
@@ -595,8 +597,8 @@ class FeatureStore:
             else:
                 df_period = df_period.merge(entity_df, how="cross")
             df_period = self._get_window_record(df_period, period, is_label, include)
-            df_period.sort_values(by=[MATERIALIZE_TIME], ascending=False, inplace=True, ignore_index=True)
-            df_period.drop_duplicates(subset=entity_names + [QUERY_COL, TIME_COL], keep="first")
+            df_period.sort_values(by=[MATERIALIZE_TIME], ascending=False, ignore_index=True, inplace=True)
+            df_period.drop_duplicates(subset=entity_names + [QUERY_COL, TIME_COL], keep="first", inplace=True)
         # df_period.sort_values(by=entity_name + [QUERY_COL, TIME_COL], inplace=True, ignore_index=True)
         return df_period
 
