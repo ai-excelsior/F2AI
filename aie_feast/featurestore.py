@@ -56,7 +56,7 @@ class FeatureStore:
         self.services = get_service_cfg(os.path.join(project_folder, "services"))
 
         # for file source, modify the path if it is not a absolute path
-        for name, source in self.sources.items():
+        for _, source in self.sources.items():
             if isinstance(source, FileSource) and not os.path.isabs(source.path):
                 source.path = os.path.join(self.project_folder, source.path)
 
@@ -133,8 +133,8 @@ class FeatureStore:
         """non-series prediction use: get `features` of `entity_df` from `feature_views`
 
         Args:
-            feature_view : Single FeatureViews or Service(after materialzed) name to lookup. Defaults to None.
-            entity_df (pd.DataFrame): condition. Defaults to None.
+            feature_view : Single FeatureViews or Service(after materialzed) name to lookup.
+            entity_df (pd.DataFrame): condition.
             features (List, optional): features to return. Defaults to None means all features.
             include (bool, optional):  include timestamp defined in `entity_df` or not. Defaults to True.
         """
@@ -333,7 +333,7 @@ class FeatureStore:
             buildin_features = view.get_features()
         elif isinstance(view, LabelView):
             buildin_features = view.get_labels()
-        else:
+        else:  # Service
             buildin_features = view.get_features(self.feature_views)
 
         if features:
@@ -561,22 +561,59 @@ class FeatureStore:
         Args:
             views (List, optional): FeatureViews/LabelViews to lookup.
             entity_df (pd.DataFrame): condition. Defaults to None.
-            period: period.
+            period: period to get data.
             features:features/labels to return
             include (bool, optional): include timestamp defined in `entity_df` or not. Defaults to True.
             is_label (bool, optional): LabelViews of not. Defaults to False.
         """
+        assert isinstance(
+            view, (FeatureView, LabelView, Service)
+        ), "only allowed FeatureView, LabelView and Service"
+        assert isinstance(self.offline_store, OfflineFileStore), "only OfflineFileStore supportted "
 
         avaliable_entity_names = self._get_available_entity_names(view)
+        join_keys = list(
+            {
+                join_key
+                for entity_name in avaliable_entity_names
+                for join_key in self.entities[entity_name].join_keys
+                if join_key in entity_df.columns
+            }
+        )
         # TODO: support multi join keys in future
-        # map join key to entity name
-        entity_dict = {
-            self.entities[entity_name].join_keys[0]: entity_name
-            for entity_name in avaliable_entity_names
-            if entity_name in entity_df.columns
-        }
-        entity_names = list(entity_dict.values())  # entity column name in table
+        if isinstance(view, (FeatureView, LabelView)):
+            source = self.sources[view.batch_source]
+            assert isinstance(source, FileSource), "only work for file source in _get_point_record"
+        else:
+            source = FileSource(
+                name=f"{view.name}_source",
+                path=os.path.join(self.project_folder, view.materialize_path),
+                timestamp_field=TIME_COL,
+                created_timestamp_field=MATERIALIZE_TIME,
+            )
 
+        if isinstance(view, FeatureView):
+            buildin_features = view.get_features()
+        elif isinstance(view, LabelView):
+            buildin_features = view.get_labels()
+        else:  # Service
+            buildin_features = view.get_features(self.feature_views)
+        if features:
+            features = set(features)
+            features = [feature for feature in buildin_features if feature.name in features]
+
+        return self.offline_store.get_period_features(
+            entity_df=entity_df,
+            features=features,
+            source=source,
+            period=period,
+            join_keys=join_keys,
+            ttl=view.ttl,
+            include=include,
+            is_label=is_label,
+        )
+
+        """
         if isinstance(view, (FeatureView, LabelView)):
             assert self.sources[
                 view.batch_source
@@ -613,7 +650,7 @@ class FeatureStore:
             df_period.sort_values(by=[MATERIALIZE_TIME], ascending=False, ignore_index=True, inplace=True)
             df_period.drop_duplicates(subset=entity_names + [QUERY_COL, TIME_COL], keep="first", inplace=True)
         # df_period.sort_values(by=entity_name + [QUERY_COL, TIME_COL], inplace=True, ignore_index=True)
-        return df_period
+        """
 
     def _get_window_pgsql(
         self,
