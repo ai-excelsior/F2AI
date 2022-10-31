@@ -137,9 +137,8 @@ class OfflineFileStore(OfflineStore):
         is_label: bool = False,
     ):
         # renames to keep things simple
-        if timestamp_field:
-            entity_df = entity_df.rename(columns={timestamp_field: ENTITY_EVENT_TIMESTAMP_FIELD})
-            source_df = source_df.rename(columns={timestamp_field: SOURCE_EVENT_TIMESTAMP_FIELD})
+        entity_df = entity_df.rename(columns={timestamp_field: ENTITY_EVENT_TIMESTAMP_FIELD})
+        source_df = source_df.rename(columns={timestamp_field: SOURCE_EVENT_TIMESTAMP_FIELD})
 
         if created_timestamp_field and created_timestamp_field in entity_df.columns:
             entity_df = entity_df.drop(columns=[created_timestamp_field])
@@ -259,11 +258,13 @@ class OfflineFileStore(OfflineStore):
         if created_timestamp_field:
             sort_by.append(created_timestamp_field)
 
-        return (
-            df.groupby(group_keys + [entity_timestamp_field])
-            .apply(lambda x: x.sort_values(sort_by, ascending=False).head(1))
-            .reset_index(drop=True)
+        df.sort_values(by=sort_by, ascending=False, ignore_index=True, inplace=True)
+        df.drop_duplicates(
+            subset=group_keys + [entity_timestamp_field],
+            keep="first",
+            inplace=True,
         )
+        return df
 
     @classmethod
     def point_on_time_latest(
@@ -274,12 +275,11 @@ class OfflineFileStore(OfflineStore):
         entity_timestamp_field: str = ENTITY_EVENT_TIMESTAMP_FIELD,
         source_timestamp_field: str = SOURCE_EVENT_TIMESTAMP_FIELD,
     ):
-        sort_by = []
         if created_timestamp_field:
-            sort_by.append(created_timestamp_field)
-
-        return (
-            df.groupby(group_keys + [entity_timestamp_field, source_timestamp_field])
-            .apply(lambda x: x.sort_values(sort_by, ascending=False).head(1))
-            .reset_index(drop=True)
-        )
+            df.sort_values(by=[created_timestamp_field], ascending=False, ignore_index=True, inplace=True)
+            df.drop_duplicates(
+                subset=group_keys + [entity_timestamp_field, source_timestamp_field],
+                keep="first",
+                inplace=True,
+            )
+        return df

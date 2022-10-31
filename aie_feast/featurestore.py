@@ -572,6 +572,7 @@ class FeatureStore:
         assert isinstance(self.offline_store, OfflineFileStore), "only OfflineFileStore supportted "
 
         avaliable_entity_names = self._get_available_entity_names(view)
+
         join_keys = list(
             {
                 join_key
@@ -612,55 +613,6 @@ class FeatureStore:
             include=include,
             is_label=is_label,
         )
-
-        """
-        entity_dict = {
-            self.entities[entity_name].join_keys[0]: entity_name
-            for entity_name in avaliable_entity_names
-            if entity_name in entity_df.columns
-        }
-        entity_names = list(entity_dict.values()) 
-
-            for entity_name in avaliable_entity_names
-            if entity_name in entity_df.columns
-            }
-        if isinstance(view, (FeatureView, LabelView)):
-            assert self.sources[
-                view.batch_source
-            ].timestamp_field, "View is not time-relevant, no period to get"
-            df_period = self._read_local_file(view, features, entity_dict)
-            # merge according to `entity`
-            if entity_dict:
-                df_period = df_period.merge(
-                    entity_df[entity_names + [TIME_COL]], on=entity_names, how="inner"
-                )
-            else:
-                df_period = df_period.merge(entity_df, how="cross")
-            # # match time_limit
-            df_period = self._get_window_record(df_period, period, is_label, include)
-            if CREATE_COL in df_period.columns:  # use`create_timestamp` to remove duplicates
-                df_period.sort_values(by=[CREATE_COL], ascending=False, ignore_index=True, inplace=True)
-                df_period.drop_duplicates(
-                    subset=entity_names + [QUERY_COL, TIME_COL], keep="first", inplace=True
-                )
-            # df_period.sort_values(by=entity_name + [QUERY_COL, TIME_COL], inplace=True, ignore_index=True)
-        else:
-            df_period = read_file(
-                os.path.join(self.project_folder, view.materialize_path),
-                time_cols=[TIME_COL, MATERIALIZE_TIME],
-                entity_cols=list(entity_dict.keys()),
-            )
-            df_period.rename(columns=entity_dict, inplace=True)
-            df_period = df_period[[col for col in entity_names + features + [TIME_COL, MATERIALIZE_TIME]]]
-            if entity_dict:
-                df_period = df_period.merge(entity_df, on=entity_names, how="inner")
-            else:
-                df_period = df_period.merge(entity_df, how="cross")
-            df_period = self._get_window_record(df_period, period, is_label, include)
-            df_period.sort_values(by=[MATERIALIZE_TIME], ascending=False, ignore_index=True, inplace=True)
-            df_period.drop_duplicates(subset=entity_names + [QUERY_COL, TIME_COL], keep="first", inplace=True)
-        # df_period.sort_values(by=entity_name + [QUERY_COL, TIME_COL], inplace=True, ignore_index=True)
-        """
 
     def _get_window_pgsql(
         self,
