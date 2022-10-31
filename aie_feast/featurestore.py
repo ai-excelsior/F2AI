@@ -1096,26 +1096,33 @@ class FeatureStore:
             views (List): view to look up
         """
         view = self._get_views(view)
-        if not entity:
-            entity = self._get_available_entity_names(view)
-        entity_dict = {self.entities[en].join_keys[0] if en in self.entities else None: en for en in entity}
+        avaliable_entity_names = self._get_available_entity_names(view)
+        entity = self._get_available_entity_names(view) if not entity else entity
 
+        join_keys = list(
+            {
+                join_key
+                for entity_name in avaliable_entity_names
+                for join_key in self.entities[entity_name].join_keys
+                if join_key in entity
+            }
+        )
         if self.offline_store.type == "file":
             if isinstance(view, (FeatureView, LabelView)):
-                df = self._read_local_file(view, [], entity_dict)
+                source = self.sources[view.batch_source]
+                assert isinstance(source, FileSource), "only work for file source in _get_point_record"
             else:
-                df = read_file(
-                    os.path.join(self.project_folder, view.materialize_path),
-                    time_cols=[TIME_COL],
-                    entity_cols=list(entity_dict.keys()),
+                source = FileSource(
+                    name=f"{view.name}_source",
+                    path=os.path.join(self.project_folder, view.materialize_path),
+                    timestamp_field=TIME_COL,
+                    created_timestamp_field=MATERIALIZE_TIME,
                 )
-                df.rename(columns=entity_dict, inplace=True)
-            df = df[list(entity_dict.values()) + [TIME_COL]]
-            # sort by event_time, decending
-            df.sort_values(by=TIME_COL, ascending=False, inplace=True, ignore_index=True)
-            # due to `ascending=False`, keep the `first` record means the latest one
-            df = df.drop_duplicates(subset=list(entity_dict.values()), keep="first")
+            return self.offline_store.get_latest_entities(source=source, join_keys=join_keys)
         elif self.offline_store.type == "pgsql":
+            entity_dict = {
+                self.entities[en].join_keys[0] if en in self.entities else None: en for en in entity
+            }
             conn = psy_conn(self.offline_store)
             if isinstance(view, (FeatureView, LabelView)):
                 q = Query.from_(view.batch_source)

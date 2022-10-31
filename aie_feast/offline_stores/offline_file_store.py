@@ -132,6 +132,11 @@ class OfflineFileStore(OfflineStore):
                 )
         return result
 
+    def get_latest_entities(self, source: FileSource, join_keys: list):
+        source_df = self.read(source=source, features=[], join_keys=join_keys)
+        df = source_df.sort_values(by=source.timestamp_field, ascending=False, ignore_index=True)
+        return df.drop_duplicates(subset=join_keys, keep="first")
+
     @classmethod
     def point_in_time_join(
         cls,
