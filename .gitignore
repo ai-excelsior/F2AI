@@ -6,6 +6,7 @@
 *.dump
 .env
 *.pk
+*.test.py
 **.yaml
 **/*.pyc
 **/**/*.pyc
