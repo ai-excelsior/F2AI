@@ -8,6 +8,8 @@ import os
 
 FSKEY = "__FS__"
 TIME_COL = "event_timestamp"
+ENTITY_EVENT_TIMESTAMP_FIELD = "_entity_event_timestamp_"
+SOURCE_EVENT_TIMESTAMP_FIELD = "_source_event_timestamp_"
 
 
 def remove_prefix(text: str, prefix: str):
@@ -272,21 +274,33 @@ def get_consistent_format(views):
 
 def get_stats_result(data, fn, primary_keys, include, start):
     if include == "neither":
-        return data[(data[TIME_COL + "_x"] < data[TIME_COL + "_y"]) & (data[TIME_COL + "_x"] > start)][
-            [fea for fea in data.columns if fea not in primary_keys]
-        ].apply(lambda x: getattr(pd.Series, fn)(x), axis=0)
+        return data[
+            (data[SOURCE_EVENT_TIMESTAMP_FIELD] < data[ENTITY_EVENT_TIMESTAMP_FIELD])
+            & (data[SOURCE_EVENT_TIMESTAMP_FIELD] > start)
+        ][[fea for fea in data.columns if fea not in primary_keys]].apply(
+            lambda x: getattr(pd.Series, fn)(x), axis=0
+        )
     elif include == "left":
-        return data[(data[TIME_COL + "_x"] < data[TIME_COL + "_y"]) & (data[TIME_COL + "_x"] >= start)][
-            [fea for fea in data.columns if fea not in primary_keys]
-        ].apply(lambda x: getattr(pd.Series, fn)(x), axis=0)
+        return data[
+            (data[SOURCE_EVENT_TIMESTAMP_FIELD] < data[ENTITY_EVENT_TIMESTAMP_FIELD])
+            & (data[SOURCE_EVENT_TIMESTAMP_FIELD] >= start)
+        ][[fea for fea in data.columns if fea not in primary_keys]].apply(
+            lambda x: getattr(pd.Series, fn)(x), axis=0
+        )
     elif include == "right":
-        return data[(data[TIME_COL + "_x"] <= data[TIME_COL + "_y"]) & (data[TIME_COL + "_x"] > start)][
-            [fea for fea in data.columns if fea not in primary_keys]
-        ].apply(lambda x: getattr(pd.Series, fn)(x), axis=0)
+        return data[
+            (data[SOURCE_EVENT_TIMESTAMP_FIELD] <= data[ENTITY_EVENT_TIMESTAMP_FIELD])
+            & (data[SOURCE_EVENT_TIMESTAMP_FIELD] > start)
+        ][[fea for fea in data.columns if fea not in primary_keys]].apply(
+            lambda x: getattr(pd.Series, fn)(x), axis=0
+        )
     else:
-        return data[(data[TIME_COL + "_x"] <= data[TIME_COL + "_y"]) & (data[TIME_COL + "_x"] >= start)][
-            [fea for fea in data.columns if fea not in primary_keys]
-        ].apply(lambda x: getattr(pd.Series, fn)(x), axis=0)
+        return data[
+            (data[SOURCE_EVENT_TIMESTAMP_FIELD] <= data[ENTITY_EVENT_TIMESTAMP_FIELD])
+            & (data[SOURCE_EVENT_TIMESTAMP_FIELD] >= start)
+        ][[fea for fea in data.columns if fea not in primary_keys]].apply(
+            lambda x: getattr(pd.Series, fn)(x), axis=0
+        )
 
 
 def get_bucket(bucket, endpoint=None):

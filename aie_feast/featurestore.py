@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import List, Union, cast
+from hologram import T
 import pandas as pd
 import os
 import json
@@ -944,93 +945,93 @@ class FeatureStore:
         Args:
             views (List): name of view to look up
             entity_df (pd.DataFrame,optional), if given, ignore `start` and `end`. Defaults to None, has the supreme priority.
-            group_key (list): joined-columns to do stats,  only works when `entity_df` is None, if None, means do stats on joined-entities.
+            group_key (list): joined-columns to do stats,  only works when `entity_df` is None. if None, means do stats on joined-entities, also accept `[]` means no grouping.
             fn (str, optional): statistical method, min, max, std, avg, mode, median. Defaults to "mean".
             start (str, optional): start_time. Defaults to None, works and only works when `entity_df` is None.
             end (str, optional): end_time. Defaults to None, works and only works when `entity_df` is None.
             include(str,optional): whether to include `start` or `end` timestamp
-            keys_only(bool,optional): whether to take action on keys
+            keys_only(bool,optional): whether to take action on keys, only available when fn=unique, return a list
         """
         self.__check_fns(fn)
         view = self._get_views(view)
-        check_type = True if fn != "unique" else False
+        avaliable_entity_names = self._get_available_entity_names(view)
+
         if entity_df is not None:
             self.__check_format(entity_df)
-            entity_df[TIME_COL] = pd.to_datetime(entity_df[TIME_COL])
             entities = (
                 list(entity_df.columns[:-1])
-                if entity_df.columns[:-1] is not None
-                else self._get_available_entity_names(view)
+                if len(entity_df.columns[:-1])
+                else [self.entities[entity_name].join_keys for entity_name in avaliable_entity_names]
             )
+            entity_df[TIME_COL] = pd.to_datetime(entity_df[TIME_COL], utc=True)
             start = pd.to_datetime(0, utc=True)
         else:
-            entities = group_key if group_key is not None else self._get_available_entity_names(view)
-            end = pd.to_datetime(end, utc=True) if end else pd.to_datetime(datetime.now(), utc=True)
+            entities = (
+                group_key
+                if group_key is not None
+                else [self.entities[entity_name].join_keys for entity_name in avaliable_entity_names]
+            )
+            entity_df = pd.DataFrame(columns=[TIME_COL])
+            entity_df[TIME_COL] = (
+                pd.to_datetime(end, utc=True) if end else pd.to_datetime(datetime.now(), utc=True)
+            )
             start = pd.to_datetime(start, utc=True) if start else pd.to_datetime(0, utc=True)
 
-        entity_dict = {self.entities[en].join_keys[0] if en in self.entities else en: en for en in entities}
+        join_keys = list(
+            {
+                join_key
+                for entity_name in avaliable_entity_names
+                for join_key in self.entities[entity_name].join_keys
+                if join_key in entities
+            }
+        )
+        if isinstance(view, FeatureView):
+            buildin_features = view.get_features(fn != "unique")
+        elif isinstance(view, LabelView):
+            buildin_features = view.get_labels(fn != "unique")
+        else:  # Service
+            buildin_features = view.get_features(self.feature_views, fn != "unique")
 
-        if not features:
-            features = (
-                self._get_available_features(view, check_type)
-                if isinstance(view, FeatureView)
-                else self._get_available_labels(view, check_type)
-                if isinstance(view, LabelView)
-                else self._get_available_features(view, check_type)
-                + self._get_available_labels(view, check_type)
-            )
+        if features:
+            features = set(features)
+            features = [feature for feature in buildin_features if feature.name in features]
+        else:
+            features = buildin_features
+
         if keys_only:
-            assert fn == "unique", "keys_only=True can only be applied when fn==unique"
+            assert fn == "unique", "keys_only=True can only be applied when fn=unique"
             features = []
 
         if self.offline_store.type == "file":
             if isinstance(view, (FeatureView, LabelView)):
-                df = self._read_local_file(view, features, entity_dict)
+                source = self.sources[view.batch_source]
+                assert isinstance(source, FileSource), "only work for file source in _get_point_record"
             else:
-                df = read_file(
-                    os.path.join(self.project_folder, view.materialize_path),
-                    time_cols=[TIME_COL],
-                    entity_cols=list(entity_dict.keys()),
+                source = FileSource(
+                    name=f"{view.name}_source",
+                    path=os.path.join(self.project_folder, view.materialize_path),
+                    timestamp_field=TIME_COL,
+                    created_timestamp_field=MATERIALIZE_TIME,
                 )
-                df.rename(columns=entity_dict, inplace=True)
-            df = df[[col for col in features + list(entity_dict.values()) + [TIME_COL]]]
-            if entity_df is not None and entities:
-                df = df.merge(entity_df, how="right", on=entities)
-            elif entity_df is not None:
-                df = df.merge(entity_df, how="cross")
-            else:
-                df.rename(columns={TIME_COL: TIME_COL + "_x"}, inplace=True)
-                # end_time limit
-                df = df.assign(**{TIME_COL + "_y": end})
-            if keys_only:
-                result = list(
-                    df[(df[TIME_COL + "_x"] < df[TIME_COL + "_y"]) & (df[TIME_COL + "_x"] >= start)]
-                    .groupby(entities)
-                    .groups.keys()
-                )
-            else:
-                result = (
-                    df.groupby(entities).apply(
-                        get_stats_result,
-                        fn,
-                        primary_keys=entities + [TIME_COL + "_x", TIME_COL + "_y"],
-                        include=include,
-                        start=start,
-                    )
-                    if entities
-                    else get_stats_result(
-                        df,
-                        fn,
-                        primary_keys=entities + [TIME_COL + "_x", TIME_COL + "_y"],
-                        include=include,
-                        start=start,
-                    )
-                )
+            assert source.timestamp_field, "stats can only apply on time relative data"
+            return self.offline_store.stats(
+                entity_df=entity_df,
+                features=features,
+                source=source,
+                fn=fn,
+                start=start,
+                join_keys=join_keys,
+                include=include,
+                keys_only=keys_only,
+            )
         elif self.offline_store.type == "pgsql":
+            entity_dict = {
+                self.entities[en].join_keys[0] if en in self.entities else en: en for en in entities
+            }
             conn = psy_conn(self.offline_store)
             if isinstance(view, (FeatureView, LabelView)):
                 if entity_df is not None and entities:
-                    entity_df.rename(columns={v: k for k, v in entity_dict.items()}, inplace=True)
+                    # entity_df.rename(columns={v: k for k, v in entity_dict.items()}, inplace=True)
                     table_suffix = to_pgsql(entity_df, TMP_TBL, self.offline_store)
                     q = Query.from_(view.batch_source)
                     q = q.inner_join(

@@ -1,13 +1,16 @@
+from ctypes import Union
+from datetime import datetime
 import pandas as pd
 from typing import List, Optional, Set
 from dateutil.relativedelta import relativedelta
 from aie_feast.common.utils import parse_date, read_file
 from aie_feast.definitions import Feature
 from aie_feast.common.source import FileSource
+from aie_feast.common.utils import get_stats_result
 from .offline_store import OfflineStore, OfflineStoreType
 
 
-DEFAULT_TIMESTAMP_FIELD = "event_timestamp"
+TIME_COL = "event_timestamp"
 # DEFAULT_CREATED_TIMESTAMP_FIELD = "created_timestamp"
 ENTITY_EVENT_TIMESTAMP_FIELD = "_entity_event_timestamp_"
 SOURCE_EVENT_TIMESTAMP_FIELD = "_source_event_timestamp_"
@@ -76,6 +79,59 @@ class OfflineFileStore(OfflineStore):
             is_label=is_label,
         )
 
+    def stats(
+        self,
+        entity_df: pd.DataFrame,
+        features: Set[Feature],
+        source: FileSource,
+        start,
+        fn: str = "mean",
+        join_keys: list = [],
+        include: str = "both",
+        keys_only: bool = False,
+    ):
+        source_df = self.read(source=source, features=features, join_keys=join_keys)
+
+        entity_df = entity_df.rename(columns={TIME_COL: ENTITY_EVENT_TIMESTAMP_FIELD})
+        source_df = source_df.rename(columns={source.timestamp_field: SOURCE_EVENT_TIMESTAMP_FIELD})
+
+        if len(join_keys) > 0:
+            unique_entity_df = entity_df[join_keys].groupby(join_keys).size().reset_index().drop(columns=[0])
+            source_df = unique_entity_df.merge(source_df, on=join_keys, how="inner")
+
+        if len(join_keys) > 0:
+            df = source_df.merge(entity_df, on=join_keys, how="inner")
+            if keys_only:
+                result = list(
+                    df[
+                        (df[SOURCE_EVENT_TIMESTAMP_FIELD] < df[ENTITY_EVENT_TIMESTAMP_FIELD])
+                        & (df[SOURCE_EVENT_TIMESTAMP_FIELD] >= start)
+                    ]
+                    .groupby(join_keys)
+                    .groups.keys()
+                )
+            else:
+                result = df.groupby(join_keys).apply(
+                    get_stats_result,
+                    fn,
+                    primary_keys=join_keys + [ENTITY_EVENT_TIMESTAMP_FIELD, SOURCE_EVENT_TIMESTAMP_FIELD],
+                    include=include,
+                    start=start,
+                )
+        else:
+            df = source_df.merge(entity_df, how="cross")
+            if keys_only:
+                pass
+            else:
+                result = get_stats_result(
+                    df,
+                    fn,
+                    primary_keys=join_keys + [ENTITY_EVENT_TIMESTAMP_FIELD, SOURCE_EVENT_TIMESTAMP_FIELD],
+                    include=include,
+                    start=start,
+                )
+        return result
+
     @classmethod
     def point_in_time_join(
         cls,
@@ -89,7 +145,7 @@ class OfflineFileStore(OfflineStore):
     ):
         # renames to keep things simple
         if timestamp_field:
-            entity_df = entity_df.rename(columns={timestamp_field: ENTITY_EVENT_TIMESTAMP_FIELD})
+            entity_df = entity_df.rename(columns={TIME_COL: ENTITY_EVENT_TIMESTAMP_FIELD})
             source_df = source_df.rename(columns={timestamp_field: SOURCE_EVENT_TIMESTAMP_FIELD})
 
         if created_timestamp_field and created_timestamp_field in entity_df.columns:
@@ -120,7 +176,7 @@ class OfflineFileStore(OfflineStore):
             df = cls.point_in_time_latest(df, join_keys, created_timestamp_field)
 
         return df.drop(columns=[SOURCE_EVENT_TIMESTAMP_FIELD]).rename(
-            columns={ENTITY_EVENT_TIMESTAMP_FIELD: timestamp_field}
+            columns={ENTITY_EVENT_TIMESTAMP_FIELD: TIME_COL}
         )
 
     @classmethod
@@ -137,7 +193,7 @@ class OfflineFileStore(OfflineStore):
         is_label: bool = False,
     ):
         # renames to keep things simple
-        entity_df = entity_df.rename(columns={timestamp_field: ENTITY_EVENT_TIMESTAMP_FIELD})
+        entity_df = entity_df.rename(columns={TIME_COL: ENTITY_EVENT_TIMESTAMP_FIELD})
         source_df = source_df.rename(columns={timestamp_field: SOURCE_EVENT_TIMESTAMP_FIELD})
 
         if created_timestamp_field and created_timestamp_field in entity_df.columns:
@@ -167,7 +223,7 @@ class OfflineFileStore(OfflineStore):
         df = cls.point_on_time_latest(df, join_keys, created_timestamp_field)
 
         return df.rename(
-            columns={ENTITY_EVENT_TIMESTAMP_FIELD: QUERY_COL, SOURCE_EVENT_TIMESTAMP_FIELD: timestamp_field}
+            columns={ENTITY_EVENT_TIMESTAMP_FIELD: QUERY_COL, SOURCE_EVENT_TIMESTAMP_FIELD: TIME_COL}
         )
 
     @classmethod

@@ -58,10 +58,21 @@ def test_materialize(make_credit_score):
 def test_get_period_features_from_feature_view(make_guizhou_traffic):
     project_folder = make_guizhou_traffic("file")
     entity_df = get_guizhou_traffic_entities(project_folder)
-    entity_df.rename(columns={"link_id": "link"}, inplace=True)
     store = FeatureStore(project_folder)
     measured_time = timeit.timeit(
         lambda: store.get_period_features("gy_link_travel_time_features", entity_df, period="20 minutes"),
         number=10,
     )
     print(f"get_period_features performance: {measured_time}s")
+
+
+def test_stats_from_feature_view(make_credit_score):
+    project_folder = make_credit_score("file")
+    # entity_df = get_credit_score_entities(project_folder)
+    # entity_df.rename(columns={"link_id": "link"}, inplace=True)
+    store = FeatureStore(project_folder)
+    measured_time = timeit.timeit(
+        lambda: store.stats("loan_features", group_key=["loan_id"], fn="unique"),
+        number=10,
+    )
+    print(f"stats performance: {measured_time}s")
