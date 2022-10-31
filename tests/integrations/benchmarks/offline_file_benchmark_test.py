@@ -65,10 +65,3 @@ def test_get_period_features_from_feature_view(make_guizhou_traffic):
         number=10,
     )
     print(f"get_period_features performance: {measured_time}s")
-
-
-def test_get_period_labels_from_label_views(make_credit_score):
-    project_folder = make_credit_score("file")
-    entity_df = get_guizhou_traffic_entities(project_folder)
-    store = FeatureStore(project_folder)
-    store.get_period_labels("loan_label_view", entity_df)
