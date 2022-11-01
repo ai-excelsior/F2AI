@@ -272,35 +272,27 @@ def get_consistent_format(views):
     return views if isinstance(views, dict) else {FSKEY: views}
 
 
-def get_stats_result(data, fn, primary_keys, include, start):
+def get_stats_result(data: pd.DataFrame, fn: str, use_cols: list, include, start):
     if include == "neither":
         return data[
             (data[SOURCE_EVENT_TIMESTAMP_FIELD] < data[ENTITY_EVENT_TIMESTAMP_FIELD])
             & (data[SOURCE_EVENT_TIMESTAMP_FIELD] > start)
-        ][[fea for fea in data.columns if fea not in primary_keys]].apply(
-            lambda x: getattr(pd.Series, fn)(x), axis=0
-        )
+        ][use_cols].apply(lambda x: getattr(pd.Series, fn)(x), axis=0)
     elif include == "left":
         return data[
             (data[SOURCE_EVENT_TIMESTAMP_FIELD] < data[ENTITY_EVENT_TIMESTAMP_FIELD])
             & (data[SOURCE_EVENT_TIMESTAMP_FIELD] >= start)
-        ][[fea for fea in data.columns if fea not in primary_keys]].apply(
-            lambda x: getattr(pd.Series, fn)(x), axis=0
-        )
+        ][use_cols].apply(lambda x: getattr(pd.Series, fn)(x), axis=0)
     elif include == "right":
         return data[
             (data[SOURCE_EVENT_TIMESTAMP_FIELD] <= data[ENTITY_EVENT_TIMESTAMP_FIELD])
             & (data[SOURCE_EVENT_TIMESTAMP_FIELD] > start)
-        ][[fea for fea in data.columns if fea not in primary_keys]].apply(
-            lambda x: getattr(pd.Series, fn)(x), axis=0
-        )
+        ][use_cols].apply(lambda x: getattr(pd.Series, fn)(x), axis=0)
     else:
         return data[
             (data[SOURCE_EVENT_TIMESTAMP_FIELD] <= data[ENTITY_EVENT_TIMESTAMP_FIELD])
             & (data[SOURCE_EVENT_TIMESTAMP_FIELD] >= start)
-        ][[fea for fea in data.columns if fea not in primary_keys]].apply(
-            lambda x: getattr(pd.Series, fn)(x), axis=0
-        )
+        ][use_cols].apply(lambda x: getattr(pd.Series, fn)(x), axis=0)
 
 
 def get_bucket(bucket, endpoint=None):

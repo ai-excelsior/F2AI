@@ -968,13 +968,14 @@ class FeatureStore:
         else:
             entities = (
                 group_key
-                if group_key is not None
+                if group_key is not None  # group_key can be empty list
                 else [self.entities[entity_name].join_keys for entity_name in avaliable_entity_names]
             )
             entity_df = pd.DataFrame(columns=[TIME_COL])
-            entity_df[TIME_COL] = (
+            entity_df[TIME_COL] = [
                 pd.to_datetime(end, utc=True) if end else pd.to_datetime(datetime.now(), utc=True)
-            )
+            ]
+
             start = pd.to_datetime(start, utc=True) if start else pd.to_datetime(0, utc=True)
 
         join_keys = list(
@@ -1000,7 +1001,7 @@ class FeatureStore:
 
         if keys_only:
             assert fn == "unique", "keys_only=True can only be applied when fn=unique"
-            features = []
+            assert join_keys, "no key available for keys_only=True"
 
         if self.offline_store.type == "file":
             if isinstance(view, (FeatureView, LabelView)):
@@ -1025,6 +1026,8 @@ class FeatureStore:
                 keys_only=keys_only,
             )
         elif self.offline_store.type == "pgsql":
+            if keys_only:
+                features = []
             entity_dict = {
                 self.entities[en].join_keys[0] if en in self.entities else en: en for en in entities
             }
@@ -1119,6 +1122,7 @@ class FeatureStore:
                     created_timestamp_field=MATERIALIZE_TIME,
                 )
             return self.offline_store.get_latest_entities(source=source, join_keys=join_keys)
+
         elif self.offline_store.type == "pgsql":
             entity_dict = {
                 self.entities[en].join_keys[0] if en in self.entities else None: en for en in entity

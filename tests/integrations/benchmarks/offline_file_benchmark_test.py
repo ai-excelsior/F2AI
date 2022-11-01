@@ -1,3 +1,4 @@
+from hologram import T
 import pandas as pd
 import timeit
 from os import path
@@ -69,12 +70,8 @@ def test_get_period_features_from_feature_view(make_guizhou_traffic):
 def test_stats_from_feature_view(make_credit_score):
     project_folder = make_credit_score("file")
     entity_df = get_credit_score_entities(project_folder)
-    entity_df.rename(columns={"link_id": "link"}, inplace=True)
     store = FeatureStore(project_folder)
-    measured_time = timeit.timeit(
-        lambda: store.stats("loan_features", entity_df=entity_df, fn="unique"),
-        number=10,
-    )
+    measured_time = timeit.timeit(lambda: store.stats("loan_features", entity_df, fn="mean"), number=10)
     print(f"stats performance: {measured_time}s")
 
 

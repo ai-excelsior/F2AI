@@ -27,7 +27,7 @@ class OfflineFileStore(OfflineStore):
             time_columns.append(source.created_timestamp_field)
 
         feature_columns = [feature.name for feature in features]
-        all_columns = time_columns + join_keys + feature_columns
+        all_columns = list(set(time_columns + join_keys + feature_columns))
 
         return read_file(
             source.path, file_format=source.file_format, time_cols=time_columns, entity_cols=join_keys
@@ -91,45 +91,35 @@ class OfflineFileStore(OfflineStore):
         keys_only: bool = False,
     ):
         source_df = self.read(source=source, features=features, join_keys=join_keys)
+        if keys_only:
+            feature_columns = join_keys
+        else:
+            feature_columns = [feature.name for feature in features]
 
         entity_df = entity_df.rename(columns={TIME_COL: ENTITY_EVENT_TIMESTAMP_FIELD})
         source_df = source_df.rename(columns={source.timestamp_field: SOURCE_EVENT_TIMESTAMP_FIELD})
 
-        if len(join_keys) > 0:
-            unique_entity_df = entity_df[join_keys].groupby(join_keys).size().reset_index().drop(columns=[0])
-            source_df = unique_entity_df.merge(source_df, on=join_keys, how="inner")
-
-        if len(join_keys) > 0:
+        if len(entity_df.columns) > 1:
             df = source_df.merge(entity_df, on=join_keys, how="inner")
-            if keys_only:
-                result = list(
-                    df[
-                        (df[SOURCE_EVENT_TIMESTAMP_FIELD] < df[ENTITY_EVENT_TIMESTAMP_FIELD])
-                        & (df[SOURCE_EVENT_TIMESTAMP_FIELD] >= start)
-                    ]
-                    .groupby(join_keys)
-                    .groups.keys()
-                )
-            else:
-                result = df.groupby(join_keys).apply(
-                    get_stats_result,
-                    fn,
-                    primary_keys=join_keys + [ENTITY_EVENT_TIMESTAMP_FIELD, SOURCE_EVENT_TIMESTAMP_FIELD],
-                    include=include,
-                    start=start,
-                )
         else:
             df = source_df.merge(entity_df, how="cross")
-            if keys_only:
-                pass
-            else:
-                result = get_stats_result(
-                    df,
-                    fn,
-                    primary_keys=join_keys + [ENTITY_EVENT_TIMESTAMP_FIELD, SOURCE_EVENT_TIMESTAMP_FIELD],
-                    include=include,
-                    start=start,
-                )
+
+        if join_keys:
+            result = df.groupby(join_keys).apply(
+                get_stats_result,
+                fn,
+                use_cols=feature_columns,
+                include=include,
+                start=start,
+            )
+        else:
+            result = get_stats_result(
+                df,
+                fn,
+                use_cols=feature_columns,
+                include=include,
+                start=start,
+            )
         return result
 
     def get_latest_entities(self, source: FileSource, join_keys: list):
