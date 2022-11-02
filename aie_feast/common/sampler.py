@@ -5,6 +5,7 @@ import pandas as pd
 import warnings
 from typing import Union, List
 import datetime
+from aie_feast.common.utils import transform_freq
 
 TIME_COL = "event_timestamp"
 
@@ -69,8 +70,9 @@ class GroupFixednbrSampler(AbstractSampler):
         return list(bucket_mask)
 
     def bucket_random_sample(self, all_date: pd.DataFrame):
+        all_date.reset_index(drop=True, inplace=True)
         if len(all_date) > 0:
-            return all_date.loc[range(all_date.index[0], all_date.index[-1], self._stride), :]
+            return all_date.loc[range(0, len(all_date), self._stride), :]
         else:
             warnings.warn(
                 "please reset input parameters to ensure you have at least one bucket to be sampled!",
@@ -80,16 +82,16 @@ class GroupFixednbrSampler(AbstractSampler):
 
     def sample(self, bucket_mask):
         bucket_num = self.time_bucket_num()
-        bucket_size = int(self._time_bucket.split(" ", 1)[0])
-        time_bucket_unit = self._time_bucket.split(" ", 1)[1].rstrip("s")
+        bucket_size, time_bucket_unit = self._time_bucket.split(" ")
+        bucket_size = int(bucket_size)
         freq_dict = {
-            "month": "MS",
-            "week": "W",
-            "day": "D",
-            "hour": "H",
-            "minute": "min",
-            "second": "S",
-            "millisecond": "ms",
+            "months": "MS",
+            "weeks": "W",
+            "days": "D",
+            "hours": "H",
+            "minutes": "min",
+            "seconds": "S",
+            "milliseconds": "ms",
         }
 
         all_date = pd.DataFrame(
@@ -119,7 +121,7 @@ class GroupFixednbrSampler(AbstractSampler):
                 result = result.drop(columns="bucket_nbr").droplevel(level="bucket_nbr")
         # result.reset_index(inplace=True, drop=True)
 
-        return result.drop_duplicates()
+        return result.drop_duplicates().reset_index(drop=True)
 
     def __call__(self):
         bucket_mask = self.random_bucket()

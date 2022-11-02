@@ -90,7 +90,7 @@ class OfflineFileStore(OfflineStore):
         join_keys: List[str] = [],
         ttl: Optional[str] = None,
         include: bool = True,
-        how: str = "inner",
+        **kwargs
     ):
         source_df = self.read(source=source, features=features, join_keys=join_keys)
 
@@ -102,7 +102,7 @@ class OfflineFileStore(OfflineStore):
             ttl=ttl,
             join_keys=join_keys,
             include=include,
-            how=how,
+            **kwargs
         )
 
     def get_period_features(
@@ -115,6 +115,7 @@ class OfflineFileStore(OfflineStore):
         ttl: Optional[str] = None,
         include: bool = True,
         is_label: bool = False,
+        **kwargs
     ):
         source_df = self.read(source=source, features=features, join_keys=join_keys)
 
@@ -128,6 +129,7 @@ class OfflineFileStore(OfflineStore):
             join_keys=join_keys,
             include=include,
             is_label=is_label,
+            **kwargs
         )
 
     def stats(
@@ -142,10 +144,8 @@ class OfflineFileStore(OfflineStore):
         keys_only: bool = False,
     ):
         source_df = self.read(source=source, features=features, join_keys=join_keys)
-        if keys_only:
-            feature_columns = join_keys
-        else:
-            feature_columns = [feature.name for feature in features]
+
+        feature_columns = [feature.name for feature in features]
 
         entity_df = entity_df.rename(columns={TIME_COL: ENTITY_EVENT_TIMESTAMP_FIELD})
         source_df = source_df.rename(columns={source.timestamp_field: SOURCE_EVENT_TIMESTAMP_FIELD})
@@ -154,6 +154,9 @@ class OfflineFileStore(OfflineStore):
             df = source_df.merge(entity_df, on=join_keys, how="inner")
         else:
             df = source_df.merge(entity_df, how="cross")
+
+        if keys_only:
+            return df[join_keys].groupby(join_keys).size().reset_index().drop(columns=[0])
 
         if join_keys:
             result = df.groupby(join_keys).apply(
@@ -222,9 +225,9 @@ class OfflineFileStore(OfflineStore):
             df = cls.point_in_time_filter(df, include=include, ttl=ttl)
             df = cls.point_in_time_latest(df, join_keys, created_timestamp_field)
 
-        return df.drop(columns=[SOURCE_EVENT_TIMESTAMP_FIELD, created_timestamp_field]).rename(
-            columns={ENTITY_EVENT_TIMESTAMP_FIELD: TIME_COL}
-        )
+        return df.drop(
+            columns=[SOURCE_EVENT_TIMESTAMP_FIELD, created_timestamp_field], errors="ignore"
+        ).rename(columns={ENTITY_EVENT_TIMESTAMP_FIELD: TIME_COL})
 
     @classmethod
     def point_on_time_join(
@@ -238,13 +241,14 @@ class OfflineFileStore(OfflineStore):
         join_keys: List[str] = [],
         include: bool = True,
         is_label: bool = False,
+        how="inner",
     ):
         # renames to keep things simple
         entity_df = entity_df.rename(columns={TIME_COL: ENTITY_EVENT_TIMESTAMP_FIELD})
         source_df = source_df.rename(columns={timestamp_field: SOURCE_EVENT_TIMESTAMP_FIELD})
 
-        if created_timestamp_field and created_timestamp_field in entity_df.columns:
-            entity_df = entity_df.drop(columns=[created_timestamp_field])
+        if created_timestamp_field:
+            entity_df = entity_df.drop(columns=[created_timestamp_field], erros="ignore")
 
         # pre filter source_df by ttl
         if ttl:
@@ -269,7 +273,7 @@ class OfflineFileStore(OfflineStore):
         df = cls.point_on_time_filter(df, period, include=include, ttl=ttl, is_label=is_label)
         df = cls.point_on_time_latest(df, join_keys, created_timestamp_field)
 
-        return df.rename(
+        return df.drop(columns=[created_timestamp_field], erros="ignore").rename(
             columns={ENTITY_EVENT_TIMESTAMP_FIELD: QUERY_COL, SOURCE_EVENT_TIMESTAMP_FIELD: TIME_COL}
         )
 

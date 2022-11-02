@@ -36,6 +36,7 @@ def read_file(path, file_format=None, time_cols=None, entity_cols=None):
 
     if file_format.startswith("parq"):
         df = pd.read_parquet(path)
+        df[entity_cols] = df[entity_cols].astype(str)
     elif file_format.startswith("tsv"):
         df = pd.read_csv(path, sep="\t", parse_dates=time_cols if time_cols else [], dtype=dtype_str)
     elif file_format.startswith("txt"):

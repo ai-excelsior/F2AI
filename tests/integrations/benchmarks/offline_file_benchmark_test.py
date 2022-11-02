@@ -1,8 +1,8 @@
-from hologram import T
 import pandas as pd
 import timeit
 from os import path
 from aie_feast import FeatureStore
+from aie_feast.common.sampler import GroupFixednbrSampler
 
 LINE_LIMIT = 1000
 
@@ -86,5 +86,43 @@ def test_get_latest_entity_from_feature_view(make_credit_score):
 def test_materialize(make_credit_score):
     project_folder = make_credit_score("file")
     store = FeatureStore(project_folder)
-    measured_time = timeit.timeit(lambda: store.materialize(service_name="credit_scoring_v1"), number=10)
+    measured_time = timeit.timeit(lambda: store.materialize(service_name="credit_scoring_v1"), number=1)
     print(f"stats performance: {measured_time}s")
+
+
+def test_sampler_with_groups(make_credit_score):
+    project_folder = make_credit_score("file")
+    store = FeatureStore(project_folder)
+    groups = store.stats("loan_features", group_key=["zipcode", "dob_ssn"], keys_only=True, fn="unique")
+    groups = list(zip(groups["zipcode"], groups["dob_ssn"]))
+    measured_time = timeit.timeit(
+        lambda: GroupFixednbrSampler(
+            time_bucket="10 days",
+            stride=1,
+            group_ids=groups,
+            group_names=["zipcode", "dob_ssn"],
+            start="2020-08-20",
+            end="2021-08-30",
+        )(),
+        number=5,
+    )
+    print(f"sampler with groups performance: {measured_time}s")
+
+
+def test_dataset_to_pytorch(make_credit_score):
+    project_folder = make_credit_score("file")
+    store = FeatureStore(project_folder)
+    store.materialize(service_name="credit_scoring_v1")
+    ds = store.get_dataset(
+        service_name="credit_scoring_v1",
+        sampler=GroupFixednbrSampler(
+            time_bucket="10 days",
+            stride=1,
+            group_ids=None,
+            group_names=None,
+            start="2020-08-20",
+            end="2021-08-30",
+        ),
+    )
+    measured_time = timeit.timeit(lambda: list(ds.to_pytorch()), number=1)
+    print(f"dataset.to_pytorch performance: {measured_time}s")

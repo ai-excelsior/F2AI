@@ -43,13 +43,11 @@ class Service(BaseModel):
         """
         get labels based on labels' schema anchor
         """
-        return list(
-            {
-                label
-                for schema_anchor in self.labels
-                for label in schema_anchor.get_features_from_views(label_views, is_numeric)
-            }
-        )
+        return {
+            label
+            for schema_anchor in self.labels
+            for label in schema_anchor.get_features_from_views(label_views, is_numeric)
+        }
 
     def get_feature_views(self, feature_views: Dict[str, FeatureView]) -> List[FeatureView]:
         if isinstance(feature_views, dict):

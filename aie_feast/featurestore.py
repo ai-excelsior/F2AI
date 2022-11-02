@@ -131,6 +131,7 @@ class FeatureStore:
         entity_df: Union[pd.DataFrame, str],
         features: list = None,
         include: bool = True,
+        **kwargs,
     ):
         """non-series prediction use: get `features` of `entity_df` from `feature_views`
 
@@ -148,7 +149,7 @@ class FeatureStore:
             features = self._get_available_features(feature_view)
 
         if self.offline_store.type == "file":
-            return self._get_point_record(feature_view, entity_df, features, include)
+            return self._get_point_record(feature_view, entity_df, features, include, **kwargs)
         elif self.offline_store.type == "pgsql":
             table_suffix = to_pgsql(entity_df, TMP_TBL, self.offline_store)
             # connect to pgsql db
@@ -175,6 +176,7 @@ class FeatureStore:
         period: str,
         features: List = None,
         include: bool = True,
+        **kwargs,
     ):
         """time_series prediction use: get past `period` length `features` of `entity_df` from `feature_views`
 
@@ -191,7 +193,9 @@ class FeatureStore:
             features = self._get_available_features(feature_view)
 
         if self.offline_store.type == "file":
-            return self._get_period_record(feature_view, entity_df, period, features, include, is_label=False)
+            return self._get_period_record(
+                feature_view, entity_df, period, features, include, is_label=False, **kwargs
+            )
         elif self.offline_store.type == "pgsql":
             table_suffix = to_pgsql(entity_df, TMP_TBL, self.offline_store)
             # connect to pgsql db
@@ -217,7 +221,7 @@ class FeatureStore:
             )
             return result
 
-    def get_labels(self, label_view, entity_df: pd.DataFrame, include: bool = True):
+    def get_labels(self, label_view, entity_df: pd.DataFrame, include: bool = True, **kwargs):
         """non-time series prediction use: get labels of `entity_df` from `label_views`
 
         Args:
@@ -230,7 +234,7 @@ class FeatureStore:
         labels = self._get_available_labels(label_view)
 
         if self.offline_store.type == "file":
-            return self._get_point_record(label_view, entity_df, labels, include)
+            return self._get_point_record(label_view, entity_df, labels, include, **kwargs)
         elif self.offline_store.type == "pgsql":
             table_suffix = to_pgsql(entity_df, TMP_TBL, self.offline_store)
             # connect to pgsql db
@@ -251,11 +255,7 @@ class FeatureStore:
             return result
 
     def get_period_labels(
-        self,
-        label_view,
-        entity_df: pd.DataFrame,
-        period: str,
-        include: bool = False,
+        self, label_view, entity_df: pd.DataFrame, period: str, include: bool = False, **kwargs
     ):
         """time series prediction use: get from `start` to `end` length labels of `entity_df` from `label_views`
 
@@ -270,7 +270,9 @@ class FeatureStore:
         labels = self._get_available_labels(label_view)
 
         if self.offline_store.type == "file":
-            return self._get_period_record(label_view, entity_df, period, labels, include, is_label=True)
+            return self._get_period_record(
+                label_view, entity_df, period, labels, include, is_label=True, **kwargs
+            )
         elif self.offline_store.type == "pgsql":
             table_suffix = to_pgsql(entity_df, TMP_TBL, self.offline_store)
             # connect to pgsql db
@@ -296,7 +298,9 @@ class FeatureStore:
             )
             return result
 
-    def _get_point_record(self, view, entity_df: pd.DataFrame, features: list, include: bool = True):
+    def _get_point_record(
+        self, view, entity_df: pd.DataFrame, features: list, include: bool = True, **kwargs
+    ):
         """non time-series prediction use
 
         Args:
@@ -336,7 +340,7 @@ class FeatureStore:
         elif isinstance(view, LabelView):
             buildin_features = view.get_labels()
         else:  # Service
-            buildin_features = view.get_features(self.feature_views)
+            buildin_features = view.get_features(self.feature_views) | view.get_labels(self.label_views)
 
         if features:
             features = set(features)
@@ -349,6 +353,7 @@ class FeatureStore:
             join_keys=join_keys,
             ttl=view.ttl,
             include=include,
+            **kwargs,
         )
 
     def _get_point_pgsql(
@@ -556,6 +561,7 @@ class FeatureStore:
         features: list,
         include: bool = True,
         is_label: bool = False,
+        **kwargs,
     ):
 
         """series prediction use
@@ -614,6 +620,7 @@ class FeatureStore:
             ttl=view.ttl,
             include=include,
             is_label=is_label,
+            **kwargs,
         )
 
     def _get_window_pgsql(
@@ -655,32 +662,6 @@ class FeatureStore:
             )
 
         return sql_query
-
-    def _get_window_record(self, df_period, period, is_label, include):
-        if is_label:
-            if include:
-                df_period = df_period[  # latest time
-                    (df_period[TIME_COL + "_y"] <= df_period[TIME_COL + "_x"])
-                    & (  # earliest time
-                        df_period[TIME_COL + "_x"]
-                        < df_period[TIME_COL + "_y"].map(lambda x: x + relativedelta(**parse_date(period)))
-                    )
-                ]
-            else:
-                df_period = df_period[  # latest time
-                    (df_period[TIME_COL + "_y"] < df_period[TIME_COL + "_x"])
-                    & (  # earliest time
-                        df_period[TIME_COL + "_x"]
-                        <= df_period[TIME_COL + "_y"].map(lambda x: x + relativedelta(**parse_date(period)))
-                    )
-                ]
-        else:
-            df_period = self._fil_timelimit(include, period, df_period)
-        # rename action timestamp based on labelviews
-        df_period.rename(columns={TIME_COL + "_x": TIME_COL}, inplace=True)
-        # time defined in `entity_df`
-        df_period.rename(columns={TIME_COL + "_y": QUERY_COL}, inplace=True)
-        return df_period
 
     def materialize(self, service_name: str, incremental_begin: str = None):
         """incrementally join `views` to generate tables
@@ -809,34 +790,6 @@ class FeatureStore:
             f"materialize done, file saved at {os.path.join(self.project_folder, service.materialize_path)}"
         )
 
-    def _read_local_file(self, view, features, all_entity_col):
-        source = cast(FileSource, self.sources[view.batch_source])
-        df = read_file(
-            os.path.join(self.project_folder, source.path),
-            file_format=source.file_format,
-            time_cols=[
-                source.timestamp_field,
-                source.created_timestamp_field,
-            ],
-            entity_cols=list(all_entity_col.keys()),
-        )
-        df.rename(
-            columns={
-                source.timestamp_field: TIME_COL,
-                source.created_timestamp_field: CREATE_COL,
-            },
-            inplace=True,
-        )
-        df.rename(columns=all_entity_col, inplace=True)
-        df = df[
-            [
-                col
-                for col in list(all_entity_col.values()) + [TIME_COL, CREATE_COL] + features
-                if col in df.columns
-            ]
-        ]
-        return df
-
     def _pgsql_timelimit(self, join, ttl, include: bool = True):
         if ttl:
             ttl = transform_pgsql_period(ttl, False)
@@ -866,33 +819,6 @@ class FeatureStore:
                 .as_("sql_query")
             )
         return sql_query
-
-    def _fil_timelimit(self, include, ttl, df):
-        if include:
-            return (
-                df[  # latest time
-                    (df[TIME_COL + "_y"] >= df[TIME_COL + "_x"])
-                    & (  # earliest time
-                        df[TIME_COL + "_x"]
-                        > df[TIME_COL + "_y"].map(lambda x: x - relativedelta(**parse_date(ttl)))
-                    )
-                ]
-                if ttl
-                else df[df[TIME_COL + "_y"] >= df[TIME_COL + "_x"]]
-            )  # latest time
-
-        else:
-            return (
-                df[  # latest time
-                    (df[TIME_COL + "_y"] > df[TIME_COL + "_x"])
-                    & (  # earliest time
-                        df[TIME_COL + "_x"]
-                        >= df[TIME_COL + "_y"].map(lambda x: x - relativedelta(**parse_date(ttl)))
-                    )
-                ]
-                if ttl
-                else df[df[TIME_COL + "_y"] > df[TIME_COL + "_x"]]
-            )  # latest time
 
     def stats(
         self,
