@@ -81,3 +81,10 @@ def test_get_latest_entity_from_feature_view(make_credit_score):
     measured_time = timeit.timeit(lambda: store.get_latest_entities("loan_features"), number=10)
     print(f"get_latest_entities performance: {measured_time}s")
     print(store.get_latest_entities("loan_features"))
+
+
+def test_materialize(make_credit_score):
+    project_folder = make_credit_score("file")
+    store = FeatureStore(project_folder)
+    measured_time = timeit.timeit(lambda: store.materialize(service_name="credit_scoring_v1"), number=5)
+    print(f"stats performance: {measured_time}s")
