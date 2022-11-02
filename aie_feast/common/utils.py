@@ -29,7 +29,6 @@ def read_file(path, file_format=None, time_cols=None, entity_cols=None):
     time_cols = [i for i in time_cols if i]
     path = remove_prefix(path, "file://")
 
-
     dtype_str = {en: str for en in entity_cols}
 
     if file_format is None:
@@ -52,13 +51,13 @@ def read_file(path, file_format=None, time_cols=None, entity_cols=None):
 def to_file(file, path, type):
     path = remove_prefix(path, "file://")
     if type.startswith("parq"):
-        file.to_parquet(path)
+        file.to_parquet(path, index=False)
     elif type.startswith("tsv"):
-        file.to_csv(path, sep="\t")
+        file.to_csv(path, sep="\t", index=False)
     elif type.startswith("txt"):
-        file.to_csv(path, sep=" ")
+        file.to_csv(path, sep=" ", index=False)
     else:
-        file.to_csv(path)
+        file.to_csv(path, index=False)
 
 
 def build_filter_time_query(
