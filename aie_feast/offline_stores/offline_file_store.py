@@ -33,6 +33,55 @@ class OfflineFileStore(OfflineStore):
             source.path, file_format=source.file_format, time_cols=time_columns, entity_cols=join_keys
         )[all_columns]
 
+    def materialize(self, service, feature_views, label_views, sources, entities, incremental_begin):
+        all_cols_name = service.get_feature_names(feature_views) | service.get_label_names(label_views)
+        label_view = service.get_label_view(label_views)
+        labels = label_view.get_labels()
+        join_keys = list(
+            {
+                join_key
+                for entity_name in service.get_label_entities(label_view)
+                for join_key in entities[entity_name].join_keys
+            }
+        )
+        source = sources[label_view.batch_source]
+        joined_frame = self.read(source=source, features=labels, join_keys=list(join_keys))
+        # create timestamp makes no sense to labels
+        joined_frame.drop(columns=source.created_timestamp_field, inplace=True, errors="ignore")
+        if isinstance(incremental_begin, dict):
+            incremental_begin = joined_frame[TIME_COL].max() - relativedelta(**incremental_begin)
+            joined_frame = joined_frame[joined_frame[TIME_COL] >= incremental_begin]
+        else:
+            joined_frame = joined_frame[joined_frame[TIME_COL] >= incremental_begin]
+
+        # join features dataframe
+        for feature_view in service.get_feature_views(feature_views):
+            feature_name = [
+                n
+                for n in feature_view.get_feature_names()
+                if n in all_cols_name and n not in joined_frame.columns
+            ]
+            if feature_name:  # this view has new features other than those in joined_frame
+                features = [n for n in feature_view.get_features() if n.name in feature_name]
+                join_keys = list(
+                    {
+                        join_key
+                        for entity_name in service.get_feature_entities(feature_view)
+                        for join_key in entities[entity_name].join_keys
+                    }
+                )
+                source = sources[feature_view.batch_source]
+                joined_frame = self.get_features(
+                    entity_df=joined_frame,
+                    features=features,
+                    source=source,
+                    join_keys=join_keys,
+                    ttl=feature_view.ttl,
+                    include=True,
+                    how="right",
+                )
+        return joined_frame
+
     def get_features(
         self,
         entity_df: pd.DataFrame,
@@ -41,6 +90,7 @@ class OfflineFileStore(OfflineStore):
         join_keys: List[str] = [],
         ttl: Optional[str] = None,
         include: bool = True,
+        how: str = "inner",
     ):
         source_df = self.read(source=source, features=features, join_keys=join_keys)
 
@@ -52,6 +102,7 @@ class OfflineFileStore(OfflineStore):
             ttl=ttl,
             join_keys=join_keys,
             include=include,
+            how=how,
         )
 
     def get_period_features(
@@ -120,7 +171,7 @@ class OfflineFileStore(OfflineStore):
                 include=include,
                 start=start,
             )
-        return result
+        return result.reset_index(drop=True)
 
     def get_latest_entities(self, source: FileSource, join_keys: list):
         source_df = self.read(source=source, features=[], join_keys=join_keys)
@@ -137,14 +188,15 @@ class OfflineFileStore(OfflineStore):
         ttl: Optional[str] = None,
         join_keys: List[str] = [],
         include: bool = True,
+        how: str = "inner",
     ):
         # renames to keep things simple
         if timestamp_field:
             entity_df = entity_df.rename(columns={TIME_COL: ENTITY_EVENT_TIMESTAMP_FIELD})
             source_df = source_df.rename(columns={timestamp_field: SOURCE_EVENT_TIMESTAMP_FIELD})
 
-        if created_timestamp_field and created_timestamp_field in entity_df.columns:
-            entity_df = entity_df.drop(columns=[created_timestamp_field])
+        if created_timestamp_field:
+            entity_df = entity_df.drop(columns=[created_timestamp_field], errors="ignore")
 
         # pre filter source_df by ttl
         if ttl:
@@ -162,7 +214,7 @@ class OfflineFileStore(OfflineStore):
             source_df = unique_entity_df.merge(source_df, on=join_keys, how="inner")
 
         if len(join_keys) > 0:
-            df = source_df.merge(entity_df, on=join_keys, how="inner")
+            df = source_df.merge(entity_df, on=join_keys, how=how)
         else:
             df = source_df.merge(entity_df, how="cross")
 
@@ -170,7 +222,7 @@ class OfflineFileStore(OfflineStore):
             df = cls.point_in_time_filter(df, include=include, ttl=ttl)
             df = cls.point_in_time_latest(df, join_keys, created_timestamp_field)
 
-        return df.drop(columns=[SOURCE_EVENT_TIMESTAMP_FIELD]).rename(
+        return df.drop(columns=[SOURCE_EVENT_TIMESTAMP_FIELD, created_timestamp_field]).rename(
             columns={ENTITY_EVENT_TIMESTAMP_FIELD: TIME_COL}
         )
 

@@ -1,6 +1,5 @@
 from datetime import datetime
 from typing import List, Union, cast
-from hologram import T
 import pandas as pd
 import os
 import json
@@ -792,61 +791,22 @@ class FeatureStore:
         except:
             raise TypeError("please check your `incremental_begin` type")
 
-        all_cols_name = service.get_feature_names(self.feature_views) | service.get_label_names(
-            self.label_views
+        joined_frame = self.offline_store.materialize(
+            service=service,
+            feature_views=self.feature_views,
+            label_views=self.label_views,
+            sources=self.sources,
+            entities=self.entities,
+            incremental_begin=incremental_begin,
         )
-        for label_view in service.get_label_views(self.label_views):
-            labels = label_view.get_labels()
-            join_keys = list(
-                {
-                    join_key
-                    for entity_name in service.get_label_entities(label_view)
-                    for join_key in self.entities[entity_name].join_keys
-                }
-            )
-            source = self.sources[label_view.batch_source]
-            joined_frame = self.offline_store.read(source=source, features=labels, join_keys=list(join_keys))
-            # create timestamp makes no sense to labels
-            joined_frame.drop(columns=[CREATE_COL], inplace=True, errors="ignore")
-            if isinstance(incremental_begin, dict):
-                incremental_begin = joined_frame[TIME_COL].max() - relativedelta(**incremental_begin)
-                joined_frame = joined_frame[joined_frame[TIME_COL] >= incremental_begin]
-            else:
-                joined_frame = joined_frame[joined_frame[TIME_COL] >= incremental_begin]
-
-        # join features dataframe
-        for feature_view in service.get_feature_views(self.feature_views):
-            feature_name = [
-                n
-                for n in feature_view.get_feature_names()
-                if n in all_cols_name and n not in joined_frame.columns
-            ]
-            if feature_name:  # this view has new features other than those in joined_frame
-                features = [n for n in feature_view.get_features() if n.name in feature_name]
-                join_keys = list(
-                    {
-                        join_key
-                        for entity_name in service.get_feature_entities(feature_view)
-                        for join_key in self.entities[entity_name].join_keys
-                    }
-                )
-                source = self.sources[feature_view.batch_source]
-                tmp_fea = self.offline_store.read(source=source, features=features, join_keys=join_keys)
-                joined_frame = self.offline_store.point_in_time_join(
-                    entity_df=joined_frame,
-                    source_df=tmp_fea,
-                    timestamp_field=source.timestamp_field,
-                    created_timestamp_field=source.created_timestamp_field,
-                    ttl=feature_view.ttl,
-                    join_keys=join_keys,
-                    include=True,
-                )
         joined_frame[MATERIALIZE_TIME] = pd.to_datetime(datetime.now(), utc=True)
-
         to_file(
             joined_frame,
             os.path.join(self.project_folder, f"{service.materialize_path}"),
             f"{service.materialize_path}".split(".")[-1],
+        )
+        print(
+            f"materialize done, file saved at {os.path.join(self.project_folder, service.materialize_path)}"
         )
 
     def _read_local_file(self, view, features, all_entity_col):
