@@ -42,7 +42,7 @@ class IterableDataset(IterableDataset):
     def __iter__(self):
         for i in range(len(self.entity_index)):
             if i % self.batch == 0:  # batch merge
-                self.get_context(self.merge)
+                self.get_context(i // self.batch)
             to_return = (
                 self.data_sample[0].iloc[[i % self.batch]],
                 self.data_sample[1].iloc[[i % self.batch]],
@@ -138,7 +138,7 @@ class IterableDataset(IterableDataset):
             )
 
         self.data_sample = (feature_views_pd.drop(columns=to_drop), label_views_pd.drop(columns=to_drop))
-        self.merge += 1
+    
 
     def get_feature_period(self, service: "Service", is_label=False) -> dict:
         """_summary_
