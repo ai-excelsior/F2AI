@@ -23,6 +23,12 @@ class Service(BaseModel):
         cfg["labels"] = SchemaAnchor.from_yamls(cfg.pop("labels", []))
         return cls(**cfg)
 
+    def get_feature_names(self, feature_views: Dict[str, FeatureView], is_numeric=False) -> Set[Feature]:
+        return set([feature.name for feature in self.get_features(feature_views, is_numeric)])
+
+    def get_label_names(self, label_views: Dict[str, FeatureView], is_numeric=False) -> Set[Feature]:
+        return set([label.name for label in self.get_labels(label_views, is_numeric)])
+
     def get_features(self, feature_views: Dict[str, FeatureView], is_numeric=False) -> Set[Feature]:
         """
         get features based on features' schema anchor
@@ -46,8 +52,11 @@ class Service(BaseModel):
         )
 
     def get_feature_views(self, feature_views: Dict[str, FeatureView]) -> List[FeatureView]:
-        feature_view_names = {anchor.view_name for anchor in self.features}
-        return [feature_views[feature_view_name] for feature_view_name in feature_view_names]
+        if isinstance(feature_views, dict):
+            feature_view_names = {anchor.view_name for anchor in self.features}
+            return [feature_views[feature_view_name] for feature_view_name in feature_view_names]
+        elif isinstance(feature_views, FeatureView):
+            return [feature_views]
 
     def get_feature_entities(self, feature_views: Dict[str, FeatureView]) -> Set[Entity]:
         return {
@@ -57,8 +66,11 @@ class Service(BaseModel):
         }
 
     def get_label_views(self, label_views: Dict[str, LabelView]) -> List[LabelView]:
-        label_view_names = {anchor.view_name for anchor in self.labels}
-        return [label_views[label_view_name] for label_view_name in label_view_names]
+        if isinstance(label_views, dict):
+            label_view_names = {anchor.view_name for anchor in self.labels}
+            return [label_views[label_view_name] for label_view_name in label_view_names]
+        elif isinstance(label_views, LabelView):
+            return [label_views]
 
     def get_label_entities(self, label_views: Dict[str, LabelView]) -> Set[Entity]:
         return {entity for label_view in self.get_label_views(label_views) for entity in label_view.entities}
