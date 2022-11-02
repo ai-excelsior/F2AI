@@ -37,6 +37,8 @@ CREATE_COL = "created_timestamp"  # timestamp of record of the action taken in o
 QUERY_COL = "query_timestamp"  # only use in period query, query time in period-query result table
 TMP_TBL = "entity_df"  # temp table upload in database
 MATERIALIZE_TIME = "materialize_time"  # timestamp to done materialize, only used in materialized result
+ENTITY_EVENT_TIMESTAMP_FIELD = "_entity_event_timestamp_"
+SOURCE_EVENT_TIMESTAMP_FIELD = "_source_event_timestamp_"
 
 
 class FeatureStore:
@@ -755,7 +757,7 @@ class FeatureStore:
         conn.close()
 
         if incremental_begin is None:
-            incremental_begin = result
+            incremental_begin = result.tz_localize(None)
         elif isinstance(incremental_begin, dict):
             incremental_begin = label_result - relativedelta(**incremental_begin)
         else:
@@ -766,7 +768,7 @@ class FeatureStore:
             f"{service.dbt_path}",
             f"{service.materialize_path}",
         )
-
+        pd.to_datetime
         dict_var = {
             "labelviews": label_view_dict,
             "featureviews": feature_views,
@@ -781,6 +783,7 @@ class FeatureStore:
 
         Args:
             service (Service): service entity
+            incremental_begin: time to begin materialize
         """
         try:
             incremental_begin = pd.to_datetime(incremental_begin if incremental_begin else 0, utc=True)
@@ -789,17 +792,22 @@ class FeatureStore:
         except:
             raise TypeError("please check your `incremental_begin` type")
 
-        all_features_use = self._get_available_features(service)
+        all_cols_name = service.get_feature_names(self.feature_views) | service.get_label_names(
+            self.label_views
+        )
         for label_view in service.get_label_views(self.label_views):
-            labels = self._get_available_labels(service)
-            avaliable_entity_names = self._get_available_entity_names(service)
-            entity_dict = {
-                self.entities[entity_name].join_keys[0]: entity_name for entity_name in avaliable_entity_names
-            }
-            joined_frame = self._read_local_file(label_view, labels, entity_dict)
-            joined_frame.drop(
-                columns=[CREATE_COL], inplace=True, errors="ignore"
-            )  # create timestamp makes no sense to labels
+            labels = label_view.get_labels()
+            join_keys = list(
+                {
+                    join_key
+                    for entity_name in service.get_label_entities(label_view)
+                    for join_key in self.entities[entity_name].join_keys
+                }
+            )
+            source = self.sources[label_view.batch_source]
+            joined_frame = self.offline_store.read(source=source, features=labels, join_keys=list(join_keys))
+            # create timestamp makes no sense to labels
+            joined_frame.drop(columns=[CREATE_COL], inplace=True, errors="ignore")
             if isinstance(incremental_begin, dict):
                 incremental_begin = joined_frame[TIME_COL].max() - relativedelta(**incremental_begin)
                 joined_frame = joined_frame[joined_frame[TIME_COL] >= incremental_begin]
@@ -808,33 +816,31 @@ class FeatureStore:
 
         # join features dataframe
         for feature_view in service.get_feature_views(self.feature_views):
-            feature_cols = [
-                item
-                for item in all_features_use
-                if item in self._get_available_features(feature_view) and item not in joined_frame.columns
+            feature_name = [
+                n
+                for n in feature_view.get_feature_names()
+                if n in all_cols_name and n not in joined_frame.columns
             ]
-            if feature_cols:  # this view has new features other than those in joined_frame
-                avaliable_entity_names = self._get_available_entity_names(feature_view)
-                entity_dict = {
-                    self.entities[entity_name].join_keys[0]: entity_name
-                    for entity_name in avaliable_entity_names
-                }
-                tmp_fea = self._read_local_file(feature_view, feature_cols, entity_dict)
-                joined_frame = tmp_fea.merge(joined_frame, how="right", on=avaliable_entity_names)
-                if self.sources[feature_view.batch_source].timestamp_field:  # time relevant features
-                    # filter feature timestamp <= label timestamp
-                    joined_frame = self._fil_timelimit(include=True, ttl=feature_view.ttl, df=joined_frame)
-                    # get the latest record for each label time after filter feature timestamp <= label timestamp
-                    joined_frame = get_newest_record(
-                        joined_frame, TIME_COL, avaliable_entity_names, CREATE_COL
-                    )
-                    # feature timestamp makes no use to result
-                    joined_frame.drop(columns=[CREATE_COL], inplace=True)
-
-        joined_frame.rename(
-            columns={en: self.entities[en].join_keys[0] for en in self._get_available_entity_names(service)},
-            inplace=True,
-        )
+            if feature_name:  # this view has new features other than those in joined_frame
+                features = [n for n in feature_view.get_features() if n.name in feature_name]
+                join_keys = list(
+                    {
+                        join_key
+                        for entity_name in service.get_feature_entities(feature_view)
+                        for join_key in self.entities[entity_name].join_keys
+                    }
+                )
+                source = self.sources[feature_view.batch_source]
+                tmp_fea = self.offline_store.read(source=source, features=features, join_keys=join_keys)
+                joined_frame = self.offline_store.point_in_time_join(
+                    entity_df=joined_frame,
+                    source_df=tmp_fea,
+                    timestamp_field=source.timestamp_field,
+                    created_timestamp_field=source.created_timestamp_field,
+                    ttl=feature_view.ttl,
+                    join_keys=join_keys,
+                    include=True,
+                )
         joined_frame[MATERIALIZE_TIME] = pd.to_datetime(datetime.now(), utc=True)
 
         to_file(
