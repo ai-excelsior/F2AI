@@ -631,11 +631,11 @@ class FeatureStore:
                 .select(join.star)
                 .where(
                     Parameter(
-                        f" ({TIME_COL}_tmp::timestamp >= {TIME_COL}::timestamp) and ({TIME_COL}_tmp::timestamp < {TIME_COL}::timestamp + '{period}')  "
+                        f" ({TIME_COL}_tmp::timestamptz >= {TIME_COL}::timestamptz) and ({TIME_COL}_tmp::timestamptz < {TIME_COL}::timestamptz + '{period}')  "
                     )
                     if include
                     else Parameter(
-                        f" ({TIME_COL}_tmp::timestamp > {TIME_COL}::timestamp) and ({TIME_COL}_tmp::timestamp <= {TIME_COL}::timestamp + '{period}')  "
+                        f" ({TIME_COL}_tmp::timestamptz > {TIME_COL}::timestamptz) and ({TIME_COL}_tmp::timestamptz <= {TIME_COL}::timestamptz + '{period}')  "
                     )
                 )
                 .as_("sql_query")
@@ -646,11 +646,11 @@ class FeatureStore:
                 .select(join.star)
                 .where(
                     Parameter(
-                        f" ({TIME_COL}_tmp::timestamp <= {TIME_COL}::timestamp) and ({TIME_COL}_tmp::timestamp > {TIME_COL}::timestamp + '{period}')  "
+                        f" ({TIME_COL}_tmp::timestamptz <= {TIME_COL}::timestamptz) and ({TIME_COL}_tmp::timestamptz > {TIME_COL}::timestamptz + '{period}')  "
                     )
                     if include
                     else Parameter(
-                        f" ({TIME_COL}_tmp::timestamp < {TIME_COL}::timestamp) and ({TIME_COL}_tmp::timestamp >= {TIME_COL}::timestamp + '{period}')  "
+                        f" ({TIME_COL}_tmp::timestamptz < {TIME_COL}::timestamptz) and ({TIME_COL}_tmp::timestamptz >= {TIME_COL}::timestamptz + '{period}')  "
                     )
                 )
                 .as_("sql_query")
@@ -819,11 +819,11 @@ class FeatureStore:
                 .select(join.star)
                 .where(
                     Parameter(
-                        f" ({TIME_COL}_tmp::timestamp > {TIME_COL}::timestamp + '{ttl}') and ({TIME_COL}_tmp::timestamp <= {TIME_COL}::timestamp) "
+                        f" ({TIME_COL}_tmp::timestamptz> {TIME_COL}::timestamptz+ '{ttl}') and ({TIME_COL}_tmp::timestamptz<= {TIME_COL}::timestamptztz) "
                     )
                     if include
                     else Parameter(
-                        f" ({TIME_COL}_tmp::timestamp >= {TIME_COL}::timestamp + '{ttl}') and ({TIME_COL}_tmp::timestamp < {TIME_COL}::timestamp) "
+                        f" ({TIME_COL}_tmp::timestamptz>= {TIME_COL}::timestamptz+ '{ttl}') and ({TIME_COL}_tmp::timestamptz< {TIME_COL}::timestamptztz) "
                     )
                 )
                 .as_("sql_query")
@@ -833,9 +833,9 @@ class FeatureStore:
                 Query.from_(join)
                 .select(join.star)
                 .where(
-                    Parameter(f" ({TIME_COL}_tmp::timestamp <= {TIME_COL}::timestamp) ")
+                    Parameter(f" ({TIME_COL}_tmp::timestamptz <= {TIME_COL}::timestamptz) ")
                     if include
-                    else Parameter(f" ({TIME_COL}_tmp::timestamp < {TIME_COL}::timestamp) ")
+                    else Parameter(f" ({TIME_COL}_tmp::timestamptz < {TIME_COL}::timestamptz) ")
                 )
                 .as_("sql_query")
             )

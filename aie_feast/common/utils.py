@@ -68,13 +68,13 @@ def build_filter_time_query(
         return (
             q.where(
                 Parameter(
-                    f" ({timecol}::timestamp > '{start}'::timestamp) and ({timecol}::timestamp < '{end}'::timestamp) "
+                    f" ({timecol}::timestamptz > '{start}'::timestamptz) and ({timecol}::timestamptz < '{end}'::timestamptz) "
                 )
             )
             if end
             else q.where(
                 Parameter(
-                    f" ({timecol}::timestamp > '{start}'::timestamp) and ({timecol}::timestamp < {TIME_COL}_tmp::timestamp) "
+                    f" ({timecol}::timestamptz > '{start}'::timestamptz) and ({timecol}::timestamptz < {TIME_COL}_tmp::timestamptz) "
                 )
             )
         )
@@ -82,13 +82,13 @@ def build_filter_time_query(
         return (
             q.where(
                 Parameter(
-                    f" ({timecol}::timestamp >= '{start}'::timestamp) and ({timecol}::timestamp < '{end}'::timestamp) "
+                    f" ({timecol}::timestamptz >= '{start}'::timestamptz) and ({timecol}::timestamptz < '{end}'::timestamptz) "
                 )
             )
             if end
             else q.where(
                 Parameter(
-                    f" ({timecol}::timestamp >= '{start}'::timestamp) and ({timecol}::timestamp < {TIME_COL}_tmp::timestamp) "
+                    f" ({timecol}::timestamptz >= '{start}'::timestamptz) and ({timecol}::timestamptz < {TIME_COL}_tmp::timestamptz) "
                 )
             )
         )
@@ -96,13 +96,13 @@ def build_filter_time_query(
         return (
             q.where(
                 Parameter(
-                    f" ({timecol}::timestamp > '{start}'::timestamp) and ({timecol}::timestamp <= '{end}'::timestamp) "
+                    f" ({timecol}::timestamptz > '{start}'::timestamptz) and ({timecol}::timestamptz <= '{end}'::timestamptz) "
                 )
             )
             if end
             else q.where(
                 Parameter(
-                    f" ({timecol}::timestamp > '{start}'::timestamp) and ({timecol}::timestamp <= {TIME_COL}_tmp::timestamp) "
+                    f" ({timecol}::timestamptz > '{start}'::timestamptz) and ({timecol}::timestamptz <= {TIME_COL}_tmp::timestamptz) "
                 )
             )
         )
@@ -110,13 +110,13 @@ def build_filter_time_query(
         return (
             q.where(
                 Parameter(
-                    f" ({timecol}::timestamp >= '{start}'::timestamp) and ({timecol}::timestamp <= '{end}'::timestamp) "
+                    f" ({timecol}::timestamptz >= '{start}'::timestamptz) and ({timecol}::timestamptz <= '{end}'::timestamptz) "
                 )
             )
             if end
             else q.where(
                 Parameter(
-                    f" ({timecol}::timestamp >= '{start}'::timestamp) and ({timecol}::timestamp <= {TIME_COL}_tmp::timestamp) "
+                    f" ({timecol}::timestamptz >= '{start}'::timestamptz) and ({timecol}::timestamptz <= {TIME_COL}_tmp::timestamptz) "
                 )
             )
         )
