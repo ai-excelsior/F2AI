@@ -24,26 +24,30 @@ def schema_to_dict(schema):
     return {item["name"]: item.get("dtype", "string") for item in schema}
 
 
-# TODO: refactor this to speedup column oriented file format
-def read_file(path, file_format=None, time_cols=None, entity_cols=None):
-    time_cols = [i for i in time_cols if i]
+def read_file(
+    path,
+    parse_dates: List[str] = [],
+    str_cols: List[str] = [],
+    keep_cols: List[str] = [],
+    file_format=None,
+):
     path = remove_prefix(path, "file://")
-
-    dtype_str = {en: str for en in entity_cols}
+    dtypes = {en: str for en in str_cols}
+    usecols = set(keep_cols + parse_dates + str_cols)
 
     if file_format is None:
         file_format = path.split(".")[-1]
 
     if file_format.startswith("parq"):
-        df = pd.read_parquet(path)
-        df[entity_cols] = df[entity_cols].astype(str)
+        df = pd.read_parquet(path, usecols=usecols).astype(dtypes)
     elif file_format.startswith("tsv"):
-        df = pd.read_csv(path, sep="\t", parse_dates=time_cols if time_cols else [], dtype=dtype_str)
+        df = pd.read_csv(path, sep="\t", parse_dates=parse_dates, dtype=dtypes, usecols=usecols)
     elif file_format.startswith("txt"):
-        df = pd.read_csv(path, sep=" ", parse_dates=time_cols if time_cols else [], dtype=dtype_str)
+        df = pd.read_csv(path, sep=" ", parse_dates=parse_dates, dtype=dtypes, usecols=usecols)
     else:
-        df = pd.read_csv(path, parse_dates=time_cols if time_cols else [], dtype=dtype_str)
-    for col in time_cols:
+        df = pd.read_csv(path, parse_dates=parse_dates, dtype=dtypes, usecols=usecols)
+
+    for col in parse_dates:
         df[col] = pd.to_datetime(df[col], utc=True)
 
     return df

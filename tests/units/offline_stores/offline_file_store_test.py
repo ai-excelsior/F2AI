@@ -109,8 +109,12 @@ mock_point_in_time_latest_df = pd.DataFrame(
 
 def test_point_in_time_latest_with_group_keys():
     result_df = OfflineFileStore.point_in_time_latest(mock_point_in_time_latest_df, ["join_key"])
-    assert result_df.loc[0]["_source_event_timestamp_"] == pd.Timestamp("2021-08-25 20:16:19")
-    assert result_df.loc[1]["_source_event_timestamp_"] == pd.Timestamp("2021-08-25 20:16:20")
+
+    df_a = result_df[result_df["join_key"] == "A"].iloc[0]
+    df_b = result_df[result_df["join_key"] == "B"].iloc[0]
+
+    assert df_a["_source_event_timestamp_"] == pd.Timestamp("2021-08-25 20:16:19")
+    assert df_b["_source_event_timestamp_"] == pd.Timestamp("2021-08-25 20:16:20")
 
 
 def test_point_in_time_latest_without_group_keys():
@@ -284,6 +288,6 @@ def test_point_on_time_join_with_created_timestamp():
         join_keys=["join_key"],
         period="2 seconds",
     )
-    assert all(result_df["feature"] == [4, 5, 5])
-    assert result_df[result_df["event_timestamp"] == pd.Timestamp("2021-08-25 20:16:18")].shape == (2, 6)
+    assert all(result_df["feature"] == [5, 5, 4])
+    assert result_df[result_df["event_timestamp"] == pd.Timestamp("2021-08-25 20:16:18")].shape == (2, 5)
     assert pd.Timestamp("2021-08-25 20:16:20") not in result_df["event_timestamp"]

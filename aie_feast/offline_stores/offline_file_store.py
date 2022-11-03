@@ -1,10 +1,13 @@
+from feast import Entity, FeatureView
 import pandas as pd
 from typing import List, Optional, Set
 from dateutil.relativedelta import relativedelta
-from aie_feast.common.utils import parse_date, read_file
+from aie_feast.common.utils import parse_date
 from aie_feast.definitions import Feature
 from aie_feast.common.source import FileSource
 from aie_feast.common.utils import get_stats_result
+from aie_feast.service import Service
+from aie_feast.views import LabelView
 from .offline_store import OfflineStore, OfflineStoreType
 
 
@@ -19,19 +22,23 @@ QUERY_COL = "query_timestamp"
 class OfflineFileStore(OfflineStore):
     type: OfflineStoreType = OfflineStoreType.FILE
 
-    def read(self, source: FileSource, features: Set[Feature] = {}, join_keys: List[str] = []):
-        time_columns = [source.timestamp_field]
-        if source.created_timestamp_field:
-            time_columns.append(source.created_timestamp_field)
-
+    def _read_file(self, source: FileSource, features: Set[Feature] = {}, join_keys: List[str] = []):
         feature_columns = [feature.name for feature in features]
-        all_columns = list(set(time_columns + join_keys + feature_columns))
 
-        return read_file(
-            source.path, file_format=source.file_format, time_cols=time_columns, entity_cols=join_keys
-        )[all_columns]
+        return source.read_file(
+            str_cols=join_keys,
+            keep_cols=feature_columns,
+        )
 
-    def materialize(self, service, feature_views, label_views, sources, entities, incremental_begin):
+    def materialize(
+        self,
+        service: Service,
+        feature_views: List[FeatureView],
+        label_views: List[LabelView],
+        sources: List[FileSource],
+        entities: List[Entity],
+        incremental_begin,
+    ):
         all_cols_name = service.get_feature_names(feature_views) | service.get_label_names(label_views)
         label_view = service.get_label_view(label_views)
         labels = label_view.get_labels()
@@ -43,7 +50,7 @@ class OfflineFileStore(OfflineStore):
             }
         )
         source = sources[label_view.batch_source]
-        joined_frame = self.read(source=source, features=labels, join_keys=list(join_keys))
+        joined_frame = self._read_file(source=source, features=labels, join_keys=list(join_keys))
         # create timestamp makes no sense to labels
         joined_frame.drop(columns=source.created_timestamp_field, inplace=True, errors="ignore")
         if isinstance(incremental_begin, dict):
@@ -90,7 +97,7 @@ class OfflineFileStore(OfflineStore):
         include: bool = True,
         **kwargs
     ):
-        source_df = self.read(source=source, features=features, join_keys=join_keys)
+        source_df = self._read_file(source=source, features=features, join_keys=join_keys)
 
         return self.point_in_time_join(
             entity_df=entity_df,
@@ -115,7 +122,7 @@ class OfflineFileStore(OfflineStore):
         is_label: bool = False,
         **kwargs
     ):
-        source_df = self.read(source=source, features=features, join_keys=join_keys)
+        source_df = self._read_file(source=source, features=features, join_keys=join_keys)
 
         return self.point_on_time_join(
             entity_df=entity_df,
@@ -141,7 +148,7 @@ class OfflineFileStore(OfflineStore):
         include: str = "both",
         keys_only: bool = False,
     ):
-        source_df = self.read(source=source, features=features, join_keys=join_keys)
+        source_df = self._read_file(source=source, features=features, join_keys=join_keys)
 
         feature_columns = [feature.name for feature in features]
 
@@ -175,7 +182,7 @@ class OfflineFileStore(OfflineStore):
         return result
 
     def get_latest_entities(self, source: FileSource, join_keys: list):
-        source_df = self.read(source=source, features=[], join_keys=join_keys)
+        source_df = self._read_file(source=source, features=[], join_keys=join_keys)
         df = source_df.sort_values(by=source.timestamp_field, ascending=False, ignore_index=True)
         return df.drop_duplicates(subset=join_keys, keep="first")
 
@@ -246,7 +253,7 @@ class OfflineFileStore(OfflineStore):
         source_df = source_df.rename(columns={timestamp_field: SOURCE_EVENT_TIMESTAMP_FIELD})
 
         if created_timestamp_field:
-            entity_df = entity_df.drop(columns=[created_timestamp_field], erros="ignore")
+            entity_df = entity_df.drop(columns=[created_timestamp_field], errors="ignore")
 
         # pre filter source_df by ttl
         if ttl:
@@ -271,7 +278,7 @@ class OfflineFileStore(OfflineStore):
         df = cls.point_on_time_filter(df, period, include=include, ttl=ttl, is_label=is_label)
         df = cls.point_on_time_latest(df, join_keys, created_timestamp_field)
 
-        return df.drop(columns=[created_timestamp_field], erros="ignore").rename(
+        return df.drop(columns=[created_timestamp_field], errors="ignore").rename(
             columns={ENTITY_EVENT_TIMESTAMP_FIELD: QUERY_COL, SOURCE_EVENT_TIMESTAMP_FIELD: TIME_COL}
         )
 
@@ -359,7 +366,7 @@ class OfflineFileStore(OfflineStore):
         entity_timestamp_field: str = ENTITY_EVENT_TIMESTAMP_FIELD,
         source_timestamp_field: str = SOURCE_EVENT_TIMESTAMP_FIELD,
     ):
-        sort_by = [source_timestamp_field]
+        sort_by = group_keys + [source_timestamp_field]
         if created_timestamp_field:
             sort_by.append(created_timestamp_field)
 
@@ -381,7 +388,12 @@ class OfflineFileStore(OfflineStore):
         source_timestamp_field: str = SOURCE_EVENT_TIMESTAMP_FIELD,
     ):
         if created_timestamp_field:
-            df.sort_values(by=[created_timestamp_field], ascending=False, ignore_index=True, inplace=True)
+            df.sort_values(
+                by=group_keys + [created_timestamp_field],
+                ascending=False,
+                ignore_index=True,
+                inplace=True,
+            )
             df.drop_duplicates(
                 subset=group_keys + [entity_timestamp_field, source_timestamp_field],
                 keep="first",

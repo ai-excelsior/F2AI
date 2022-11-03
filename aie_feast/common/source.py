@@ -2,6 +2,7 @@ from typing import Dict, List, Optional, Any
 from pydantic import BaseModel, Field
 from enum import Enum
 from aie_feast.definitions import FeatureSchema, OfflineStoreType
+from aie_feast.common.utils import read_file
 
 
 class Source(BaseModel):
@@ -22,6 +23,19 @@ class FileFormatEnum(str, Enum):
 class FileSource(Source):
     file_format: FileFormatEnum = FileFormatEnum.CSV
     path: str
+
+    def read_file(self, str_cols: List[str] = [], keep_cols: List[str] = []):
+        time_columns = [self.timestamp_field]
+        if self.created_timestamp_field:
+            time_columns.append(self.created_timestamp_field)
+
+        return read_file(
+            self.path,
+            file_format=self.file_format,
+            parse_dates=time_columns,
+            str_cols=str_cols,
+            keep_cols=keep_cols,
+        )
 
 
 class RequestSource(Source):
