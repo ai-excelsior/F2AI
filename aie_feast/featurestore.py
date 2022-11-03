@@ -1,8 +1,10 @@
-from datetime import datetime
-from typing import List, Union, cast
 import pandas as pd
 import os
 import json
+from datetime import datetime
+from aie_feast.common.docker_client import docker_client
+from aie_feast.common.jinja import jinja_env
+from typing import Dict, List, Union, cast
 from dateutil.relativedelta import relativedelta
 from pypika import Query, Parameter, functions
 from aie_feast.common.source import FileSource
@@ -756,7 +758,33 @@ class FeatureStore:
             "increment_begin": str(incremental_begin),
         }
         json_var = json.dumps(dict_var)
-        os.system(f"cd {dbt_path} && dbt run --profiles-dir {dbt_path} --vars '{json_var}' ")
+        self.schedule_local_dbt_container(service.materialize_path, json_var, dbt_path)
+        # os.system(f"cd {dbt_path} && dbt run --profiles-dir {dbt_path} --vars '{json_var}' ")
+
+    def schedule_local_dbt_container(self, profile_name: str, vars: Dict, dbt_path: str):
+        dbt_profiles = jinja_env.get_template("profiles.yaml").render(
+            profile=profile_name,
+            host=self.offline_store.host,
+            port=self.offline_store.port,
+            user=self.offline_store.user,
+            password=self.offline_store.password,
+            database=self.offline_store.database,
+            db_schema=self.offline_store.db_schema,
+        )
+        profile_path = os.path.join(dbt_path, "profiles.yml")
+        if not os.path.exists(profile_path):
+            with open(profile_path, "w") as f:
+                f.write(dbt_profiles)
+        docker_client.containers.run(
+            'ghcr.io/dbt-labs/dbt-postgres:1.3.latest',
+            command=f"run --vars '{vars}' ",
+            volumes={
+                dbt_path: {'bind': '/usr/app', 'mode': 'rw'},
+                profile_path: {'bind': '/root/.dbt/profiles.yml', 'mode': 'rw'},
+            },
+            network='host',
+            remove=True
+        )
 
     def _offline_record_materialize(self, service: Service, incremental_begin):
         """materialize offline file

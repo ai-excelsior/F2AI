@@ -1,0 +1,9 @@
+FROM python:3.8
+
+WORKDIR /aie-feast
+RUN pip install --upgrade pip
+
+COPY ./requirements.txt /aie-feast/
+RUN pip install -i https://mirrors.aliyun.com/pypi/simple -r requirements.txt
+
+COPY ./aie-feast /aie-feast
