@@ -152,12 +152,12 @@ class IterableDataset(IterableDataset):
         period_dict = defaultdict(list)
 
         if is_label:
-            for label in service.get_labels(self.fs.label_views):
+            for label in service.get_label_objects(self.fs.label_views):
                 period = label.period if label.period else 0
                 period_dict[period].append(label.name)
 
         else:
-            for feature in service.get_features(self.fs.feature_views):
+            for feature in service.get_feature_objects(self.fs.feature_views):
                 period = feature.period if feature.period else 0
                 period_dict[period].append(feature.name)
 

@@ -13,7 +13,7 @@ def test_get_features_from_service():
     )
     feature_views = {"fv": FeatureView(name="fv", schema=[FeatureSchema(name="f1", dtype="string")])}
 
-    features = service.get_features(feature_views)
+    features = service.get_feature_objects(feature_views)
 
     assert len(features) == 1
     assert list(features)[0].name == "f1"

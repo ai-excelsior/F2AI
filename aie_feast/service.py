@@ -24,12 +24,12 @@ class Service(BaseModel):
         return cls(**cfg)
 
     def get_feature_names(self, feature_views: Dict[str, FeatureView], is_numeric=False) -> Set[Feature]:
-        return set([feature.name for feature in self.get_features(feature_views, is_numeric)])
+        return set([feature.name for feature in self.get_feature_objects(feature_views, is_numeric)])
 
     def get_label_names(self, label_views: Dict[str, FeatureView], is_numeric=False) -> Set[Feature]:
-        return set([label.name for label in self.get_labels(label_views, is_numeric)])
+        return set([label.name for label in self.get_label_objects(label_views, is_numeric)])
 
-    def get_features(self, feature_views: Dict[str, FeatureView], is_numeric=False) -> Set[Feature]:
+    def get_feature_objects(self, feature_views: Dict[str, FeatureView], is_numeric=False) -> Set[Feature]:
         """
         get features based on features' schema anchor
         """
@@ -39,7 +39,7 @@ class Service(BaseModel):
             for feature in schema_anchor.get_features_from_views(feature_views, is_numeric)
         }
 
-    def get_labels(self, label_views: Dict[str, LabelView], is_numeric=False) -> Set[Feature]:
+    def get_label_objects(self, label_views: Dict[str, LabelView], is_numeric=False) -> Set[Feature]:
         """
         get labels based on labels' schema anchor
         """

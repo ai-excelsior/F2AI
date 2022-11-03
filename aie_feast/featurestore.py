@@ -20,16 +20,7 @@ from aie_feast.common.get_config import (
     get_feature_views,
     get_source_cfg,
 )
-from aie_feast.common.utils import (
-    read_file,
-    to_file,
-    parse_date,
-    get_newest_record,
-    get_stats_result,
-    transform_pgsql_period,
-    build_agg_query,
-    remove_prefix,
-)
+from aie_feast.common.utils import to_file, parse_date, transform_pgsql_period, build_agg_query, remove_prefix
 from aie_feast.common.psl_utils import execute_sql, psy_conn, to_pgsql, close_conn, sql_df
 
 
@@ -87,9 +78,9 @@ class FeatureStore:
         self, view: Union[FeatureView, Service], is_numeric: bool = False
     ) -> List[str]:
         if isinstance(view, FeatureView):
-            features = view.get_features(is_numeric)
+            features = view.get_feature_objects(is_numeric)
         elif isinstance(view, Service):
-            features = view.get_features(self.feature_views, is_numeric)
+            features = view.get_feature_objects(self.feature_views, is_numeric)
         else:
             raise TypeError("must be FeatureViews or Service")
 
@@ -97,9 +88,9 @@ class FeatureStore:
 
     def _get_available_labels(self, view: Union[LabelView, Service], is_numeric: bool = False):
         if isinstance(view, LabelView):
-            labels = view.get_labels(is_numeric)
+            labels = view.get_label_objects(is_numeric)
         elif isinstance(view, Service):
-            labels = view.get_labels(self.label_views, is_numeric)
+            labels = view.get_label_objects(self.label_views, is_numeric)
         else:
             raise TypeError("must be LabelViews or Service")
 
@@ -338,11 +329,13 @@ class FeatureStore:
             )
 
         if isinstance(view, FeatureView):
-            buildin_features = view.get_features()
+            buildin_features = view.get_feature_objects()
         elif isinstance(view, LabelView):
-            buildin_features = view.get_labels()
+            buildin_features = view.get_label_objects()
         else:  # Service
-            buildin_features = view.get_features(self.feature_views) | view.get_labels(self.label_views)
+            buildin_features = view.get_feature_objects(self.feature_views) | view.get_label_objects(
+                self.label_views
+            )
 
         if features:
             features = set(features)
@@ -604,11 +597,11 @@ class FeatureStore:
             )
 
         if isinstance(view, FeatureView):
-            buildin_features = view.get_features()
+            buildin_features = view.get_feature_objects()
         elif isinstance(view, LabelView):
-            buildin_features = view.get_labels()
+            buildin_features = view.get_label_objects()
         else:  # Service
-            buildin_features = view.get_features(self.feature_views)
+            buildin_features = view.get_feature_objects(self.feature_views)
         if features:
             features = set(features)
             features = [feature for feature in buildin_features if feature.name in features]
@@ -695,13 +688,13 @@ class FeatureStore:
         label_view_dict = label_view.dict()
         label_view_dict.update(
             {
-                "labels": [label.name for label in label_view.get_labels()],
+                "labels": [label.name for label in label_view.get_label_objects()],
                 "event_time": self.sources[label_view.batch_source].timestamp_field,
                 "create_time": self.sources[label_view.batch_source].created_timestamp_field,
             }
         )
 
-        all_features_use = [feature.name for feature in service.get_features(self.feature_views)]
+        all_features_use = [feature.name for feature in service.get_feature_objects(self.feature_views)]
 
         feature_views = []
         for feature_view in service.get_feature_views(self.feature_views):
@@ -907,9 +900,9 @@ class FeatureStore:
             }
         )
         if isinstance(view, FeatureView):
-            buildin_features = view.get_features(fn != "unique")
+            buildin_features = view.get_feature_objects(fn != "unique")
         elif isinstance(view, LabelView):
-            buildin_features = view.get_labels(fn != "unique")
+            buildin_features = view.get_label_objects(fn != "unique")
         else:  # Service
             buildin_features = view.get_features(self.feature_views, fn != "unique")
 

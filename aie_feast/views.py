@@ -18,7 +18,7 @@ class FeatureView(BaseView):
     def get_feature_names(self):
         return [feature.name for feature in self.schemas]
 
-    def get_features(self, is_numeric=False) -> Set[Feature]:
+    def get_feature_objects(self, is_numeric=False) -> Set[Feature]:
         return {
             Feature(
                 name=schema.name,
@@ -37,7 +37,7 @@ class LabelView(BaseView):
     def get_label_names(self):
         return [label.name for label in self.schemas]
 
-    def get_labels(self, is_numeric=False) -> Set[Feature]:
+    def get_label_objects(self, is_numeric=False) -> Set[Feature]:
         return {
             Feature(
                 name=schema.name,
