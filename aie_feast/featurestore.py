@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 from aie_feast.common.docker_client import docker_client
 from aie_feast.common.jinja import jinja_env
-from typing import Dict, List, Union, cast
+from typing import Dict, List, Union
 from dateutil.relativedelta import relativedelta
 from pypika import Query, Parameter, functions
 from aie_feast.common.source import FileSource
@@ -769,14 +769,14 @@ class FeatureStore:
             with open(profile_path, "w") as f:
                 f.write(dbt_profiles)
         docker_client.containers.run(
-            'ghcr.io/dbt-labs/dbt-postgres:1.3.latest',
+            "ghcr.io/dbt-labs/dbt-postgres:1.3.latest",
             command=f"run --vars '{vars}' ",
             volumes={
-                dbt_path: {'bind': '/usr/app', 'mode': 'rw'},
-                profile_path: {'bind': '/root/.dbt/profiles.yml', 'mode': 'rw'},
+                dbt_path: {"bind": "/usr/app", "mode": "rw"},
+                profile_path: {"bind": "/root/.dbt/profiles.yml", "mode": "rw"},
             },
-            network='host',
-            remove=True
+            network="host",
+            remove=True,
         )
 
     def _offline_record_materialize(self, service: Service, incremental_begin):
