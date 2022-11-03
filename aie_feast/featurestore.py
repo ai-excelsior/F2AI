@@ -1,8 +1,8 @@
 import pandas as pd
 import os
 import json
+import docker
 from datetime import datetime
-from aie_feast.common.docker_client import docker_client
 from aie_feast.common.jinja import jinja_env
 from typing import Dict, List, Union
 from dateutil.relativedelta import relativedelta
@@ -755,6 +755,7 @@ class FeatureStore:
         # os.system(f"cd {dbt_path} && dbt run --profiles-dir {dbt_path} --vars '{json_var}' ")
 
     def schedule_local_dbt_container(self, profile_name: str, vars: Dict, dbt_path: str):
+        docker_client = docker.from_env()
         dbt_profiles = jinja_env.get_template("profiles.yaml").render(
             profile=profile_name,
             host=self.offline_store.host,
