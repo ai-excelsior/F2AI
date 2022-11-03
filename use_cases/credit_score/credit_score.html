@@ -14659,7 +14659,7 @@ body[data-format='mobile'] .jp-OutputArea-child .jp-OutputArea-output {
 <div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[&nbsp;]:</div>
 <div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
      <div class="CodeMirror cm-s-jupyter">
-<div class=" highlight hl-ipython3"><pre><span></span><span class="n">download_from</span> <span class="o">=</span> <span class="s2">&quot;oss://aiexcelsior-shanghai-test/xyz_test_data/credit_score.zip&quot;</span>
+<div class=" highlight hl-ipython3"><pre><span></span><span class="n">download_from</span> <span class="o">=</span> <span class="s2">&quot;oss://aiexcelsior-shanghai-test/xyz_test_data/credit-score.zip&quot;</span>
 <span class="n">save_path</span> <span class="o">=</span> <span class="s1">&#39;/tmp/&#39;</span>
 <span class="n">save_dir</span> <span class="o">=</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">mkdtemp</span><span class="p">(</span><span class="n">prefix</span><span class="o">=</span><span class="n">save_path</span><span class="p">)</span>
 <span class="n">bucket</span><span class="p">,</span> <span class="n">key</span> <span class="o">=</span> <span class="n">get_bucket_from_oss_url</span><span class="p">(</span><span class="n">download_from</span><span class="p">)</span>
@@ -14690,7 +14690,7 @@ body[data-format='mobile'] .jp-OutputArea-child .jp-OutputArea-output {
 
 
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain">
-<pre>Project downloaded and saved in /tmp/v6tc4uau/xyz_test_data
+<pre>Project downloaded and saved in /tmp/558u5bgc/xyz_test_data
 </pre>
 </div>
 </div>
@@ -14758,7 +14758,7 @@ body[data-format='mobile'] .jp-OutputArea-child .jp-OutputArea-output {
 
 
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain">
-<pre>All features are: [&#39;missed_payments_1y&#39;, &#39;loan_int_rate&#39;, &#39;city&#39;, &#39;student_loan_due&#39;, &#39;vehicle_loan_due&#39;, &#39;credit_card_due&#39;, &#39;loan_intent&#39;, &#39;missed_payments_2y&#39;, &#39;person_home_ownership&#39;, &#39;person_emp_length&#39;, &#39;total_wages&#39;, &#39;missed_payments_6m&#39;, &#39;loan_amnt&#39;, &#39;tax_returns_filed&#39;, &#39;state&#39;, &#39;hard_pulls&#39;, &#39;person_income&#39;, &#39;population&#39;, &#39;person_age&#39;, &#39;bankruptcies&#39;, &#39;location_type&#39;, &#39;mortgage_due&#39;]
+<pre>All features are: [&#39;person_home_ownership&#39;, &#39;location_type&#39;, &#39;mortgage_due&#39;, &#39;tax_returns_filed&#39;, &#39;population&#39;, &#39;person_emp_length&#39;, &#39;loan_amnt&#39;, &#39;person_age&#39;, &#39;missed_payments_2y&#39;, &#39;state&#39;, &#39;total_wages&#39;, &#39;hard_pulls&#39;, &#39;loan_int_rate&#39;, &#39;missed_payments_6m&#39;, &#39;student_loan_due&#39;, &#39;city&#39;, &#39;person_income&#39;, &#39;loan_intent&#39;, &#39;bankruptcies&#39;, &#39;vehicle_loan_due&#39;, &#39;missed_payments_1y&#39;, &#39;credit_card_due&#39;]
 </pre>
 </div>
 </div>
@@ -14903,8 +14903,8 @@ Latest timestamp: 2021-08-25 20:34:41.361000+00:00
 <div class=" highlight hl-ipython3"><pre><span></span><span class="c1"># catgorical features</span>
 <span class="n">features_cat</span> <span class="o">=</span> <span class="p">[</span>  
     <span class="n">fea</span>
-    <span class="k">for</span> <span class="n">fea</span> <span class="ow">in</span> <span class="n">fs</span><span class="o">.</span><span class="n">_get_available_features</span><span class="p">(</span><span class="n">fs</span><span class="o">.</span><span class="n">services</span><span class="p">[</span><span class="s2">&quot;credit_scoring_v1&quot;</span><span class="p">])</span>
-    <span class="k">if</span> <span class="n">fea</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">fs</span><span class="o">.</span><span class="n">_get_available_features</span><span class="p">(</span><span class="n">fs</span><span class="o">.</span><span class="n">services</span><span class="p">[</span><span class="s2">&quot;credit_scoring_v1&quot;</span><span class="p">],</span> <span class="n">is_numeric</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">fea</span> <span class="ow">in</span> <span class="n">fs</span><span class="o">.</span><span class="n">services</span><span class="p">[</span><span class="s2">&quot;credit_scoring_v1&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">get_feature_names</span><span class="p">(</span><span class="n">fs</span><span class="o">.</span><span class="n">feature_views</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">fea</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">fs</span><span class="o">.</span><span class="n">services</span><span class="p">[</span><span class="s2">&quot;credit_scoring_v1&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">get_feature_names</span><span class="p">(</span><span class="n">fs</span><span class="o">.</span><span class="n">feature_views</span><span class="p">,</span><span class="n">is_numeric</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="p">]</span>
 <span class="c1"># get unique item number to do labelencoder</span>
 <span class="n">cat_unique</span> <span class="o">=</span> <span class="n">fs</span><span class="o">.</span><span class="n">stats</span><span class="p">(</span>
@@ -14938,7 +14938,7 @@ Latest timestamp: 2021-08-25 20:34:41.361000+00:00
 
 
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain">
-<pre>Number of unique values of categorical features are: {&#39;city&#39;: 8166, &#39;loan_intent&#39;: 6, &#39;person_home_ownership&#39;: 4, &#39;state&#39;: 51, &#39;location_type&#39;: 1}
+<pre>Number of unique values of categorical features are: {&#39;person_home_ownership&#39;: 4, &#39;location_type&#39;: 1, &#39;state&#39;: 51, &#39;city&#39;: 8166, &#39;loan_intent&#39;: 6}
 </pre>
 </div>
 </div>
@@ -14985,7 +14985,7 @@ Latest timestamp: 2021-08-25 20:34:41.361000+00:00
 
 
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain">
-<pre>Min-Max boundary of continuous features are: {&#39;person_income&#39;: [4000.0, 6000000.0], &#39;missed_payments_1y&#39;: [0.0, 3.0], &#39;person_age&#39;: [20.0, 144.0], &#39;loan_amnt&#39;: [500.0, 35000.0], &#39;population&#39;: [272.0, 88503.0], &#39;loan_int_rate&#39;: [5.42, 23.22], &#39;student_loan_due&#39;: [0.0, 49997.0], &#39;person_emp_length&#39;: [0.0, 41.0], &#39;vehicle_loan_due&#39;: [1.0, 29998.0], &#39;bankruptcies&#39;: [0.0, 2.0], &#39;tax_returns_filed&#39;: [250.0, 47778.0], &#39;credit_card_due&#39;: [0.0, 9998.0], &#39;mortgage_due&#39;: [33.0, 1999896.0], &#39;total_wages&#39;: [0.0, 2132869892.0], &#39;missed_payments_6m&#39;: [0.0, 1.0], &#39;hard_pulls&#39;: [0.0, 10.0], &#39;missed_payments_2y&#39;: [0.0, 7.0]}
+<pre>Min-Max boundary of continuous features are: {&#39;population&#39;: [272.0, 88503.0], &#39;missed_payments_6m&#39;: [0.0, 1.0], &#39;person_age&#39;: [20.0, 144.0], &#39;missed_payments_2y&#39;: [0.0, 7.0], &#39;student_loan_due&#39;: [0.0, 49997.0], &#39;missed_payments_1y&#39;: [0.0, 3.0], &#39;bankruptcies&#39;: [0.0, 2.0], &#39;mortgage_due&#39;: [33.0, 1999896.0], &#39;vehicle_loan_due&#39;: [1.0, 29998.0], &#39;total_wages&#39;: [0.0, 2132869892.0], &#39;tax_returns_filed&#39;: [250.0, 47778.0], &#39;credit_card_due&#39;: [0.0, 9998.0], &#39;person_emp_length&#39;: [0.0, 41.0], &#39;hard_pulls&#39;: [0.0, 10.0], &#39;loan_int_rate&#39;: [5.42, 23.22], &#39;loan_amnt&#39;: [500.0, 35000.0], &#39;person_income&#39;: [4000.0, 6000000.0]}
 </pre>
 </div>
 </div>
@@ -15159,26 +15159,25 @@ Latest timestamp: 2021-08-25 20:34:41.361000+00:00
 
 
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain">
-<pre>epoch: 0 done, train loss: 0.5457816099127134, valid loss: 0.5164944291114807
-epoch: 1 done, train loss: 0.5107613255580267, valid loss: 0.4875011324882507
-epoch: 2 done, train loss: 0.482652281721433, valid loss: 0.46836462020874026
-epoch: 3 done, train loss: 0.4625305086374283, valid loss: 0.45708905458450316
-epoch: 4 done, train loss: 0.4575968583424886, valid loss: 0.4514279544353485
-epoch: 5 done, train loss: 0.4426721011598905, valid loss: 0.44881240129470823
-epoch: 6 done, train loss: 0.4327094616989295, valid loss: 0.4476616203784943
-epoch: 7 done, train loss: 0.43204356357455254, valid loss: 0.44734528064727785
-epoch: 8 done, train loss: 0.41324341421326, valid loss: 0.4469992458820343
-epoch: 9 done, train loss: 0.4199388821919759, valid loss: 0.44723341464996336
+<pre>epoch: 0 done, train loss: 0.9228071888287862, valid loss: 0.8917452792326609
+epoch: 1 done, train loss: 0.8228938817977905, valid loss: 0.806285967429479
+epoch: 2 done, train loss: 0.7159536878267924, valid loss: 0.715582956870397
+epoch: 3 done, train loss: 0.6077397664388021, valid loss: 0.6279712617397308
+epoch: 4 done, train loss: 0.523370603720347, valid loss: 0.5640117128690084
+epoch: 5 done, train loss: 0.46912830471992495, valid loss: 0.530453751484553
+epoch: 6 done, train loss: 0.4288410405317942, valid loss: 0.5177373588085175
+epoch: 7 done, train loss: 0.4263931175072988, valid loss: 0.5144786983728409
+epoch: 8 done, train loss: 0.4069450835386912, valid loss: 0.5147957305113474
 EarlyStopping counter: 1 out of 5
-epoch: 10 done, train loss: 0.39054058616360027, valid loss: 0.44767376184463503
+epoch: 9 done, train loss: 0.4173213442166646, valid loss: 0.5159803281227747
 EarlyStopping counter: 2 out of 5
-epoch: 11 done, train loss: 0.41189128657182056, valid loss: 0.44872903227806094
+epoch: 10 done, train loss: 0.43354902466138207, valid loss: 0.5168851017951965
 EarlyStopping counter: 3 out of 5
-epoch: 12 done, train loss: 0.3885562780002753, valid loss: 0.4505809545516968
+epoch: 11 done, train loss: 0.3854812800884247, valid loss: 0.5179851104815801
 EarlyStopping counter: 4 out of 5
-epoch: 13 done, train loss: 0.3874293739597003, valid loss: 0.45241581797599795
+epoch: 12 done, train loss: 0.3868887344996134, valid loss: 0.5189551711082458
 EarlyStopping counter: 5 out of 5
-Trigger earlystop, stop epoch at 13
+Trigger earlystop, stop epoch at 12
 </pre>
 </div>
 </div>
@@ -15267,7 +15266,7 @@ Trigger earlystop, stop epoch at 13
 
 
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain">
-<pre>Accuracy: 0.8378378378378378
+<pre>Accuracy: 0.7956989247311828
 </pre>
 </div>
 </div>

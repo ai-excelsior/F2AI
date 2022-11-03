@@ -138,7 +138,6 @@ class IterableDataset(IterableDataset):
             )
 
         self.data_sample = (feature_views_pd.drop(columns=to_drop), label_views_pd.drop(columns=to_drop))
-    
 
     def get_feature_period(self, service: "Service", is_label=False) -> dict:
         """_summary_

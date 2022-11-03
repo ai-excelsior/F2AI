@@ -34,17 +34,15 @@ def classify_collet_fn(datas, cont_scalar={}, cat_coder={}, label=[]):
                 torch.tensor(
                     MinMaxNormalizer(cont)
                     .fit_self(pd.Series(cont_scalar[cont]))
-                    .transform_self(data[0][cont]),
+                    .transform_self(data[0][cont])
+                    .values,
                     dtype=torch.float16,
                 )
                 for cont in cont_scalar.keys()
             ],
             dim=-1,
         )
-        labels = torch.stack(
-            [torch.tensor(data[1][lab], dtype=torch.float) for lab in label],
-            dim=-1,
-        )
+        labels = torch.stack([torch.tensor(data[1][lab].values, dtype=torch.float) for lab in label], dim=-1)
         batch = (dict(categorical_features=cat_features, continous_features=cont_features), labels)
         batches.append(batch)
 
