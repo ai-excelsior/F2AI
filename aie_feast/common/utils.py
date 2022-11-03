@@ -33,13 +33,13 @@ def read_file(
 ):
     path = remove_prefix(path, "file://")
     dtypes = {en: str for en in str_cols}
-    usecols = set(keep_cols + parse_dates + str_cols)
+    usecols = list(set(keep_cols + parse_dates + str_cols))
 
     if file_format is None:
         file_format = path.split(".")[-1]
 
     if file_format.startswith("parq"):
-        df = pd.read_parquet(path, usecols=usecols).astype(dtypes)
+        df = pd.read_parquet(path, columns=usecols).astype(dtypes)
     elif file_format.startswith("tsv"):
         df = pd.read_csv(path, sep="\t", parse_dates=parse_dates, dtype=dtypes, usecols=usecols)
     elif file_format.startswith("txt"):

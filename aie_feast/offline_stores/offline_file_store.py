@@ -216,11 +216,6 @@ class OfflineFileStore(OfflineStore):
             else:
                 source_df = source_df[source_df[SOURCE_EVENT_TIMESTAMP_FIELD] >= min_entity_timestamp]
 
-        # pre filter source_df by entities
-        # if len(join_keys) > 0:
-        #     unique_entity_df = entity_df[join_keys].groupby(join_keys).size().reset_index().drop(columns=[0])
-        #     source_df = unique_entity_df.merge(source_df, on=join_keys, how="inner")
-
         if len(join_keys) > 0:
             df = source_df.merge(entity_df, on=join_keys, how=how)
         else:
@@ -264,11 +259,6 @@ class OfflineFileStore(OfflineStore):
                 source_df = source_df[source_df[SOURCE_EVENT_TIMESTAMP_FIELD] > min_entity_timestamp]
             else:
                 source_df = source_df[source_df[SOURCE_EVENT_TIMESTAMP_FIELD] >= min_entity_timestamp]
-
-        # pre filter source_df by entities
-        # if len(join_keys) > 0:
-        #     unique_entity_df = entity_df[join_keys].groupby(join_keys).size().reset_index().drop(columns=[0])
-        #     source_df = unique_entity_df.merge(source_df, on=join_keys, how="inner")
 
         if len(join_keys) > 0:
             df = source_df.merge(entity_df, on=join_keys, how="inner")
