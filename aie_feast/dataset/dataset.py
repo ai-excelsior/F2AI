@@ -40,15 +40,21 @@ class IterableDataset(IterableDataset):
         self.merge = 0
 
     def __iter__(self):
-        for i in range(len(self.entity_index)):
-            if i % self.batch == 0:  # batch merge
-                self.get_context(i // self.batch)
-            to_return = (
-                self.data_sample[0].iloc[[i % self.batch]],
-                self.data_sample[1].iloc[[i % self.batch]],
-            )
-            if not to_return[0].isnull().all().all() and not to_return[1].isnull().all().all():
-                yield to_return
+        if self.fs.offline_store.type == "file":
+            for i in range(len(self.entity_index)):
+                if i % self.batch == 0:  # batch merge
+                    self.get_context(i // self.batch)
+                to_return = (
+                    self.data_sample[0].iloc[[i % self.batch]],
+                    self.data_sample[1].iloc[[i % self.batch]],
+                )
+                if not to_return[0].isnull().all().all() and not to_return[1].isnull().all().all():
+                    yield to_return
+        elif self.fs.offline_store.type == "pgsql":
+            for i in range(len(self.entity_index)):
+                data_sample = self.get_context(i)
+                if not data_sample[0].empty and not data_sample[1].empty:
+                    yield data_sample
 
     def get_context(self, i: int) -> Tuple[pd.DataFrame, pd.DataFrame]:
         feature_list = []
@@ -153,12 +159,12 @@ class IterableDataset(IterableDataset):
 
         if is_label:
             for label in service.get_label_objects(self.fs.label_views):
-                period = label.period if label.period else 0
+                period = label.period.strip('"') if label.period else 0
                 period_dict[period].append(label.name)
 
         else:
             for feature in service.get_feature_objects(self.fs.feature_views):
-                period = feature.period if feature.period else 0
+                period = feature.period.strip('"') if feature.period else 0
                 period_dict[period].append(feature.name)
 
         return period_dict
