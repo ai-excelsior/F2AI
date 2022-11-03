@@ -174,7 +174,7 @@ class OfflineFileStore(OfflineStore):
                 include=include,
                 start=start,
             )
-        return result.reset_index(drop=True)
+        return result
 
     def get_latest_entities(self, source: FileSource, join_keys: list):
         source_df = self.read(source=source, features=[], join_keys=join_keys)
