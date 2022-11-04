@@ -1,6 +1,6 @@
 from typing import List, Union, Tuple
 import pandas as pd
-from pypika import functions as fn, Parameter
+from pypika import functions as fn, Parameter, Query
 from pypika.queries import QueryBuilder
 from pandas._libs.tslibs.timestamps import Timestamp
 import oss2
@@ -66,79 +66,43 @@ def to_file(file, path, type):
 
 
 def build_filter_time_query(
-    q: QueryBuilder, start: Union[Timestamp, str], end: Union[Timestamp, str], include: str, timecol: str
+    q: QueryBuilder,
+    start: Union[Timestamp, str],
+    include: str,
+    entity_timestamp_field: str = ENTITY_EVENT_TIMESTAMP_FIELD,
+    source_timestamp_field: str = SOURCE_EVENT_TIMESTAMP_FIELD,
 ) -> "QueryBuilder":
     if include == "neither":
-        return (
-            q.where(
-                Parameter(
-                    f" ({timecol}::timestamptz > '{start}'::timestamptz) and ({timecol}::timestamptz < '{end}'::timestamptz) "
-                )
-            )
-            if end
-            else q.where(
-                Parameter(
-                    f" ({timecol}::timestamptz > '{start}'::timestamptz) and ({timecol}::timestamptz < {TIME_COL}_tmp::timestamptz) "
-                )
+        return q.where(
+            Parameter(
+                f" ({source_timestamp_field}::timestamptz > '{start}'::timestamptz) and ({source_timestamp_field}::timestamptz < {entity_timestamp_field}::timestamptz) "
             )
         )
     elif include == "left":
-        return (
-            q.where(
-                Parameter(
-                    f" ({timecol}::timestamptz >= '{start}'::timestamptz) and ({timecol}::timestamptz < '{end}'::timestamptz) "
-                )
-            )
-            if end
-            else q.where(
-                Parameter(
-                    f" ({timecol}::timestamptz >= '{start}'::timestamptz) and ({timecol}::timestamptz < {TIME_COL}_tmp::timestamptz) "
-                )
+        return q.where(
+            Parameter(
+                f" ({source_timestamp_field}::timestamptz >= '{start}'::timestamptz) and ({source_timestamp_field}::timestamptz < {entity_timestamp_field}::timestamptz) "
             )
         )
     elif include == "right":
-        return (
-            q.where(
-                Parameter(
-                    f" ({timecol}::timestamptz > '{start}'::timestamptz) and ({timecol}::timestamptz <= '{end}'::timestamptz) "
-                )
-            )
-            if end
-            else q.where(
-                Parameter(
-                    f" ({timecol}::timestamptz > '{start}'::timestamptz) and ({timecol}::timestamptz <= {TIME_COL}_tmp::timestamptz) "
-                )
+        return q.where(
+            Parameter(
+                f" ({source_timestamp_field}::timestamptz > '{start}'::timestamptz) and ({source_timestamp_field}::timestamptz <= {entity_timestamp_field}::timestamptz) "
             )
         )
     else:
-        return (
-            q.where(
-                Parameter(
-                    f" ({timecol}::timestamptz >= '{start}'::timestamptz) and ({timecol}::timestamptz <= '{end}'::timestamptz) "
-                )
-            )
-            if end
-            else q.where(
-                Parameter(
-                    f" ({timecol}::timestamptz >= '{start}'::timestamptz) and ({timecol}::timestamptz <= {TIME_COL}_tmp::timestamptz) "
-                )
+        return q.where(
+            Parameter(
+                f" ({source_timestamp_field}::timestamptz >= '{start}'::timestamptz) and ({source_timestamp_field}::timestamptz <= {entity_timestamp_field}::timestamptz) "
             )
         )
 
 
 def build_agg_query(
-    q: QueryBuilder,
-    features: List[str],
-    entity_cols: List[str],
-    agg_type: str,
-    start: Union[Timestamp, str],
-    end: Union[Timestamp, str],
-    include: str,
-    timecol: str = TIME_COL,
+    q: QueryBuilder, features: List[str], entity_cols: List[str], agg_type: str, keys_only
 ) -> "QueryBuilder":
-
-    q = build_filter_time_query(q, start, end, include, timecol)
-
+    if keys_only:
+        return q.groupby(*entity_cols).select(*entity_cols)
     if agg_type == "mean":
         return (
             q.groupby(*entity_cols).select(
@@ -228,8 +192,10 @@ def build_agg_query(
             q.groupby(*entity_cols).select(
                 *([Parameter(f"distinct({fea.name} as {fea.name})") for fea in features] + entity_cols)
             )
-            if features
-            else q.select(Parameter(f"distinct({','.join(entity_cols)})"))
+            if entity_cols
+            else q.select(
+                *([Parameter(f"distinct({fea.name} as {fea.name})") for fea in features] + entity_cols)
+            )
         )
 
 

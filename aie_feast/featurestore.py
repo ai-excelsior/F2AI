@@ -821,7 +821,11 @@ class FeatureStore:
             entities = (
                 group_key
                 if group_key is not None  # group_key can be empty list
-                else [self.entities[entity_name].join_keys for entity_name in avaliable_entity_names]
+                else [
+                    item
+                    for entity_name in avaliable_entity_names
+                    for item in self.entities[entity_name].join_keys
+                ]
             )
             entity_df = pd.DataFrame(columns=[TIME_COL])
             entity_df[TIME_COL] = [
@@ -878,86 +882,34 @@ class FeatureStore:
                 keys_only=keys_only,
             )
         elif self.offline_store.type == "pgsql":
-            if keys_only:
-                features = []
-            entity_dict = {
-                self.entities[en].join_keys[0] if en in self.entities else en: en for en in entities
-            }
             conn = psy_conn(self.offline_store)
             table_suffix = to_pgsql(entity_df, TMP_TBL, self.offline_store)
             table_name = SqlSource(name=f"{TMP_TBL}_{table_suffix}", timestamp_field=TIME_COL)
             if isinstance(view, (FeatureView, LabelView)):
                 source = self.sources[view.batch_source]
-                # if entity_df is not None and entities:
-                #     # entity_df.rename(columns={v: k for k, v in entity_dict.items()}, inplace=True)
-                #     table_suffix = to_pgsql(entity_df, TMP_TBL, self.offline_store)
-                #     q = Query.from_(view.batch_source)
-                #     q = q.inner_join(
-                #         Query.from_(f"{TMP_TBL}_{table_suffix}").select(
-                #             *list(entity_dict.keys()), Parameter(f"{TIME_COL} as {TIME_COL}_tmp")
-                #         )
-                #     ).using(*list(entity_dict.keys()))
-                # elif entity_df is not None:
-                #     q = Query.from_(view.batch_source)
-                #     table_suffix = to_pgsql(entity_df, TMP_TBL, self.offline_store)
-                #     q = q.cross_join(
-                #         Query.from_(f"{TMP_TBL}_{table_suffix}").select(
-                #             Parameter(f"{TIME_COL} as {TIME_COL}_tmp")
-                #         )
-                #     ).cross()
-                # else:
-                #     q = Query.from_(view.batch_source)
-                # q = build_agg_query(
-                #     q,
-                #     features,
-                #     list(entity_dict.keys()),
-                #     fn,
-                #     start,
-                #     end,
-                #     include,
-                #     self.sources[view.batch_source].timestamp_field,
-                # )
             else:
                 source = SqlSource(
                     name=f"{view.name}",
                     timestamp_field=TIME_COL,
                     created_timestamp_field=MATERIALIZE_TIME,
                 )
-                # if entity_df is not None and entities:
-                #     table_suffix = to_pgsql(entity_df, TMP_TBL, self.offline_store)
-                #     q = Query.from_(view.materialize_path)
-                #     q = q.inner_join(
-                #         Query.from_(f"{TMP_TBL}_{table_suffix}").select(
-                #             *list(entity_dict.values()), Parameter(f"{TIME_COL} as {TIME_COL}_tmp")
-                #         )
-                #     ).using(*list(entity_dict.values()))
-                # elif entity_df is not None:
-                #     q = Query.from_(view.materialize_path)
-                #     table_suffix = to_pgsql(entity_df, TMP_TBL, self.offline_store)
-                #     q = q.cross_join(
-                #         Query.from_(f"{TMP_TBL}_{table_suffix}").select(
-                #             Parameter(f"{TIME_COL} as {TIME_COL}_tmp")
-                #         )
-                #     ).cross()
-                # else:
-                #     q = Query.from_(view.materialize_path)
-                # q = build_agg_query(q, features, list(entity_dict.values()), fn, start, end, include)
-            q = self.offline_store.stats(
-                query=table_suffix,
+            assert source.timestamp_field, "stats can only apply on time relative data"
+            result_sql = self.offline_store.stats(
+                entity_df=table_name,
                 features=features,
                 source=source,
+                fn=fn,
+                start=start,
                 join_keys=join_keys,
-                ttl=view.ttl,
                 include=include,
+                keys_only=keys_only,
+                flag=len(entity_df.columns[:-1]),
             )
             result = pd.DataFrame(
-                sql_df(q.get_sql(), conn),
-                columns=[f"{c}_{fn}" for c in features] + list(entity_dict.values()),
+                sql_df(result_sql.get_sql(), conn), columns=[f"{c.name}_{fn}" for c in features] + join_keys
             )
             close_conn(conn, [f"{TMP_TBL}_{table_suffix}"])
-            if keys_only:
-                result = list(result.groupby(*list(entity_dict.values())).groups.keys())
-        return result
+            return result
 
     def get_latest_entities(self, view: str, entity: List[str] = []):
         """get latest entity and its timestamp from a single FeatureViews/LabelViews or a materialzed Service

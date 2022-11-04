@@ -4,6 +4,7 @@ from pypika import Query, Parameter, functions as fn, JoinType
 from typing import List, Optional, Set
 from aie_feast.definitions import Feature
 from aie_feast.common.source import SqlSource
+from aie_feast.common.utils import build_agg_query, build_filter_time_query
 from aie_feast.period import Period
 from .offline_store import OfflineStore, OfflineStoreType
 
@@ -42,6 +43,41 @@ class OfflinePostgresStore(OfflineStore):
         source_df = Query.from_(source.name).select(Parameter(",".join(all_columns)))
 
         return source_df
+
+    def stats(
+        self,
+        entity_df: SqlSource,
+        features: Set[Feature],
+        source: SqlSource,
+        start,
+        fn: str = "mean",
+        join_keys: list = [],
+        include: str = "both",
+        keys_only: bool = False,
+        flag: bool = False,
+    ):
+        source_df = self.read(source=source, features=features, join_keys=join_keys).as_("source_df")
+        entity_df = self.read(
+            source=entity_df,
+            features=[],
+            join_keys=join_keys if flag else [],
+            alias=ENTITY_EVENT_TIMESTAMP_FIELD,
+        ).as_("entity_df")
+
+        if flag:
+            sql_join = (
+                Query.from_(source_df)
+                .join(entity_df, JoinType.__getattr__("inner"))
+                .using(*join_keys)
+                .as_("sql_join")
+            )
+        else:
+            sql_join = Query.from_(source_df).cross_join(entity_df).cross().as_("sql_join")
+
+        sql_filter = build_filter_time_query(sql_join, start, include)
+        sql_agg = build_agg_query(sql_filter, features, join_keys, fn, keys_only)
+
+        return sql_agg
 
     def get_features(
         self,
