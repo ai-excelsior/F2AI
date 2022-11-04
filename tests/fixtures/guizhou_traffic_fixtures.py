@@ -2,7 +2,7 @@ import pytest
 import subprocess
 import os
 
-CREDIT_SCORE_CFG = {
+GUIZHOU_TRAFFIC_CFG = {
     "repo": "git@code.unianalysis.com:f2ai-examples/guizhou_traffic.git",
     "infra": {
         "file": {
@@ -19,7 +19,7 @@ CREDIT_SCORE_CFG = {
 
 def git_clone(cwd: str, repo: str, branch: str):
     return subprocess.run(
-        ["git", "clone", "--branch", "--depth", branch, repo, cwd, 1],
+        ["git", "clone", "--branch", branch, "--depth", "1", repo, cwd],
         check=True,
     )
 
@@ -39,8 +39,8 @@ def git_pull(cwd: str, branch: str):
 @pytest.fixture(scope="session")
 def make_guizhou_traffic():
     def get_guizhou_traffic(infra="file"):
-        repo = CREDIT_SCORE_CFG["repo"]
-        infra = CREDIT_SCORE_CFG["infra"][infra]
+        repo = GUIZHOU_TRAFFIC_CFG["repo"]
+        infra = GUIZHOU_TRAFFIC_CFG["infra"][infra]
         cwd = infra["cwd"]
         branch = infra["branch"]
 
