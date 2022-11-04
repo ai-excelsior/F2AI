@@ -5,7 +5,6 @@ import pandas as pd
 import warnings
 from typing import Union, List
 import datetime
-from aie_feast.common.utils import transform_freq
 
 TIME_COL = "event_timestamp"
 

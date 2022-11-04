@@ -4,8 +4,7 @@ import json
 import docker
 from datetime import datetime
 from aie_feast.common.jinja import jinja_env
-from typing import Dict, List, Union
-from dateutil.relativedelta import relativedelta
+from typing import Dict, List, Union, Optional
 from pypika import Query, Parameter, functions
 from aie_feast.common.source import FileSource, SqlSource
 from aie_feast.offline_stores.offline_file_store import OfflineFileStore
@@ -21,8 +20,9 @@ from aie_feast.common.get_config import (
     get_feature_views,
     get_source_cfg,
 )
-from aie_feast.common.utils import to_file, parse_date, transform_pgsql_period, build_agg_query, remove_prefix
+from aie_feast.common.utils import to_file, build_agg_query, remove_prefix
 from aie_feast.common.psl_utils import execute_sql, psy_conn, to_pgsql, close_conn, sql_df
+from aie_feast.period import Period
 
 
 TIME_COL = "event_timestamp"  # timestamp of action taken in original tables or period-query result, or query time in single-query result table
@@ -184,13 +184,13 @@ class FeatureStore:
         """
         feature_view = self._get_views(feature_view)
         self.__check_format(entity_df)
+        period = Period.from_str(period)
+
         if not features:
             features = self._get_available_features(feature_view)
 
         if self.offline_store.type == "file":
-            return self._get_period_record(
-                feature_view, entity_df, period, features, include, is_label=False, **kwargs
-            )
+            return self._get_period_record(feature_view, entity_df, period, features, include, **kwargs)
         elif self.offline_store.type == "pgsql":
             table_suffix = to_pgsql(entity_df, TMP_TBL, self.offline_store)
             # connect to pgsql db
@@ -258,7 +258,7 @@ class FeatureStore:
         Args:
             label_views:Single LabelViews or Service(after materialzed) name to lookup. Defaults to None.
             entity_df (pd.DataFrame): condition
-            period (str): length of look_forward
+            period (str): length of look_forward, can be negative, egg, -1 days
             include (bool, optional): include timestamp defined in `entity_df` or not. Defaults to False.
         """
         self.__check_format(entity_df)
@@ -266,9 +266,7 @@ class FeatureStore:
         labels = self._get_available_labels(label_view)
 
         if self.offline_store.type == "file":
-            return self._get_period_record(
-                label_view, entity_df, period, labels, include, is_label=True, **kwargs
-            )
+            return self._get_period_record(label_view, entity_df, period, labels, include, **kwargs)
         elif self.offline_store.type == "pgsql":
             table_suffix = to_pgsql(entity_df, TMP_TBL, self.offline_store)
             # connect to pgsql db
@@ -420,18 +418,15 @@ class FeatureStore:
         self,
         view,
         table_name: str,
-        period: str,
+        period: Period,
         features: list,
         include: bool = True,
-        is_label: bool = False,
         entity_columns: list = None,
     ):
         avaliable_entity_names = self._get_available_entity_names(view)
         entity_names = [
             entity_name for entity_name in avaliable_entity_names if entity_name in entity_columns
         ]
-        # connect to pgsql db
-        period = transform_pgsql_period(period, is_label)
 
         if isinstance(view, (FeatureView, LabelView)):
             assert self.sources[
@@ -480,7 +475,7 @@ class FeatureStore:
                 .select(Parameter(f"df.*, {TIME_COL}"))
                 .as_("sql_join")
             )
-        sql_query = self._get_window_pgsql(sql_join, period, include, is_label)
+        sql_query = self._get_window_pgsql(sql_join, period, include)
         sql_result = (
             Query.from_(sql_query).select(
                 Parameter(
@@ -519,10 +514,9 @@ class FeatureStore:
         self,
         view,
         entity_df: pd.DataFrame,
-        period: str,
+        period: Period,
         features: list,
         include: bool = True,
-        is_label: bool = False,
         **kwargs,
     ):
 
@@ -534,7 +528,6 @@ class FeatureStore:
             period: period to get data.
             features:features/labels to return
             include (bool, optional): include timestamp defined in `entity_df` or not. Defaults to True.
-            is_label (bool, optional): LabelViews of not. Defaults to False.
         """
         assert isinstance(
             view, (FeatureView, LabelView, Service)
@@ -581,43 +574,42 @@ class FeatureStore:
             join_keys=join_keys,
             ttl=view.ttl,
             include=include,
-            is_label=is_label,
             **kwargs,
         )
 
     def _get_window_pgsql(
         self,
         join,
-        period: str,
+        period: Period,
         include: bool = True,
-        is_label: bool = False,
     ):
-        if is_label:  # forward
+        # look back
+        if period.is_neg:
             sql_query = (
                 Query.from_(join)
                 .select(join.star)
                 .where(
                     Parameter(
-                        f" ({TIME_COL}_tmp::timestamptz >= {TIME_COL}::timestamptz) and ({TIME_COL}_tmp::timestamptz < {TIME_COL}::timestamptz + '{period}')  "
+                        f" ({TIME_COL}_tmp::timestamptz <= {TIME_COL}::timestamptz) and ({TIME_COL}_tmp::timestamptz > {TIME_COL}::timestamptz + '{period.to_pgsql_interval()}')  "
                     )
                     if include
                     else Parameter(
-                        f" ({TIME_COL}_tmp::timestamptz > {TIME_COL}::timestamptz) and ({TIME_COL}_tmp::timestamptz <= {TIME_COL}::timestamptz + '{period}')  "
+                        f" ({TIME_COL}_tmp::timestamptz < {TIME_COL}::timestamptz) and ({TIME_COL}_tmp::timestamptz >= {TIME_COL}::timestamptz + '{period.to_pgsql_interval()}')  "
                     )
                 )
                 .as_("sql_query")
             )
-        else:  # backward
+        else:
             sql_query = (
                 Query.from_(join)
                 .select(join.star)
                 .where(
                     Parameter(
-                        f" ({TIME_COL}_tmp::timestamptz <= {TIME_COL}::timestamptz) and ({TIME_COL}_tmp::timestamptz > {TIME_COL}::timestamptz + '{period}')  "
+                        f" ({TIME_COL}_tmp::timestamptz >= {TIME_COL}::timestamptz) and ({TIME_COL}_tmp::timestamptz < {TIME_COL}::timestamptz + '{period.to_pgsql_interval()}')  "
                     )
                     if include
                     else Parameter(
-                        f" ({TIME_COL}_tmp::timestamptz < {TIME_COL}::timestamptz) and ({TIME_COL}_tmp::timestamptz >= {TIME_COL}::timestamptz + '{period}')  "
+                        f" ({TIME_COL}_tmp::timestamptz > {TIME_COL}::timestamptz) and ({TIME_COL}_tmp::timestamptz <= {TIME_COL}::timestamptz + '{period.to_pgsql_interval()}')  "
                     )
                 )
                 .as_("sql_query")
@@ -646,7 +638,7 @@ class FeatureStore:
         try:
             incremental_begin = pd.to_datetime(incremental_begin, utc=True) if incremental_begin else None
         except Exception:
-            incremental_begin = parse_date(incremental_begin)
+            incremental_begin = Period.from_str(incremental_begin)
         except:
             raise TypeError("please check your `incremental_begin` type")
 
@@ -700,8 +692,8 @@ class FeatureStore:
 
         if incremental_begin is None:
             incremental_begin = result.tz_localize(None)
-        elif isinstance(incremental_begin, dict):
-            incremental_begin = label_result - relativedelta(**incremental_begin)
+        elif isinstance(incremental_begin, Period):
+            incremental_begin = label_result - incremental_begin.to_py_timedelta()
         else:
             incremental_begin = incremental_begin
 
@@ -757,7 +749,7 @@ class FeatureStore:
         try:
             incremental_begin = pd.to_datetime(incremental_begin if incremental_begin else 0, utc=True)
         except Exception:
-            incremental_begin = parse_date(incremental_begin)
+            incremental_begin = Period.from_str(incremental_begin)
         except:
             raise TypeError("please check your `incremental_begin` type")
 
@@ -779,19 +771,18 @@ class FeatureStore:
             f"materialize done, file saved at {os.path.join(self.project_folder, service.materialize_path)}"
         )
 
-    def _pgsql_timelimit(self, join, ttl, include: bool = True):
+    def _pgsql_timelimit(self, join, ttl: Optional[Period] = None, include: bool = True):
         if ttl:
-            ttl = transform_pgsql_period(ttl, False)
             sql_query = (
                 Query.from_(join)
                 .select(join.star)
                 .where(
                     Parameter(
-                        f" ({TIME_COL}_tmp::timestamptz> {TIME_COL}::timestamptz+ '{ttl}') and ({TIME_COL}_tmp::timestamptz<= {TIME_COL}::timestamptztz) "
+                        f" ({TIME_COL}_tmp::timestamptz> {TIME_COL}::timestamptz+ '{ttl.to_pgsql_interval()}') and ({TIME_COL}_tmp::timestamptz<= {TIME_COL}::timestamptztz) "
                     )
                     if include
                     else Parameter(
-                        f" ({TIME_COL}_tmp::timestamptz>= {TIME_COL}::timestamptz+ '{ttl}') and ({TIME_COL}_tmp::timestamptz< {TIME_COL}::timestamptztz) "
+                        f" ({TIME_COL}_tmp::timestamptz>= {TIME_COL}::timestamptz+ '{ttl.to_pgsql_interval()}') and ({TIME_COL}_tmp::timestamptz< {TIME_COL}::timestamptztz) "
                     )
                 )
                 .as_("sql_query")

@@ -1,6 +1,7 @@
-from typing import List, Optional, Dict, Set
+from typing import List, Optional, Dict, Set, Any
 
 from aie_feast.definitions import FeatureSchema, Feature, SchemaType
+from aie_feast.period import Period
 from pydantic import BaseModel, Field
 
 
@@ -10,8 +11,13 @@ class BaseView(BaseModel):
     entities: List[str] = []
     schemas: List[FeatureSchema] = Field(alias="schema", default=[])
     batch_source: Optional[str]
-    ttl: Optional[str]
+    ttl: Optional[Period]
     tags: Dict[str, str] = {}
+
+    def __init__(__pydantic_self__, **data: Any) -> None:
+        if isinstance(data.get("ttl", None), str):
+            data["ttl"] = Period.from_str(data.get("ttl", None))
+        super().__init__(**data)
 
 
 class FeatureView(BaseView):

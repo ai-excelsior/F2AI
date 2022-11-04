@@ -100,7 +100,7 @@ class IterableDataset(IterableDataset):
             for period, features in self.all_features.items():
                 if period:
                     tmp_result = self.fs._get_period_pgsql(
-                        self.service, entity, period, features, True, False, self.entity_name
+                        self.service, entity, -period, features, True, self.entity_name
                     )
                     tmp_result[0] = Query.from_(tmp_result[0]).select(
                         *tmp_result[1], Parameter(f"{QUERY_COL} as {TIME_COL}"), *features
@@ -121,7 +121,7 @@ class IterableDataset(IterableDataset):
             for period, features in self.all_labels.items():
                 if period:
                     tmp_result = self.fs._get_period_pgsql(
-                        self.service, entity, period, features, False, True, self.entity_name
+                        self.service, entity, period, features, False, self.entity_name
                     )
                     tmp_result[0] = Query.from_(tmp_result[0]).select(
                         *tmp_result[1], Parameter(f"{QUERY_COL} as {TIME_COL}"), *features
@@ -145,19 +145,19 @@ class IterableDataset(IterableDataset):
         self.data_sample = (feature_views_pd.drop(columns=to_drop), label_views_pd.drop(columns=to_drop))
         return feature_views_pd.drop(columns=to_drop), label_views_pd.drop(columns=to_drop)
 
-    def get_feature_period(self, service: "Service", is_label=False) -> dict:
+    def get_feature_period(self, service: "Service", with_labels=False) -> dict:
         """_summary_
 
         Args:
             service (Service): materialized service to construct
-            is_label (bool, optional): get labels or not
+            with_labels (bool, optional): get labels or not
 
         Returns:
             Dict: {period1:[fea1,fea2],period2[fea5],0:[fea3,fea4]}, 0 means no period
         """
         period_dict = defaultdict(list)
 
-        if is_label:
+        if with_labels:
             for label in service.get_label_objects(self.fs.label_views):
                 period = label.period.strip('"') if label.period else 0
                 period_dict[period].append(label.name)

@@ -4,6 +4,7 @@ from aie_feast.offline_stores.offline_file_store import (
     ENTITY_EVENT_TIMESTAMP_FIELD,
     SOURCE_EVENT_TIMESTAMP_FIELD,
 )
+from aie_feast.period import Period
 
 mock_point_in_time_filter_df = pd.DataFrame(
     {
@@ -37,7 +38,9 @@ def test_point_in_time_filter_not_include():
 
 
 def test_point_in_time_filter_with_ttl():
-    result_df = OfflineFileStore.point_in_time_filter(mock_point_in_time_filter_df, ttl="2 seconds")
+    result_df = OfflineFileStore.point_in_time_filter(
+        mock_point_in_time_filter_df, ttl=Period.from_str("2 seconds")
+    )
     assert len(result_df) == 2
     assert result_df["_source_event_timestamp_"].max() == pd.Timestamp("2021-08-25 20:16:20")
     assert result_df["_source_event_timestamp_"].min() == pd.Timestamp("2021-08-25 20:16:19")
@@ -46,7 +49,7 @@ def test_point_in_time_filter_with_ttl():
 ###
 def test_point_on_time_filter_simple():
     result_df = OfflineFileStore.point_on_time_filter(
-        mock_point_in_time_filter_df, "2 seconds", is_label=False, include=True
+        mock_point_in_time_filter_df, Period.from_str("-2 seconds"), include=True
     )
     assert len(result_df) == 2
     assert result_df["_source_event_timestamp_"].max() == pd.Timestamp("2021-08-25 20:16:20")
@@ -55,7 +58,7 @@ def test_point_on_time_filter_simple():
 
 def test_point_on_time_filter_simple_label():
     result_df = OfflineFileStore.point_on_time_filter(
-        mock_point_in_time_filter_df, "2 seconds", is_label=True, include=True
+        mock_point_in_time_filter_df, Period.from_str("2 seconds"), include=True
     )
     assert len(result_df) == 2
     assert result_df["_source_event_timestamp_"].max() == pd.Timestamp("2021-08-25 20:16:21")
@@ -64,7 +67,7 @@ def test_point_on_time_filter_simple_label():
 
 def test_point_on_time_filter_not_include():
     result_df = OfflineFileStore.point_on_time_filter(
-        mock_point_in_time_filter_df, "2 seconds", is_label=False, include=False
+        mock_point_in_time_filter_df, period=Period.from_str("-2 seconds"), include=False
     )
     assert len(result_df) == 2
     assert result_df["_source_event_timestamp_"].max() == pd.Timestamp("2021-08-25 20:16:19")
@@ -73,7 +76,7 @@ def test_point_on_time_filter_not_include():
 
 def test_point_on_time_filter_not_include_label():
     result_df = OfflineFileStore.point_on_time_filter(
-        mock_point_in_time_filter_df, "2 seconds", is_label=True, include=False
+        mock_point_in_time_filter_df, Period.from_str("2 seconds"), include=False
     )
     assert len(result_df) == 1
     assert result_df["_source_event_timestamp_"].max() == pd.Timestamp("2021-08-25 20:16:21")
@@ -81,7 +84,10 @@ def test_point_on_time_filter_not_include_label():
 
 def test_point_on_time_filter_with_ttl():
     result_df = OfflineFileStore.point_on_time_filter(
-        mock_point_in_time_filter_df, "3 seconds", ttl="2 seconds", is_label=False, include=True
+        mock_point_in_time_filter_df,
+        period=Period.from_str("-3 seconds"),
+        ttl=Period.from_str("2 seconds"),
+        include=True,
     )
     assert len(result_df) == 2
     assert result_df["_source_event_timestamp_"].max() == pd.Timestamp("2021-08-25 20:16:20")
@@ -160,7 +166,7 @@ def test_point_in_time_join_with_ttl():
         mock_source_df,
         timestamp_field="event_timestamp",
         join_keys=["join_key"],
-        ttl="2 seconds",
+        ttl=Period.from_str("2 seconds"),
     )
     assert len(result_df) == 2
 
@@ -201,17 +207,16 @@ def test_point_in_time_join_with_created_timestamp():
         timestamp_field="event_timestamp",
         created_timestamp_field="created_timestamp",
         join_keys=["join_key"],
-        ttl="2 seconds",
+        ttl=Period.from_str("2 seconds"),
     )
     assert all(result_df["feature"] == [5, 5])
 
 
-###
 def test_point_on_time_join_with_join_keys():
     result_df = OfflineFileStore.point_on_time_join(
         mock_entity_df,
         mock_source_df,
-        period="2 seconds",
+        period=Period.from_str("-2 seconds"),
         timestamp_field="event_timestamp",
         join_keys=["join_key"],
         include=False,
@@ -224,10 +229,9 @@ def test_point_on_time_join_with_join_keys_label():
     result_df = OfflineFileStore.point_on_time_join(
         mock_entity_df,
         mock_source_df,
-        period="2 seconds",
+        period=Period.from_str("2 seconds"),
         timestamp_field="event_timestamp",
         join_keys=["join_key"],
-        is_label=True,
     )
     assert len(result_df) == 4
 
@@ -238,8 +242,8 @@ def test_point_on_time_join_with_ttl():
         mock_source_df,
         timestamp_field="event_timestamp",
         join_keys=["join_key"],
-        ttl="2 seconds",
-        period="10 seconds",
+        ttl=Period.from_str("2 seconds"),
+        period=Period.from_str("-10 seconds"),
     )
     assert len(result_df) == 3
     assert "B" not in result_df["join_key"].values
@@ -255,7 +259,7 @@ def test_point_on_time_join_with_extra_entities_in_source():
             }
         ),
         mock_source_df,
-        period="3 seconds",
+        period=Period.from_str("3 seconds"),
         timestamp_field="event_timestamp",
         join_keys=["join_key"],
     )
@@ -286,7 +290,7 @@ def test_point_on_time_join_with_created_timestamp():
         timestamp_field="event_timestamp",
         created_timestamp_field="materialize_time",
         join_keys=["join_key"],
-        period="2 seconds",
+        period=Period.from_str("-2 seconds"),
     )
     assert all(result_df["feature"] == [5, 5, 4])
     assert result_df[result_df["event_timestamp"] == pd.Timestamp("2021-08-25 20:16:18")].shape == (2, 5)

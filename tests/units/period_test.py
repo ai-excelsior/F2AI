@@ -24,3 +24,6 @@ def test_period_negative():
     ten_years = Period.from_str("10 years")
     neg_ten_years = -ten_years
     assert neg_ten_years.n == -10
+
+    neg_ten_years = Period.from_str("-10 years")
+    assert neg_ten_years.n == -10

@@ -1,13 +1,12 @@
-from feast import Entity, FeatureView
 import pandas as pd
 from typing import List, Optional, Set
-from dateutil.relativedelta import relativedelta
-from aie_feast.common.utils import parse_date
 from aie_feast.definitions import Feature
 from aie_feast.common.source import FileSource
 from aie_feast.common.utils import get_stats_result
 from aie_feast.service import Service
-from aie_feast.views import LabelView
+from aie_feast.views import LabelView, FeatureView
+from aie_feast.definitions import Entity
+from aie_feast.period import Period
 from .offline_store import OfflineStore, OfflineStoreType
 
 
@@ -52,8 +51,8 @@ class OfflineFileStore(OfflineStore):
         joined_frame = self._read_file(source=source, features=labels, join_keys=list(join_keys))
         # create timestamp makes no sense to labels
         joined_frame.drop(columns=source.created_timestamp_field, inplace=True, errors="ignore")
-        if isinstance(incremental_begin, dict):
-            incremental_begin = joined_frame[TIME_COL].max() - relativedelta(**incremental_begin)
+        if isinstance(incremental_begin, Period):
+            incremental_begin = joined_frame[TIME_COL].max() - incremental_begin.to_pandas_dateoffset()
             joined_frame = joined_frame[joined_frame[TIME_COL] >= incremental_begin]
         else:
             joined_frame = joined_frame[joined_frame[TIME_COL] >= incremental_begin]
@@ -92,7 +91,7 @@ class OfflineFileStore(OfflineStore):
         features: Set[Feature],
         source: FileSource,
         join_keys: List[str] = [],
-        ttl: Optional[str] = None,
+        ttl: Optional[Period] = None,
         include: bool = True,
         **kwargs
     ):
@@ -114,11 +113,10 @@ class OfflineFileStore(OfflineStore):
         entity_df: pd.DataFrame,
         features: Set[Feature],
         source: FileSource,
-        period: str,
+        period: Period,
         join_keys: List[str] = [],
-        ttl: Optional[str] = None,
+        ttl: Optional[Period] = None,
         include: bool = True,
-        is_label: bool = False,
         **kwargs
     ):
         source_df = self._read_file(source=source, features=features, join_keys=join_keys)
@@ -132,7 +130,6 @@ class OfflineFileStore(OfflineStore):
             ttl=ttl,
             join_keys=join_keys,
             include=include,
-            is_label=is_label,
             **kwargs
         )
 
@@ -192,7 +189,7 @@ class OfflineFileStore(OfflineStore):
         source_df: pd.DataFrame,
         timestamp_field: Optional[str] = None,
         created_timestamp_field: Optional[str] = None,
-        ttl: Optional[str] = None,
+        ttl: Optional[Period] = None,
         join_keys: List[str] = [],
         include: bool = True,
         how: str = "inner",
@@ -207,9 +204,7 @@ class OfflineFileStore(OfflineStore):
 
         # pre filter source_df by ttl
         if ttl:
-            min_entity_timestamp = entity_df[ENTITY_EVENT_TIMESTAMP_FIELD].min() - relativedelta(
-                **parse_date(ttl)
-            )
+            min_entity_timestamp = entity_df[ENTITY_EVENT_TIMESTAMP_FIELD].min() - ttl.to_pandas_dateoffset()
             if include:
                 source_df = source_df[source_df[SOURCE_EVENT_TIMESTAMP_FIELD] > min_entity_timestamp]
             else:
@@ -233,13 +228,12 @@ class OfflineFileStore(OfflineStore):
         cls,
         entity_df: pd.DataFrame,
         source_df: pd.DataFrame,
-        period: str,
+        period: Period,
         timestamp_field: Optional[str],
         created_timestamp_field: Optional[str] = None,
-        ttl: Optional[str] = None,
+        ttl: Optional[Period] = None,
         join_keys: List[str] = [],
         include: bool = True,
-        is_label: bool = False,
     ):
         # renames to keep things simple
         entity_df = entity_df.rename(columns={TIME_COL: ENTITY_EVENT_TIMESTAMP_FIELD})
@@ -250,9 +244,7 @@ class OfflineFileStore(OfflineStore):
 
         # pre filter source_df by ttl
         if ttl:
-            min_entity_timestamp = entity_df[ENTITY_EVENT_TIMESTAMP_FIELD].min() - relativedelta(
-                **parse_date(ttl)
-            )
+            min_entity_timestamp = entity_df[ENTITY_EVENT_TIMESTAMP_FIELD].min() - ttl.to_pandas_dateoffset()
             if include:
                 source_df = source_df[source_df[SOURCE_EVENT_TIMESTAMP_FIELD] > min_entity_timestamp]
             else:
@@ -263,7 +255,7 @@ class OfflineFileStore(OfflineStore):
         else:
             df = source_df.merge(entity_df, how="cross")
 
-        df = cls.point_on_time_filter(df, period, include=include, ttl=ttl, is_label=is_label)
+        df = cls.point_on_time_filter(df, period, include=include, ttl=ttl)
         df = cls.point_on_time_latest(df, join_keys, created_timestamp_field)
 
         return df.drop(columns=[created_timestamp_field], errors="ignore").rename(
@@ -275,7 +267,7 @@ class OfflineFileStore(OfflineStore):
         cls,
         df: pd.DataFrame,
         include: bool = True,
-        ttl: Optional[str] = None,
+        ttl: Optional[Period] = None,
         entity_timestamp_field: str = ENTITY_EVENT_TIMESTAMP_FIELD,
         source_timestamp_field: str = SOURCE_EVENT_TIMESTAMP_FIELD,
     ):
@@ -283,8 +275,7 @@ class OfflineFileStore(OfflineStore):
 
         earliest_timestamp = None
         if ttl:
-            timedelta = relativedelta(**parse_date(ttl))
-            earliest_timestamp = df[entity_timestamp_field].map(lambda x: x - timedelta)
+            earliest_timestamp = df[entity_timestamp_field] - ttl.to_pandas_dateoffset()
 
         if include:
             candidates = df[entity_timestamp_field] >= df[source_timestamp_field]
@@ -300,49 +291,50 @@ class OfflineFileStore(OfflineStore):
     def point_on_time_filter(
         cls,
         df: pd.DataFrame,
-        period: str,
+        period: Period,
         include: bool = True,
-        ttl: Optional[str] = None,
-        is_label=False,
+        ttl: Optional[Period] = None,
         entity_timestamp_field: str = ENTITY_EVENT_TIMESTAMP_FIELD,
         source_timestamp_field: str = SOURCE_EVENT_TIMESTAMP_FIELD,
     ):
         """filter the joined results within [entity_timestamp - ttl, entity_timestamp]"""
 
         earliest_timestamp = None
-        period = relativedelta(**parse_date(period))
+        offset = period.to_pandas_dateoffset()
         if ttl:
-            timedelta = relativedelta(**parse_date(ttl))
-            earliest_timestamp = df[entity_timestamp_field].map(lambda x: x - timedelta)
+            earliest_timestamp = df[entity_timestamp_field] - ttl.to_pandas_dateoffset()
 
-        if is_label:  # get forward data
-            if include:
-                candidates = (df[entity_timestamp_field] <= df[source_timestamp_field]) & (
-                    df[entity_timestamp_field] > df[source_timestamp_field].map(lambda x: x - period)
-                )
-                if ttl:
-                    candidates = candidates & (df[source_timestamp_field] > earliest_timestamp)
-            else:
-                candidates = (df[entity_timestamp_field] < df[source_timestamp_field]) & (
-                    df[entity_timestamp_field] >= df[source_timestamp_field].map(lambda x: x - period)
-                )
-
-                if ttl:
-                    candidates = candidates & (df[source_timestamp_field] >= earliest_timestamp)
-            return df[candidates]
-        else:  # get backward data
+        # get backward data
+        if period.is_neg:
             if include:
                 candidates = (df[entity_timestamp_field] >= df[source_timestamp_field]) & (
-                    df[entity_timestamp_field] < df[source_timestamp_field].map(lambda x: x + period)
+                    df[entity_timestamp_field] < df[source_timestamp_field] - offset
                 )
                 if ttl:
                     candidates = candidates & (df[source_timestamp_field] > earliest_timestamp)
             else:
                 candidates = (df[entity_timestamp_field] > df[source_timestamp_field]) & (
-                    df[entity_timestamp_field] <= df[source_timestamp_field].map(lambda x: x + period)
+                    df[entity_timestamp_field] <= df[source_timestamp_field] - offset
                 )
                 if ttl:
                     candidates = candidates & (df[source_timestamp_field] >= earliest_timestamp)
+        # get forward data
+        else:
+            if include:
+                candidates = (df[entity_timestamp_field] <= df[source_timestamp_field]) & (
+                    df[entity_timestamp_field] > df[source_timestamp_field] - offset
+                )
+                if ttl:
+                    candidates = candidates & (df[source_timestamp_field] > earliest_timestamp)
+            else:
+                candidates = (df[entity_timestamp_field] < df[source_timestamp_field]) & (
+                    df[entity_timestamp_field] >= df[source_timestamp_field] - offset
+                )
+
+                if ttl:
+                    candidates = candidates & (df[source_timestamp_field] >= earliest_timestamp)
+            return df[candidates]
+
         return df[candidates]
 
     @classmethod

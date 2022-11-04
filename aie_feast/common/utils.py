@@ -217,42 +217,6 @@ def build_agg_query(
         )
 
 
-# TODO: refactor freq later, to keep consistant with transform_pgsql_period
-def transform_freq(dt):
-    value, freq = dt.split(" ")
-    if freq == "quarters":
-        freq = "months"
-        value = int(value) * 3
-    elif freq == "milliseconds":
-        freq = "microseconds"
-        value = int(value) * 10e3
-    elif freq == "second":
-        freq = "seconds"
-        value = int(value)
-
-    return {freq: int(value)}
-
-
-def transform_pgsql_period(period, is_label: bool = False):
-    value, freq = period.split(" ")
-    if freq == "minutes" or freq == "minute":
-        freq = "mins"
-    elif freq == "quarters" or freq == "quater":
-        freq = "months"
-        value = int(value) * 3
-    elif freq in ["millisecs", "milliseconds", "milli", "millisecond"]:
-        freq = "seconds"
-        value = int(value) / 10e3
-    elif freq in ["microsecs", "microseconds"]:
-        freq = "seconds"
-        value = int(value) / 10e6
-    return str(value) + " " + freq if is_label else "-" + str(value) + " " + freq
-
-
-def parse_date(dt):
-    return {**transform_freq(dt)} if dt else 0
-
-
 def get_stats_result(data: pd.DataFrame, fn: str, use_cols: list, include, start):
     if include == "neither":
         return data[
