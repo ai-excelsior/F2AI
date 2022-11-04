@@ -253,31 +253,6 @@ def parse_date(dt):
     return {**transform_freq(dt)} if dt else 0
 
 
-# TODO: this is confused with get_latest_record
-def get_newest_record(df, time_col, join_keys, create_time):
-    if len(df) == 0:
-        return get_latest_record(df, time_col, create_time)
-    return (
-        df.groupby(join_keys + [time_col + "_y"])
-        .apply(get_latest_record, time_col, create_time)
-        .reset_index(drop=True)
-    )
-
-
-def get_latest_record(df, time_col, create_time):
-    df = df[df[time_col + "_x"] == df[time_col + "_x"].max()]
-    if create_time in df.columns:  # only used when have duplicate event_timestamp values
-        df = df[df[create_time] == df[create_time].max()]
-        df.drop(columns=create_time, inplace=True)
-    df.rename(columns={time_col + "_x": create_time}, inplace=True)  # rename action timestamp
-    df.rename(columns={time_col + "_y": time_col}, inplace=True)  # time defined in `entity_df`
-    return df
-
-
-def get_consistent_format(views):
-    return views if isinstance(views, dict) else {FSKEY: views}
-
-
 def get_stats_result(data: pd.DataFrame, fn: str, use_cols: list, include, start):
     if include == "neither":
         return data[
