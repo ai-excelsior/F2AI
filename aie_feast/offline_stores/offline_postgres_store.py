@@ -1,15 +1,11 @@
-from tkinter import E
 from pydantic import Field
-from .offline_store import OfflineStore, OfflineStoreType
 import pandas as pd
+from pypika import Query, Parameter, functions as fn, JoinType
 from typing import List, Optional, Set
-from dateutil.relativedelta import relativedelta
-from aie_feast.common.utils import parse_date, transform_pgsql_period
 from aie_feast.definitions import Feature
 from aie_feast.common.source import SqlSource
-from aie_feast.common.utils import build_agg_query
+from aie_feast.period import Period
 from .offline_store import OfflineStore, OfflineStoreType
-from pypika import Query, Parameter, functions as fn, JoinType
 
 TIME_COL = "event_timestamp"
 # DEFAULT_CREATED_TIMESTAMP_FIELD = "created_timestamp"
@@ -53,7 +49,7 @@ class OfflinePostgresStore(OfflineStore):
         features: Set[Feature],
         source: SqlSource,
         join_keys: List[str] = [],
-        ttl: Optional[str] = None,
+        ttl: Optional[Period] = None,
         include: bool = True,
         **kwargs,
     ):
@@ -86,7 +82,7 @@ class OfflinePostgresStore(OfflineStore):
         source_df: Query,
         timestamp_field: Optional[str] = None,
         created_timestamp_field: Optional[str] = None,
-        ttl: Optional[str] = None,
+        ttl: Optional[Period] = None,
         join_keys: List[str] = [],
         include: bool = True,
         how: str = "inner",
@@ -94,7 +90,7 @@ class OfflinePostgresStore(OfflineStore):
 
         if ttl:
             min_entity_timestamp = Query.from_(entity_df).select(
-                fn.Min(Parameter(ENTITY_EVENT_TIMESTAMP_FIELD)) + f"{transform_pgsql_period(ttl)}"
+                fn.Min(Parameter(ENTITY_EVENT_TIMESTAMP_FIELD)) + ttl.to_pgsql_interval()
             )
             if include:
                 pre_fil = Parameter(SOURCE_EVENT_TIMESTAMP_FIELD) > min_entity_timestamp
@@ -134,7 +130,7 @@ class OfflinePostgresStore(OfflineStore):
         period: str,
         timestamp_field: Optional[str],
         created_timestamp_field: Optional[str] = None,
-        ttl: Optional[str] = None,
+        ttl: Optional[Period] = None,
         join_keys: List[str] = [],
         include: bool = True,
         is_label: bool = False,
@@ -149,9 +145,7 @@ class OfflinePostgresStore(OfflineStore):
 
         # pre filter source_df by ttl
         if ttl:
-            min_entity_timestamp = entity_df[ENTITY_EVENT_TIMESTAMP_FIELD].min() - relativedelta(
-                **parse_date(ttl)
-            )
+            min_entity_timestamp = entity_df[ENTITY_EVENT_TIMESTAMP_FIELD].min() - ttl.to_pandas_dateoffset()
             if include:
                 source_df = source_df[source_df[SOURCE_EVENT_TIMESTAMP_FIELD] > min_entity_timestamp]
             else:
@@ -174,7 +168,7 @@ class OfflinePostgresStore(OfflineStore):
         cls,
         df: Query,
         include: bool = True,
-        ttl: Optional[str] = None,
+        ttl: Optional[Period] = None,
         entity_timestamp_field: str = ENTITY_EVENT_TIMESTAMP_FIELD,
         source_timestamp_field: str = SOURCE_EVENT_TIMESTAMP_FIELD,
     ):
@@ -185,14 +179,14 @@ class OfflinePostgresStore(OfflineStore):
             if ttl:
                 candidates = candidates & (
                     Parameter(source_timestamp_field)
-                    > Parameter(entity_timestamp_field) + transform_pgsql_period(ttl)
+                    > Parameter(entity_timestamp_field) + ttl.to_pgsql_interval()
                 )
         else:
             candidates = Parameter(entity_timestamp_field) >= Parameter(source_timestamp_field)
             if ttl:
                 candidates = candidates & (
                     Parameter(source_timestamp_field)
-                    >= Parameter(entity_timestamp_field) + transform_pgsql_period(ttl)
+                    >= Parameter(entity_timestamp_field) + ttl.to_pgsql_interval()
                 )
         return df.where(candidates)
 
@@ -202,7 +196,7 @@ class OfflinePostgresStore(OfflineStore):
         df: pd.DataFrame,
         period: str,
         include: bool = True,
-        ttl: Optional[str] = None,
+        ttl: Optional[Period] = None,
         is_label=False,
         entity_timestamp_field: str = ENTITY_EVENT_TIMESTAMP_FIELD,
         source_timestamp_field: str = SOURCE_EVENT_TIMESTAMP_FIELD,
@@ -210,21 +204,19 @@ class OfflinePostgresStore(OfflineStore):
         """filter the joined results within [entity_timestamp - ttl, entity_timestamp]"""
 
         earliest_timestamp = None
-        period = relativedelta(**parse_date(period))
         if ttl:
-            timedelta = relativedelta(**parse_date(ttl))
-            earliest_timestamp = df[entity_timestamp_field].map(lambda x: x - timedelta)
+            earliest_timestamp = df[entity_timestamp_field] - ttl.to_pandas_dateoffset()
 
         if is_label:  # get forward data
             if include:
                 candidates = (df[entity_timestamp_field] <= df[source_timestamp_field]) & (
-                    df[entity_timestamp_field] > df[source_timestamp_field].map(lambda x: x - period)
+                    df[entity_timestamp_field] > df[source_timestamp_field] - ttl.to_pandas_dateoffset()
                 )
                 if ttl:
                     candidates = candidates & (df[source_timestamp_field] > earliest_timestamp)
             else:
                 candidates = (df[entity_timestamp_field] < df[source_timestamp_field]) & (
-                    df[entity_timestamp_field] >= df[source_timestamp_field].map(lambda x: x - period)
+                    df[entity_timestamp_field] >= df[source_timestamp_field] - ttl.to_pandas_dateoffset()
                 )
 
                 if ttl:
