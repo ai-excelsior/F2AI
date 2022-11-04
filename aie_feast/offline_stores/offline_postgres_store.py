@@ -56,23 +56,18 @@ class OfflinePostgresStore(OfflineStore):
         keys_only: bool = False,
         flag: bool = False,
     ):
-        source_df = self.read(source=source, features=features, join_keys=join_keys).as_("source_df")
+        source_df = self.read(source=source, features=features, join_keys=join_keys)
         entity_df = self.read(
             source=entity_df,
             features=[],
             join_keys=join_keys if flag else [],
             alias=ENTITY_EVENT_TIMESTAMP_FIELD,
-        ).as_("entity_df")
+        )
 
         if flag:
-            sql_join = (
-                Query.from_(source_df)
-                .join(entity_df, JoinType.__getattr__("inner"))
-                .using(*join_keys)
-                .as_("sql_join")
-            )
+            sql_join = Query.from_(source_df).inner_join(entity_df).using(*join_keys)
         else:
-            sql_join = Query.from_(source_df).cross_join(entity_df).cross().as_("sql_join")
+            sql_join = Query.from_(source_df).cross_join(entity_df).cross()
 
         sql_filter = build_filter_time_query(sql_join, start, include)
         sql_agg = build_agg_query(sql_filter, features, join_keys, fn, keys_only)
@@ -90,10 +85,10 @@ class OfflinePostgresStore(OfflineStore):
         **kwargs,
     ):
 
-        source_df = self.read(source=source, features=features, join_keys=join_keys).as_("source_df")
+        source_df = self.read(source=source, features=features, join_keys=join_keys)
         entity_df = self.read(
             source=query, features=[], join_keys=join_keys, alias=ENTITY_EVENT_TIMESTAMP_FIELD
-        ).as_("entity_df")
+        )
 
         sql_query = self.point_in_time_join(
             entity_df=entity_df,
@@ -105,10 +100,10 @@ class OfflinePostgresStore(OfflineStore):
             include=include,
             **kwargs,
         )
-        return Query.from_(sql_query).select(
-            *join_keys,
-            Parameter(f"{ENTITY_EVENT_TIMESTAMP_FIELD} as {TIME_COL}"),
-            *[feature.name for feature in features],
+        return sql_query.select(
+            Parameter(
+                f"{','.join(join_keys + [ENTITY_EVENT_TIMESTAMP_FIELD]  +[feature.name for feature in features])}"
+            )
         )
 
     @classmethod
@@ -135,27 +130,13 @@ class OfflinePostgresStore(OfflineStore):
             source_df = source_df.where(pre_fil)
 
         if len(join_keys) > 0:
-            sql_join = (
-                Query.from_(entity_df)
-                .join(source_df, JoinType.__getattr__(how))
-                .using(*join_keys)
-                .select(source_df.star, ENTITY_EVENT_TIMESTAMP_FIELD)
-                .as_("sql_join")
-            )
+            sql_join = Query.from_(source_df).join(entity_df, JoinType.__getattr__(how)).using(*join_keys)
         else:
-            sql_join = (
-                Query.from_(entity_df)
-                .cross_join(source_df)
-                .cross()
-                .select(source_df.star, ENTITY_EVENT_TIMESTAMP_FIELD)
-                .as_("sql_join")
-            )
+            sql_join = Query.from_(source_df).cross_join(entity_df).cross()
 
         if timestamp_field:
-            sql_query = cls.point_in_time_filter(sql_join, include=include, ttl=ttl).as_("sql_query")
-            sql_query = cls.point_in_time_latest(sql_join, join_keys, created_timestamp_field).as_(
-                "sql_query"
-            )
+            sql_query = cls.point_in_time_filter(sql_join, include=include, ttl=ttl)
+            sql_query = cls.point_in_time_latest(sql_join, join_keys, created_timestamp_field)
         return sql_query
 
     @classmethod
@@ -286,21 +267,12 @@ class OfflinePostgresStore(OfflineStore):
         if created_timestamp_field:
             sort_by.append(created_timestamp_field)
 
-        latest_time = (
-            Query.from_(df)
-            .groupby(*(group_keys + [entity_timestamp_field]))
-            .select(
-                *([fn.Max(Parameter(item), item) for item in sort_by] + group_keys + [entity_timestamp_field])
-            )
+        latest_time = df.groupby(Parameter(",".join(group_keys + [entity_timestamp_field]))).select(
+            *[fn.Max(Parameter(item), item) for item in sort_by],
+            Parameter(",".join(group_keys + [entity_timestamp_field])),
         )
 
-        df = (
-            Query.from_(df)
-            .inner_join(latest_time)
-            .using(*(sort_by + group_keys + [entity_timestamp_field]))
-            .select("*")
-        )
-        return df
+        return df.inner_join(latest_time).using(*(sort_by + group_keys + [entity_timestamp_field]))
 
     @classmethod
     def point_on_time_latest(

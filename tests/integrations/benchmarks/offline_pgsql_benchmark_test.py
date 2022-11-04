@@ -37,7 +37,7 @@ def test_stats_from_feature_view(make_guizhou_traffic):
     entity_df = get_guizhou_traffic_entities(store)
 
     measured_time = timeit.timeit(
-        lambda: store.stats("gy_link_travel_time_features", entity_df, fn="mean"), number=10
+        lambda: store.stats("gy_link_travel_time_features", fn="mean", group_key=["link_id"]), number=10
     )
     print(f"stats performance pgsql: {measured_time}s")
 

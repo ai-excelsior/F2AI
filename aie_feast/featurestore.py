@@ -152,16 +152,10 @@ class FeatureStore:
                 feature_view, f"{TMP_TBL}_{table_suffix}", features, include, entity_df.columns
             )
             result = pd.DataFrame(
-                sql_df(sql_result.get_sql(), conn),
-                columns=entity_name + [TIME_COL] + features,
+                sql_df(sql_result.get_sql(), conn), columns=entity_name + [TIME_COL] + features
             )
             # remove entity_df and close connection
-            close_conn(
-                conn,
-                tables=[
-                    f"{self.offline_store.database}.{self.offline_store.db_schema}.{TMP_TBL}_{table_suffix}"
-                ],
-            )
+            close_conn(conn, tables=[f"{TMP_TBL}_{table_suffix}"])
             return result
 
     def get_period_features(
@@ -207,12 +201,7 @@ class FeatureStore:
                 sql_df(sql_result.get_sql(), conn), columns=entity_cols + [QUERY_COL, TIME_COL] + features
             )
             # remove entity_df and close connection
-            close_conn(
-                conn,
-                tables=[
-                    f"{self.offline_store.database}.{self.offline_store.db_schema}.{TMP_TBL}_{table_suffix}"
-                ],
-            )
+            close_conn(conn, tables=[f"{TMP_TBL}_{table_suffix}"])
             return result
 
     def get_labels(self, label_view, entity_df: pd.DataFrame, include: bool = True, **kwargs):
@@ -241,12 +230,7 @@ class FeatureStore:
                 columns=entity_name + [TIME_COL] + features,
             )
             # remove entity_df and close connection
-            close_conn(
-                conn,
-                tables=[
-                    f"{self.offline_store.database}.{self.offline_store.db_schema}.{TMP_TBL}_{table_suffix}"
-                ],
-            )
+            close_conn(conn, tables=[f"{TMP_TBL}_{table_suffix}"])
             return result
 
     def get_period_labels(
@@ -282,12 +266,7 @@ class FeatureStore:
                 sql_df(sql_result.get_sql(), conn), columns=entity_cols + [QUERY_COL, TIME_COL] + labels
             )
             # remove entity_df and close connection
-            close_conn(
-                conn,
-                tables=[
-                    f"{self.offline_store.database}.{self.offline_store.db_schema}.{TMP_TBL}_{table_suffix}"
-                ],
-            )
+            close_conn(conn, tables=[f"{TMP_TBL}_{table_suffix}"])
             return result
 
     def _get_point_record(
@@ -858,6 +837,7 @@ class FeatureStore:
         if keys_only:
             assert fn == "unique", "keys_only=True can only be applied when fn=unique"
             assert join_keys, "no key available for keys_only=True"
+            features = []
 
         if self.offline_store.type == "file":
             if isinstance(view, (FeatureView, LabelView)):
@@ -906,8 +886,10 @@ class FeatureStore:
                 flag=len(entity_df.columns[:-1]),
             )
             result = pd.DataFrame(
-                sql_df(result_sql.get_sql(), conn), columns=[f"{c.name}_{fn}" for c in features] + join_keys
+                sql_df(result_sql.get_sql(), conn),
+                columns=[f"{c.name}_{fn}" for c in features] + join_keys,
             )
+
             close_conn(conn, [f"{TMP_TBL}_{table_suffix}"])
             return result
 
