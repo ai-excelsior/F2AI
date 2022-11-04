@@ -31,6 +31,17 @@ def test_get_features_from_feature_view(make_guizhou_traffic):
     print(f"get_features performance pgsql: {measured_time}s")
 
 
+def test_stats_from_feature_view(make_guizhou_traffic):
+    project_folder = make_guizhou_traffic("pgsql")
+    store = FeatureStore(project_folder)
+    entity_df = get_guizhou_traffic_entities(store)
+
+    measured_time = timeit.timeit(
+        lambda: store.stats("gy_link_travel_time_features", entity_df, fn="mean"), number=10
+    )
+    print(f"stats performance pgsql: {measured_time}s")
+
+
 # def test_dataset_to_pytorch_pgsql(make_guizhou_traffic):
 #     project_folder = make_guizhou_traffic("pgsql")
 #     store = FeatureStore(project_folder)

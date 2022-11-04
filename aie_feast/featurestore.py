@@ -771,35 +771,6 @@ class FeatureStore:
             f"materialize done, file saved at {os.path.join(self.project_folder, service.materialize_path)}"
         )
 
-    def _pgsql_timelimit(self, join, ttl: Optional[Period] = None, include: bool = True):
-        if ttl:
-            sql_query = (
-                Query.from_(join)
-                .select(join.star)
-                .where(
-                    Parameter(
-                        f" ({TIME_COL}_tmp::timestamptz> {TIME_COL}::timestamptz+ '{ttl.to_pgsql_interval()}') and ({TIME_COL}_tmp::timestamptz<= {TIME_COL}::timestamptztz) "
-                    )
-                    if include
-                    else Parameter(
-                        f" ({TIME_COL}_tmp::timestamptz>= {TIME_COL}::timestamptz+ '{ttl.to_pgsql_interval()}') and ({TIME_COL}_tmp::timestamptz< {TIME_COL}::timestamptztz) "
-                    )
-                )
-                .as_("sql_query")
-            )
-        else:
-            sql_query = (
-                Query.from_(join)
-                .select(join.star)
-                .where(
-                    Parameter(f" ({TIME_COL}_tmp::timestamptz <= {TIME_COL}::timestamptz) ")
-                    if include
-                    else Parameter(f" ({TIME_COL}_tmp::timestamptz < {TIME_COL}::timestamptz) ")
-                )
-                .as_("sql_query")
-            )
-        return sql_query
-
     def stats(
         self,
         view: str,

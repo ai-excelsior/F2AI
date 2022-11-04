@@ -1,3 +1,5 @@
+from aie_feast.views import FeatureView, LabelView
+from aie_feast.definitions import Entity
 import pandas as pd
 from typing import List, Optional, Set
 from aie_feast.definitions import Feature

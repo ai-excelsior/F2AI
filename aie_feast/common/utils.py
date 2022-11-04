@@ -141,46 +141,62 @@ def build_agg_query(
 
     if agg_type == "mean":
         return (
-            q.groupby(*entity_cols).select(*([fn.Avg(Parameter(fea), fea) for fea in features] + entity_cols))
+            q.groupby(*entity_cols).select(
+                *([fn.Avg(Parameter(fea.name), fea.name) for fea in features] + entity_cols)
+            )
             if entity_cols
-            else q.select(*([fn.Avg(Parameter(fea), fea) for fea in features] + entity_cols))
+            else q.select(*([fn.Avg(Parameter(fea.name), fea.name) for fea in features] + entity_cols))
         )
     elif agg_type == "sum":
         return (
-            q.groupby(*entity_cols).select(*([fn.Sum(Parameter(fea), fea) for fea in features] + entity_cols))
+            q.groupby(*entity_cols).select(
+                *([fn.Sum(Parameter(fea.name), fea.name) for fea in features] + entity_cols)
+            )
             if entity_cols
-            else q.select(*([fn.Sum(Parameter(fea), fea) for fea in features] + entity_cols))
+            else q.select(*([fn.Sum(Parameter(fea.name), fea.name) for fea in features] + entity_cols))
         )
     elif agg_type == "max":
         return (
-            q.groupby(*entity_cols).select(*([fn.Max(Parameter(fea), fea) for fea in features] + entity_cols))
+            q.groupby(*entity_cols).select(
+                *([fn.Max(Parameter(fea.name), fea.name) for fea in features] + entity_cols)
+            )
             if entity_cols
-            else q.select(*([fn.Max(Parameter(fea), fea) for fea in features] + entity_cols))
+            else q.select(*([fn.Max(Parameter(fea.name), fea.name) for fea in features] + entity_cols))
         )
     elif agg_type == "min":
         return (
-            q.groupby(*entity_cols).select(*([fn.Min(Parameter(fea), fea) for fea in features] + entity_cols))
+            q.groupby(*entity_cols).select(
+                *([fn.Min(Parameter(fea.name), fea) for fea in features] + entity_cols)
+            )
             if entity_cols
-            else q.select(*([fn.Min(Parameter(fea), fea) for fea in features] + entity_cols))
+            else q.select(*([fn.Min(Parameter(fea.name), fea.name) for fea in features] + entity_cols))
         )
     elif agg_type == "std":
         return (
-            q.groupby(*entity_cols).select(*([fn.Std(Parameter(fea), fea) for fea in features] + entity_cols))
+            q.groupby(*entity_cols).select(
+                *([fn.Std(Parameter(fea.name), fea.name) for fea in features] + entity_cols)
+            )
             if entity_cols
-            else q.select(*([fn.Std(Parameter(fea), fea) for fea in features] + entity_cols))
+            else q.select(*([fn.Std(Parameter(fea.name), fea.name) for fea in features] + entity_cols))
         )
     elif agg_type == "mode":
         return (
             q.groupby(*entity_cols).select(
                 *(
-                    [Parameter(f"MODE() WITHIN GROUP (ORDER BY {fea}) as {fea}") for fea in features]
+                    [
+                        Parameter(f"MODE() WITHIN GROUP (ORDER BY {fea.name}) as {fea.name}")
+                        for fea in features
+                    ]
                     + entity_cols
                 )
             )
             if entity_cols
             else q.select(
                 *(
-                    [Parameter(f"MODE() WITHIN GROUP (ORDER BY {fea}) as {fea}") for fea in features]
+                    [
+                        Parameter(f"MODE() WITHIN GROUP (ORDER BY {fea.name}) as {fea.name}")
+                        for fea in features
+                    ]
                     + entity_cols
                 )
             )
@@ -190,7 +206,7 @@ def build_agg_query(
             q.groupby(*entity_cols).select(
                 *(
                     [
-                        Parameter(f"PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY {fea}) as {fea}")
+                        Parameter(f"PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY {fea.name}) as {fea.name}")
                         for fea in features
                     ]
                     + entity_cols
@@ -200,7 +216,7 @@ def build_agg_query(
             else q.select(
                 *(
                     [
-                        Parameter(f"PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY {fea}) as {fea}")
+                        Parameter(f"PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY {fea.name}) as {fea.name}")
                         for fea in features
                     ]
                     + entity_cols
@@ -210,7 +226,7 @@ def build_agg_query(
     elif agg_type == "unique":
         return (
             q.groupby(*entity_cols).select(
-                *([Parameter(f"distinct({fea} as {fea})") for fea in features] + entity_cols)
+                *([Parameter(f"distinct({fea.name} as {fea.name})") for fea in features] + entity_cols)
             )
             if features
             else q.select(Parameter(f"distinct({','.join(entity_cols)})"))
