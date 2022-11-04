@@ -38,7 +38,6 @@ def test_get_features_from_feature_view(make_credit_score):
 
     measured_time = timeit.timeit(lambda: store.get_features("zipcode_features", entity_df), number=10)
     print(f"get_features performance: {measured_time}s")
-    print(store.get_features("zipcode_features", entity_df))
 
 
 def test_get_labels_from_label_views(make_credit_score):

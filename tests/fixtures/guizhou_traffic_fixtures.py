@@ -19,14 +19,7 @@ CREDIT_SCORE_CFG = {
 
 def git_clone(cwd: str, repo: str, branch: str):
     return subprocess.run(
-        [
-            "git",
-            "clone",
-            "--branch",
-            branch,
-            repo,
-            cwd,
-        ],
+        ["git", "clone", "--branch", "--depth", branch, repo, cwd, 1],
         check=True,
     )
 

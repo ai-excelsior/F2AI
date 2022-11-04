@@ -3,22 +3,47 @@ import timeit
 from os import path
 from aie_feast import FeatureStore
 from aie_feast.common.sampler import GroupFixednbrSampler
+from aie_feast.common.psl_utils import sql_df, psy_conn
 
 
-def test_dataset_to_pytorch_pgsql(make_guizhou_traffic):
+def get_guizhou_traffic_entities(store):
+
+    query_entities = pd.DataFrame(
+        sql_df(
+            sql=f"select link_id,event_timestamp from {store.services['traval_time_prediction_embedding_v1'].materialize_path} limit 100",
+            conn=psy_conn(store.offline_store),
+        ),
+        columns=["link_id", "event_timestamp"],
+    )
+    return query_entities.astype({"link_id": "string"})
+
+
+def test_get_features_from_feature_view(make_guizhou_traffic):
     project_folder = make_guizhou_traffic("pgsql")
     store = FeatureStore(project_folder)
-    store.materialize(service_name="credit_scoring_v1")
-    ds = store.get_dataset(
-        service_name="traval_time_prediction_embedding_v1",
-        sampler=GroupFixednbrSampler(
-            time_bucket="10 days",
-            stride=1,
-            group_ids=None,
-            group_names=None,
-            start="2016-03-01 08:02:00",
-            end="2016-07-01 00:00:00",
-        ),
+    entity_df = get_guizhou_traffic_entities(store)
+
+    store.get_features("gy_link_travel_time_features", entity_df)
+
+    measured_time = timeit.timeit(
+        lambda: store.get_features("gy_link_travel_time_features", entity_df), number=10
     )
-    measured_time = timeit.timeit(lambda: list(ds.to_pytorch()), number=1)
-    print(f"dataset.to_pytorch performance: {measured_time}s")
+    print(f"get_features performance pgsql: {measured_time}s")
+
+
+# def test_dataset_to_pytorch_pgsql(make_guizhou_traffic):
+#     project_folder = make_guizhou_traffic("pgsql")
+#     store = FeatureStore(project_folder)
+#     ds = store.get_dataset(
+#         service_name="traval_time_prediction_embedding_v1",
+#         sampler=GroupFixednbrSampler(
+#             time_bucket="12 hours",
+#             stride=1,
+#             group_ids=None,
+#             group_names=None,
+#             start="2016-03-01 08:02:00",
+#             end="2016-07-01 00:00:00",
+#         ),
+#     )
+#     measured_time = timeit.timeit(lambda: list(ds.to_pytorch()), number=1)
+#     print(f"dataset.to_pytorch pgsql performance: {measured_time}s")

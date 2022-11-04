@@ -142,8 +142,8 @@ class IterableDataset(IterableDataset):
             label_views_pd = pd.DataFrame(
                 sql_df(label_views_pd.get_sql(), conn), columns=self.entity_name + label_list
             )
-
         self.data_sample = (feature_views_pd.drop(columns=to_drop), label_views_pd.drop(columns=to_drop))
+        return feature_views_pd.drop(columns=to_drop), label_views_pd.drop(columns=to_drop)
 
     def get_feature_period(self, service: "Service", is_label=False) -> dict:
         """_summary_
