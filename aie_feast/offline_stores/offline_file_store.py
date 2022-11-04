@@ -383,7 +383,7 @@ class OfflineFileStore(OfflineStore):
                 inplace=True,
             )
             df.drop_duplicates(
-                subset=[entity_timestamp_field, source_timestamp_field],
+                subset=group_keys + [entity_timestamp_field, source_timestamp_field],
                 keep="first",
                 inplace=True,
             )
