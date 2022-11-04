@@ -875,57 +875,72 @@ class FeatureStore:
                 self.entities[en].join_keys[0] if en in self.entities else en: en for en in entities
             }
             conn = psy_conn(self.offline_store)
+            table_suffix = to_pgsql(entity_df, TMP_TBL, self.offline_store)
+            table_name = SqlSource(name=f"{TMP_TBL}_{table_suffix}", timestamp_field=TIME_COL)
             if isinstance(view, (FeatureView, LabelView)):
-                if entity_df is not None and entities:
-                    # entity_df.rename(columns={v: k for k, v in entity_dict.items()}, inplace=True)
-                    table_suffix = to_pgsql(entity_df, TMP_TBL, self.offline_store)
-                    q = Query.from_(view.batch_source)
-                    q = q.inner_join(
-                        Query.from_(f"{TMP_TBL}_{table_suffix}").select(
-                            *list(entity_dict.keys()), Parameter(f"{TIME_COL} as {TIME_COL}_tmp")
-                        )
-                    ).using(*list(entity_dict.keys()))
-                elif entity_df is not None:
-                    q = Query.from_(view.batch_source)
-                    table_suffix = to_pgsql(entity_df, TMP_TBL, self.offline_store)
-                    q = q.cross_join(
-                        Query.from_(f"{TMP_TBL}_{table_suffix}").select(
-                            Parameter(f"{TIME_COL} as {TIME_COL}_tmp")
-                        )
-                    ).cross()
-                else:
-                    q = Query.from_(view.batch_source)
-                q = build_agg_query(
-                    q,
-                    features,
-                    list(entity_dict.keys()),
-                    fn,
-                    start,
-                    end,
-                    include,
-                    self.sources[view.batch_source].timestamp_field,
-                )
+                source = self.sources[view.batch_source]
+                # if entity_df is not None and entities:
+                #     # entity_df.rename(columns={v: k for k, v in entity_dict.items()}, inplace=True)
+                #     table_suffix = to_pgsql(entity_df, TMP_TBL, self.offline_store)
+                #     q = Query.from_(view.batch_source)
+                #     q = q.inner_join(
+                #         Query.from_(f"{TMP_TBL}_{table_suffix}").select(
+                #             *list(entity_dict.keys()), Parameter(f"{TIME_COL} as {TIME_COL}_tmp")
+                #         )
+                #     ).using(*list(entity_dict.keys()))
+                # elif entity_df is not None:
+                #     q = Query.from_(view.batch_source)
+                #     table_suffix = to_pgsql(entity_df, TMP_TBL, self.offline_store)
+                #     q = q.cross_join(
+                #         Query.from_(f"{TMP_TBL}_{table_suffix}").select(
+                #             Parameter(f"{TIME_COL} as {TIME_COL}_tmp")
+                #         )
+                #     ).cross()
+                # else:
+                #     q = Query.from_(view.batch_source)
+                # q = build_agg_query(
+                #     q,
+                #     features,
+                #     list(entity_dict.keys()),
+                #     fn,
+                #     start,
+                #     end,
+                #     include,
+                #     self.sources[view.batch_source].timestamp_field,
+                # )
             else:
-                if entity_df is not None and entities:
-                    table_suffix = to_pgsql(entity_df, TMP_TBL, self.offline_store)
-                    q = Query.from_(view.materialize_path)
-                    q = q.inner_join(
-                        Query.from_(f"{TMP_TBL}_{table_suffix}").select(
-                            *list(entity_dict.values()), Parameter(f"{TIME_COL} as {TIME_COL}_tmp")
-                        )
-                    ).using(*list(entity_dict.values()))
-                elif entity_df is not None:
-                    q = Query.from_(view.materialize_path)
-                    table_suffix = to_pgsql(entity_df, TMP_TBL, self.offline_store)
-                    q = q.cross_join(
-                        Query.from_(f"{TMP_TBL}_{table_suffix}").select(
-                            Parameter(f"{TIME_COL} as {TIME_COL}_tmp")
-                        )
-                    ).cross()
-                else:
-                    q = Query.from_(view.materialize_path)
-                q = build_agg_query(q, features, list(entity_dict.values()), fn, start, end, include)
-
+                source = SqlSource(
+                    name=f"{view.name}",
+                    timestamp_field=TIME_COL,
+                    created_timestamp_field=MATERIALIZE_TIME,
+                )
+                # if entity_df is not None and entities:
+                #     table_suffix = to_pgsql(entity_df, TMP_TBL, self.offline_store)
+                #     q = Query.from_(view.materialize_path)
+                #     q = q.inner_join(
+                #         Query.from_(f"{TMP_TBL}_{table_suffix}").select(
+                #             *list(entity_dict.values()), Parameter(f"{TIME_COL} as {TIME_COL}_tmp")
+                #         )
+                #     ).using(*list(entity_dict.values()))
+                # elif entity_df is not None:
+                #     q = Query.from_(view.materialize_path)
+                #     table_suffix = to_pgsql(entity_df, TMP_TBL, self.offline_store)
+                #     q = q.cross_join(
+                #         Query.from_(f"{TMP_TBL}_{table_suffix}").select(
+                #             Parameter(f"{TIME_COL} as {TIME_COL}_tmp")
+                #         )
+                #     ).cross()
+                # else:
+                #     q = Query.from_(view.materialize_path)
+                # q = build_agg_query(q, features, list(entity_dict.values()), fn, start, end, include)
+            q = self.offline_store.stats(
+                query=table_suffix,
+                features=features,
+                source=source,
+                join_keys=join_keys,
+                ttl=view.ttl,
+                include=include,
+            )
             result = pd.DataFrame(
                 sql_df(q.get_sql(), conn),
                 columns=[f"{c}_{fn}" for c in features] + list(entity_dict.values()),
