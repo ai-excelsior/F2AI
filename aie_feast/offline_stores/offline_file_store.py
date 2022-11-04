@@ -12,7 +12,6 @@ from .offline_store import OfflineStore, OfflineStoreType
 
 
 TIME_COL = "event_timestamp"
-# DEFAULT_CREATED_TIMESTAMP_FIELD = "created_timestamp"
 ENTITY_EVENT_TIMESTAMP_FIELD = "_entity_event_timestamp_"
 SOURCE_EVENT_TIMESTAMP_FIELD = "_source_event_timestamp_"
 SOURCE_CREATED_TIMESTAMP_FIELD = "_created_timestamp_"
@@ -241,7 +240,6 @@ class OfflineFileStore(OfflineStore):
         join_keys: List[str] = [],
         include: bool = True,
         is_label: bool = False,
-        how="inner",
     ):
         # renames to keep things simple
         entity_df = entity_df.rename(columns={TIME_COL: ENTITY_EVENT_TIMESTAMP_FIELD})
@@ -356,7 +354,7 @@ class OfflineFileStore(OfflineStore):
         entity_timestamp_field: str = ENTITY_EVENT_TIMESTAMP_FIELD,
         source_timestamp_field: str = SOURCE_EVENT_TIMESTAMP_FIELD,
     ):
-        sort_by = group_keys + [source_timestamp_field]
+        sort_by = [source_timestamp_field]
         if created_timestamp_field:
             sort_by.append(created_timestamp_field)
 
@@ -379,13 +377,13 @@ class OfflineFileStore(OfflineStore):
     ):
         if created_timestamp_field:
             df.sort_values(
-                by=group_keys + [created_timestamp_field],
+                by=[created_timestamp_field],
                 ascending=False,
                 ignore_index=True,
                 inplace=True,
             )
             df.drop_duplicates(
-                subset=group_keys + [entity_timestamp_field, source_timestamp_field],
+                subset=[entity_timestamp_field, source_timestamp_field],
                 keep="first",
                 inplace=True,
             )
