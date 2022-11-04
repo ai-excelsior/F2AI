@@ -39,9 +39,7 @@ class OfflinePostgresStore(OfflineStore):
 
         feature_columns = [feature.name for feature in features]
         all_columns = list(set(time_columns + join_keys + feature_columns))
-
         source_df = Query.from_(source.name).select(Parameter(",".join(all_columns)))
-
         return source_df
 
     def stats(
@@ -51,26 +49,26 @@ class OfflinePostgresStore(OfflineStore):
         source: SqlSource,
         start,
         fn: str = "mean",
-        join_keys: list = [],
+        group_keys: list = [],
         include: str = "both",
         keys_only: bool = False,
-        flag: bool = False,
+        join_keys: bool = False,
     ):
-        source_df = self.read(source=source, features=features, join_keys=join_keys)
+        source_df = self.read(source=source, features=features, join_keys=group_keys)
         entity_df = self.read(
             source=entity_df,
             features=[],
-            join_keys=join_keys if flag else [],
+            join_keys=group_keys if join_keys else [],
             alias=ENTITY_EVENT_TIMESTAMP_FIELD,
         )
 
-        if flag:
-            sql_join = Query.from_(source_df).inner_join(entity_df).using(*join_keys)
+        if join_keys:
+            sql_join = Query.from_(source_df).inner_join(entity_df).using(*group_keys)
         else:
             sql_join = Query.from_(source_df).cross_join(entity_df).cross()
 
         sql_filter = build_filter_time_query(sql_join, start, include)
-        sql_agg = build_agg_query(sql_filter, features, join_keys, fn, keys_only)
+        sql_agg = build_agg_query(sql_filter, features, group_keys, fn, keys_only)
 
         return sql_agg
 

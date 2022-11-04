@@ -780,8 +780,8 @@ class FeatureStore:
             fn (str, optional): statistical method, min, max, std, avg, mode, median. Defaults to "mean".
             start (str, optional): start_time. Defaults to None, works and only works when `entity_df` is None.
             end (str, optional): end_time. Defaults to None, works and only works when `entity_df` is None.
-            include(str,optional): whether to include `start` or `end` timestamp
-            keys_only(bool,optional): whether to take action on keys, only available when fn=unique, return a list
+            include (str, optional): whether to include `start` or `end` timestamp
+            keys_only (bool, optional): whether to take action on keys, only available when fn=unique, return a list
         """
         self.__check_fns(fn)
         view = self._get_views(view)
@@ -792,7 +792,11 @@ class FeatureStore:
             entities = (
                 list(entity_df.columns[:-1])
                 if len(entity_df.columns[:-1])
-                else [self.entities[entity_name].join_keys for entity_name in avaliable_entity_names]
+                else [
+                    item
+                    for entity_name in avaliable_entity_names
+                    for item in self.entities[entity_name].join_keys
+                ]
             )
             entity_df[TIME_COL] = pd.to_datetime(entity_df[TIME_COL], utc=True)
             start = pd.to_datetime(0, utc=True)
@@ -810,7 +814,6 @@ class FeatureStore:
             entity_df[TIME_COL] = [
                 pd.to_datetime(end, utc=True) if end else pd.to_datetime(datetime.now(), utc=True)
             ]
-
             start = pd.to_datetime(start, utc=True) if start else pd.to_datetime(0, utc=True)
 
         join_keys = list(
@@ -857,9 +860,10 @@ class FeatureStore:
                 source=source,
                 fn=fn,
                 start=start,
-                join_keys=join_keys,
+                group_keys=join_keys,
                 include=include,
                 keys_only=keys_only,
+                join_keys=len(entity_df.columns[:-1]),
             )
         elif self.offline_store.type == "pgsql":
             conn = psy_conn(self.offline_store)
@@ -880,10 +884,10 @@ class FeatureStore:
                 source=source,
                 fn=fn,
                 start=start,
-                join_keys=join_keys,
+                group_keys=join_keys,
                 include=include,
                 keys_only=keys_only,
-                flag=len(entity_df.columns[:-1]),
+                join_keys=len(entity_df.columns[:-1]),
             )
             result = pd.DataFrame(
                 sql_df(result_sql.get_sql(), conn),

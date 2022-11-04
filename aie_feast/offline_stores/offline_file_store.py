@@ -142,27 +142,28 @@ class OfflineFileStore(OfflineStore):
         source: FileSource,
         start,
         fn: str = "mean",
-        join_keys: list = [],
+        group_keys: list = [],
         include: str = "both",
         keys_only: bool = False,
+        join_keys: bool = False,
     ):
-        source_df = self._read_file(source=source, features=features, join_keys=join_keys)
+        source_df = self._read_file(source=source, features=features, join_keys=group_keys)
 
         feature_columns = [feature.name for feature in features]
 
         entity_df = entity_df.rename(columns={TIME_COL: ENTITY_EVENT_TIMESTAMP_FIELD})
         source_df = source_df.rename(columns={source.timestamp_field: SOURCE_EVENT_TIMESTAMP_FIELD})
 
-        if len(entity_df.columns) > 1:
-            df = source_df.merge(entity_df, on=join_keys, how="inner")
+        if join_keys:
+            df = source_df.merge(entity_df, on=group_keys, how="inner")
         else:
             df = source_df.merge(entity_df, how="cross")
 
         if keys_only:
-            return df[join_keys].groupby(join_keys).size().reset_index().drop(columns=[0])
+            return df[group_keys].groupby(group_keys).size().reset_index().drop(columns=[0])
 
-        if join_keys:
-            result = df.groupby(join_keys).apply(
+        if group_keys:
+            result = df.groupby(group_keys).apply(
                 get_stats_result,
                 fn,
                 use_cols=feature_columns,
