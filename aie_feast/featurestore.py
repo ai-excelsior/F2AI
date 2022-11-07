@@ -103,6 +103,14 @@ class FeatureStore:
         return features
 
     def _get_available_entity_names(self, view) -> List[str]:
+        """_summary_
+
+        Args:
+            view (_type_): FeatureView, LabelView or Service
+
+        Returns:
+            List[str]: all entities defined in view
+        """
         entities = []
         if isinstance(view, FeatureView):
             entities = list(view.entities)
@@ -115,6 +123,14 @@ class FeatureStore:
         return entities
 
     def _get_views(self, view_name):
+        """_summary_
+
+        Args:
+            view_name (_type_): name of FeatureView, LabelView or Service
+
+        Returns:
+            _type_: FeatureView, LabelView or Service
+        """
         if view_name in self.feature_views.keys():
             return self.feature_views[view_name]
         elif view_name in self.label_views.keys():
