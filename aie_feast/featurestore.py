@@ -655,7 +655,7 @@ class FeatureStore:
             )
             feature_views.append(feature_view_dict)
 
-        entity_names = self._get_keys_to_join(service)
+        entity_names = list(service.get_entities(self.feature_views, self.label_views))
         entities_dict = {entity_name: self.entities[entity_name].join_keys[0] for entity_name in entity_names}
 
         conn = psy_conn(self.offline_store)
