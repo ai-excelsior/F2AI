@@ -75,41 +75,32 @@ class FeatureStore:
             "unique",
         ], f"{fn}is not a available function, you can use fs.query() to customize your function"
 
-    def _get_feature_to_use(self, views, features):
+    def _get_feature_to_use(self, views, features: list = [], is_numeric: bool = False):
+        """_summary_
+
+        Args:
+            views (_type_): FeatureView, LabelView or Service
+            features (list, optional): feature(label) to use
+            is_numeric (bool, optional): whether return numeric feature(label) only
+
+        Returns:
+            _type_: corresponding feature(label)
+        """
         if isinstance(views, FeatureView):
-            buildin_features = views.get_feature_objects()
+            buildin_features = views.get_feature_objects(is_numeric)
         elif isinstance(views, LabelView):
-            buildin_features = views.get_label_objects()
+            buildin_features = views.get_label_objects(is_numeric)
         else:  # Service
-            buildin_features = views.get_feature_objects(self.feature_views) | views.get_label_objects(
-                self.label_views
-            )
+            buildin_features = views.get_feature_objects(
+                self.feature_views, is_numeric
+            ) | views.get_label_objects(self.label_views, is_numeric)
+
         if features:
             features = set(features)
             features = [feature for feature in buildin_features if feature.name in features]
+        else:
+            features = buildin_features
         return features
-
-    def _get_available_features(
-        self, view: Union[FeatureView, Service], is_numeric: bool = False
-    ) -> List[str]:
-        if isinstance(view, FeatureView):
-            features = view.get_feature_objects(is_numeric)
-        elif isinstance(view, Service):
-            features = view.get_feature_objects(self.feature_views, is_numeric)
-        else:
-            raise TypeError("must be FeatureViews or Service")
-
-        return [feature.name for feature in features]
-
-    def _get_available_labels(self, view: Union[LabelView, Service], is_numeric: bool = False):
-        if isinstance(view, LabelView):
-            labels = view.get_label_objects(is_numeric)
-        elif isinstance(view, Service):
-            labels = view.get_label_objects(self.label_views, is_numeric)
-        else:
-            raise TypeError("must be LabelViews or Service")
-
-        return [label.name for label in labels]
 
     def _get_available_entity_names(self, view) -> List[str]:
         entities = []
@@ -152,9 +143,7 @@ class FeatureStore:
 
         self.__check_format(entity_df)
         feature_view = self._get_views(feature_view)
-
-        if not features:
-            features = self._get_available_features(feature_view)
+        features = self._get_feature_to_use(feature_view, features)
 
         if self.offline_store.type == "file":
             return self._get_point_record(feature_view, entity_df, features, include, **kwargs)
@@ -193,9 +182,7 @@ class FeatureStore:
         feature_view = self._get_views(feature_view)
         self.__check_format(entity_df)
         period = Period.from_str(period)
-
-        if not features:
-            features = self._get_available_features(feature_view)
+        features = self._get_feature_to_use(feature_view, features)
 
         if self.offline_store.type == "file":
             return self._get_period_record(feature_view, entity_df, period, features, include, **kwargs)
@@ -228,7 +215,7 @@ class FeatureStore:
         """
         self.__check_format(entity_df)
         label_view = self._get_views(label_view)
-        labels = self._get_available_labels(label_view)
+        labels = self._get_feature_to_use(label_view)
 
         if self.offline_store.type == "file":
             return self._get_point_record(label_view, entity_df, labels, include, **kwargs)
@@ -260,7 +247,7 @@ class FeatureStore:
         """
         self.__check_format(entity_df)
         label_view = self._get_views(label_view)
-        labels = self._get_available_labels(label_view)
+        labels = self._get_feature_to_use(label_view)
 
         if self.offline_store.type == "file":
             return self._get_period_record(label_view, entity_df, period, labels, include, **kwargs)
@@ -309,8 +296,6 @@ class FeatureStore:
             }
         )
 
-        features = self._get_feature_to_use(view, features)
-
         if isinstance(view, (FeatureView, LabelView)):
             source = self.sources[view.batch_source]
             assert isinstance(source, FileSource), "only work for file source in _get_point_record"
@@ -356,8 +341,6 @@ class FeatureStore:
                 if join_key in entity_columns
             }
         )
-
-        features = self._get_feature_to_use(views, features)
 
         table_name = SqlSource(name=table_name, timestamp_field=TIME_COL)
         if isinstance(views, (FeatureView, LabelView)):
@@ -537,8 +520,6 @@ class FeatureStore:
                 timestamp_field=TIME_COL,
                 created_timestamp_field=MATERIALIZE_TIME,
             )
-
-        features = self._get_feature_to_use(view, features)
 
         return self.offline_store.get_period_features(
             entity_df=entity_df,
@@ -810,18 +791,7 @@ class FeatureStore:
                 if join_key in entities
             }
         )
-        if isinstance(view, FeatureView):
-            buildin_features = view.get_feature_objects(fn != "unique")
-        elif isinstance(view, LabelView):
-            buildin_features = view.get_label_objects(fn != "unique")
-        else:  # Service
-            buildin_features = view.get_features(self.feature_views, fn != "unique")
-
-        if features:
-            features = set(features)
-            features = [feature for feature in buildin_features if feature.name in features]
-        else:
-            features = buildin_features
+        features = self._get_feature_to_use(view, features, fn != "unique")
 
         if keys_only:
             assert fn == "unique", "keys_only=True can only be applied when fn=unique"

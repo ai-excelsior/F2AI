@@ -50,7 +50,7 @@ class IterableDataset(IterableDataset):
                 )
                 if not to_return[0].isnull().all().all() and not to_return[1].isnull().all().all():
                     yield to_return
-        elif self.fs.offline_store.type == "pgsql":
+        elif self.fs.offline_store.type == "pgsql":  # TODO: not completed
             for i in range(len(self.entity_index)):
                 data_sample = self.get_context(i)
                 if not data_sample[0].empty and not data_sample[1].empty:
