@@ -102,25 +102,36 @@ class FeatureStore:
             features = buildin_features
         return features
 
-    def _get_available_entity_names(self, view) -> List[str]:
-        """_summary_
-
-        Args:
-            view (_type_): FeatureView, LabelView or Service
-
-        Returns:
-            List[str]: all entities defined in view
-        """
-        entities = []
+    def _get_keys_to_join(self, view, entity_columns=[]):
+        avaliable_entity_names = []
         if isinstance(view, FeatureView):
-            entities = list(view.entities)
+            avaliable_entity_names = list(view.entities)
         elif isinstance(view, LabelView):
-            entities = list(view.entities)
+            avaliable_entity_names = list(view.entities)
         elif isinstance(view, Service):
-            entities = list(view.get_entities(self.feature_views, self.label_views))
+            avaliable_entity_names = list(view.get_entities(self.feature_views, self.label_views))
         else:
             raise TypeError("must be FeatureViews, LabelViews or Service")
-        return entities
+
+        if entity_columns:  # need filter
+            entity_names = list(
+                {
+                    join_key
+                    for entity_name in avaliable_entity_names
+                    for join_key in self.entities[entity_name].join_keys
+                    if join_key in entity_columns
+                }
+            )
+        else:
+            entity_names = list(
+                {
+                    join_key
+                    for entity_name in avaliable_entity_names
+                    for join_key in self.entities[entity_name].join_keys
+                }
+            )
+
+        return entity_names
 
     def _get_views(self, view_name):
         """_summary_
@@ -302,15 +313,7 @@ class FeatureStore:
         ), "only allowed FeatureView, LabelView and Service"
         assert isinstance(self.offline_store, OfflineFileStore), "only OfflineFileStore supportted "
 
-        avaliable_entity_names = self._get_available_entity_names(view)
-        join_keys = list(
-            {
-                join_key
-                for entity_name in avaliable_entity_names
-                for join_key in self.entities[entity_name].join_keys
-                if join_key in entity_df.columns
-            }
-        )
+        join_keys = self._get_keys_to_join(view, entity_df.columns)
 
         if isinstance(view, (FeatureView, LabelView)):
             source = self.sources[view.batch_source]
@@ -348,15 +351,7 @@ class FeatureStore:
         ), "only allowed FeatureView, LabelView and Service"
         assert isinstance(self.offline_store, OfflinePostgresStore), "only OfflinePostgresStore supportted "
 
-        avaliable_entity_names = self._get_available_entity_names(views)
-        entity_names = list(
-            {
-                join_key
-                for entity_name in avaliable_entity_names
-                for join_key in self.entities[entity_name].join_keys
-                if join_key in entity_columns
-            }
-        )
+        entity_names = self._get_keys_to_join(views, entity_columns)
 
         table_name = SqlSource(name=table_name, timestamp_field=TIME_COL)
         if isinstance(views, (FeatureView, LabelView)):
@@ -393,10 +388,6 @@ class FeatureStore:
         include: bool = True,
         entity_df_columns: list = None,
     ):
-        # avaliable_entity_names = self._get_available_entity_names(view)
-        # entity_names = [
-        #     entity_name for entity_name in avaliable_entity_names if entity_name in entity_df_columns
-        # ]
 
         if isinstance(view, (FeatureView, LabelView)):
             assert self.sources[
@@ -514,17 +505,8 @@ class FeatureStore:
             view, (FeatureView, LabelView, Service)
         ), "only allowed FeatureView, LabelView and Service"
         assert isinstance(self.offline_store, OfflineFileStore), "only OfflineFileStore supportted "
+        join_keys = self._get_keys_to_join(view, entity_df.columns)
 
-        avaliable_entity_names = self._get_available_entity_names(view)
-
-        join_keys = list(
-            {
-                join_key
-                for entity_name in avaliable_entity_names
-                for join_key in self.entities[entity_name].join_keys
-                if join_key in entity_df.columns
-            }
-        )
         # TODO: support multi join keys in future
         if isinstance(view, (FeatureView, LabelView)):
             source = self.sources[view.batch_source]
@@ -642,7 +624,7 @@ class FeatureStore:
             )
             feature_views.append(feature_view_dict)
 
-        entity_names = self._get_available_entity_names(service)
+        entity_names = self._get_keys_to_join(service)
         entities_dict = {entity_name: self.entities[entity_name].join_keys[0] for entity_name in entity_names}
 
         conn = psy_conn(self.offline_store)
@@ -768,45 +750,22 @@ class FeatureStore:
         """
         self.__check_fns(fn)
         view = self._get_views(view)
-        avaliable_entity_names = self._get_available_entity_names(view)
 
         if entity_df is not None:
             self.__check_format(entity_df)
-            entities = (
-                list(entity_df.columns[:-1])
-                if len(entity_df.columns[:-1])
-                else [
-                    item
-                    for entity_name in avaliable_entity_names
-                    for item in self.entities[entity_name].join_keys
-                ]
-            )
+            entities = entity_df.columns
             entity_df[TIME_COL] = pd.to_datetime(entity_df[TIME_COL], utc=True)
             start = pd.to_datetime(0, utc=True)
         else:
-            entities = (
-                group_key
-                if group_key is not None  # group_key can be empty list
-                else [
-                    item
-                    for entity_name in avaliable_entity_names
-                    for item in self.entities[entity_name].join_keys
-                ]
-            )
+            # group_key can be empty list, which is different as None
+            entities = group_key
             entity_df = pd.DataFrame(columns=[TIME_COL])
             entity_df[TIME_COL] = [
                 pd.to_datetime(end, utc=True) if end else pd.to_datetime(datetime.now(), utc=True)
             ]
             start = pd.to_datetime(start, utc=True) if start else pd.to_datetime(0, utc=True)
 
-        join_keys = list(
-            {
-                join_key
-                for entity_name in avaliable_entity_names
-                for join_key in self.entities[entity_name].join_keys
-                if join_key in entities
-            }
-        )
+        join_keys = self._get_keys_to_join(view, entities)
         features = self._get_feature_to_use(view, features, fn != "unique")
 
         if keys_only:
@@ -877,25 +836,12 @@ class FeatureStore:
             views (List): view to look up
         """
         view = self._get_views(view)
-        avaliable_entity_names = self._get_available_entity_names(view)
         if isinstance(entity, pd.DataFrame):
             entities = entity.columns
-        elif entity:
-            entities = entity
         else:
-            entities = {
-                join_key
-                for entity_name in avaliable_entity_names
-                for join_key in self.entities[entity_name].join_keys
-            }
-        join_keys = list(
-            {
-                join_key
-                for entity_name in avaliable_entity_names
-                for join_key in self.entities[entity_name].join_keys
-                if join_key in entities
-            }
-        )
+            entities = entity
+
+        join_keys = self._get_keys_to_join(view, entities)
 
         if self.offline_store.type == "file":
             if isinstance(view, (FeatureView, LabelView)):
