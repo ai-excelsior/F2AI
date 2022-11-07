@@ -277,7 +277,7 @@ class FeatureStore:
             return result
 
     def get_period_labels(
-        self, label_view, entity_df: pd.DataFrame, period: str, include: bool = False, **kwargs
+        self, label_view: str, entity_df: pd.DataFrame, period: str, include: bool = False, **kwargs
     ):
         """time series prediction use: get from `start` to `end` length labels of `entity_df` from `label_views`
 
@@ -289,30 +289,29 @@ class FeatureStore:
         """
         self.__check_format(entity_df)
         label_view = self._get_views(label_view)
+        assert isinstance(label_view, LabelView), "only allowed LabelView"
+
         labels = self._get_feature_to_use(label_view)
         period = Period.from_str(period)
+        join_keys = self._get_keys_to_join(label_view, entity_df.columns)
 
-        if self.offline_store.type == "file":
-            return self._get_period_record(label_view, entity_df, period, labels, include, **kwargs)
-        elif self.offline_store.type == "pgsql":
-            table_suffix = to_pgsql(entity_df, TMP_TBL, self.offline_store)
-            # connect to pgsql db
-            conn = psy_conn(self.offline_store)
-            sql_result, entity_cols = self._get_period_pgsql(
-                label_view,
-                f"{TMP_TBL}_{table_suffix}",
-                period,
-                labels,
-                include,
-                list(entity_df.columns[:-1]),
-            )
-            result = pd.DataFrame(
-                sql_df(sql_result.get_sql(), conn), columns=entity_cols + [QUERY_COL, TIME_COL] + labels
-            )
-            # remove entity_df and close connection
-            close_conn(conn, tables=[f"{TMP_TBL}_{table_suffix}"])
-            return result
+        if isinstance(label_view, (FeatureView, LabelView)):
+            source = self.sources[label_view.batch_source]
+        else:
+            source = self.offline_store.get_offline_source(label_view)
 
+        return self.offline_store.get_period_features(
+            entity_df=entity_df,
+            features=labels,
+            source=source,
+            period=period,
+            join_keys=join_keys,
+            ttl=label_view.ttl,
+            include=include,
+            **kwargs,
+        )
+
+    # TODO: remove this in future
     def _get_point_record(
         self, view, entity_df: pd.DataFrame, features: list, include: bool = True, **kwargs
     ):
@@ -361,7 +360,6 @@ class FeatureStore:
         entity_columns: list = None,
         **kwargs,
     ):
-
         assert isinstance(
             views, (FeatureView, LabelView, Service)
         ), "only allowed FeatureView, LabelView and Service"
@@ -394,109 +392,6 @@ class FeatureStore:
             join_keys,
             [f.name for f in features],
         )
-
-    def _get_period_pgsql(
-        self,
-        view: Union[FeatureView, LabelView, Service],
-        table_name: str,
-        period: Period,
-        features: list,
-        include: bool = True,
-        entity_df_columns: list = None,
-    ):
-
-        if isinstance(view, (FeatureView, LabelView)):
-            assert self.sources[
-                view.batch_source
-            ].timestamp_field, "View is not time-relevant, no period to get"
-
-            entity_cols = [
-                join_key
-                for entity_name in view.entities
-                for join_key in self.entities[entity_name].join_keys
-                if join_key in entity_df_columns
-            ]
-            time_cols = (
-                [
-                    f"{self.sources[view.batch_source].timestamp_field} as {TIME_COL}_tmp",
-                    f"{self.sources[view.batch_source].created_timestamp_field} as {CREATE_COL}",
-                ]
-                if self.sources[view.batch_source].created_timestamp_field
-                else [f"{self.sources[view.batch_source].timestamp_field} as  {TIME_COL}_tmp"]
-            )
-            create_time = CREATE_COL
-            df = (
-                Query.from_(view.batch_source)
-                .select(Parameter(",".join(entity_cols + time_cols + features)))
-                .as_("df")
-            )
-        else:
-            entities = view.get_entities(self.feature_views, self.label_views)
-            entity_cols = [
-                join_key
-                for entity in entities
-                for join_key in entity.join_keys
-                if join_key in entity_df_columns
-            ]
-            time_cols = [f"{TIME_COL} as {TIME_COL}_tmp", MATERIALIZE_TIME]
-
-            create_time = MATERIALIZE_TIME
-            df = (
-                Query.from_(view.materialize_path)
-                .select(Parameter(",".join(entity_cols + time_cols + features)))
-                .as_("df")
-            )
-
-        if entity_cols:
-            sql_join = (
-                Query.from_(Query.from_(table_name).select(Parameter(",".join(entity_cols + [TIME_COL]))))
-                .inner_join(df)
-                .using(*entity_cols)
-                .select(Parameter(f"df.*, {TIME_COL}"))
-                .as_("sql_join")
-            )
-        else:
-            sql_join = (
-                Query.from_(table_name)
-                .cross_join(df)
-                .cross()
-                .select(Parameter(f"df.*, {TIME_COL}"))
-                .as_("sql_join")
-            )
-        sql_query = self._get_window_pgsql(sql_join, period, include)
-        sql_result = (
-            Query.from_(sql_query).select(
-                Parameter(
-                    ",".join(
-                        entity_cols
-                        + [f"{TIME_COL} as {QUERY_COL}", f"{TIME_COL}_tmp as {TIME_COL}"]
-                        + features
-                    )
-                ),
-            )
-            if len(time_cols) == 1
-            else (
-                Query.from_(
-                    Query.from_(sql_query).select(
-                        sql_query.star,
-                        Parameter(
-                            f"row_number() over (partition by ({','.join(entity_cols+[TIME_COL,TIME_COL+'_tmp'])}) order by {create_time} DESC)"
-                        ),
-                    )
-                )
-                .select(
-                    Parameter(
-                        ",".join(
-                            entity_cols
-                            + [f"{TIME_COL} as {QUERY_COL}", f"{TIME_COL}_tmp as {TIME_COL}"]
-                            + features
-                        )
-                    )
-                )
-                .where(Parameter("row_number=1"))
-            )
-        )
-        return [sql_result, entity_cols]
 
     def _get_period_record(
         self,
