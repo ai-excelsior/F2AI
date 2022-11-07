@@ -5,7 +5,7 @@ import docker
 from datetime import datetime
 from aie_feast.common.jinja import jinja_env
 from typing import Dict, List, Union
-from pypika import Query, Parameter, functions
+from pypika import Query, Parameter
 from aie_feast.common.source import FileSource, SqlSource
 from aie_feast.offline_stores.offline_file_store import OfflineFileStore
 from aie_feast.offline_stores.offline_postgres_store import OfflinePostgresStore
@@ -23,6 +23,7 @@ from aie_feast.common.get_config import (
 from aie_feast.common.utils import to_file, remove_prefix
 from aie_feast.common.psl_utils import execute_sql, psy_conn, to_pgsql, close_conn, sql_df
 from aie_feast.period import Period
+from aie_feast.definitions import Feature
 
 
 TIME_COL = "event_timestamp"  # timestamp of action taken in original tables or period-query result, or query time in single-query result table
@@ -56,6 +57,11 @@ class FeatureStore:
             if isinstance(source, FileSource) and not os.path.isabs(source.path):
                 source.path = os.path.join(self.project_folder, source.path)
 
+        # fmodity the services' materialize path if it is not a absolute path
+        for _, service in self.services.items():
+            if service.materialize_type == "file" and not os.path.isabs(service.materialize_path):
+                service.materialize_path = os.path.join(self.project_folder, service.materialize_path)
+
     def __check_format(self, entity_df):
         if isinstance(entity_df, pd.DataFrame):
             # TODO: Remove this constraint in future
@@ -75,7 +81,7 @@ class FeatureStore:
             "unique",
         ], f"{fn}is not a available function, you can use fs.query() to customize your function"
 
-    def _get_feature_to_use(self, views, features: list = [], is_numeric: bool = False):
+    def _get_feature_to_use(self, views, features: list = [], is_numeric: bool = False) -> List[Feature]:
         """_summary_
 
         Args:
@@ -122,7 +128,7 @@ class FeatureStore:
         else:
             raise TypeError("must be FeatureViews, LabelViews or Service")
 
-        if entity_columns:  # need filter
+        if len(entity_columns) > 0:  # need filter
             entity_names = list(
                 {
                     join_key
@@ -160,14 +166,6 @@ class FeatureStore:
             return self.services[view_name]
         else:
             raise ValueError("Can't find any views/services")
-
-    def _get_join_keys(self, view: Union[FeatureView, LabelView, Service]):
-        if isinstance(view, (FeatureView, LabelView)):
-            entities = {self.entities[entity_name] for entity_name in view.entities}
-        else:
-            entities = view.get_entities(feature_views=self.feature_views, label_views=self.label_views)
-
-        return [join_key for entity in entities for join_key in entity.join_keys]
 
     def get_features(
         self,
@@ -211,7 +209,7 @@ class FeatureStore:
         feature_view: str,
         entity_df: pd.DataFrame,
         period: str,
-        features: List = None,
+        features: List[str] = None,
         include: bool = True,
         **kwargs,
     ):
@@ -224,44 +222,30 @@ class FeatureStore:
             features (List, optional): features to return. Defaults to None means all features.
             include (bool, optional): include timestamp defined in `entity_df` or not. Defaults to True.
         """
-        feature_view = self._get_views(feature_view)
         self.__check_format(entity_df)
+        feature_view = self._get_views(feature_view)
+        assert isinstance(
+            feature_view, (FeatureView, LabelView, Service)
+        ), "only allowed FeatureView, LabelView and Service"
         period = -Period.from_str(period)
+        feature_objects = self._get_feature_to_use(feature_view, features)
+        join_keys = self._get_keys_to_join(feature_view, entity_df.columns)
 
         if isinstance(feature_view, (FeatureView, LabelView)):
             source = self.sources[feature_view.batch_source]
         else:
             source = self.offline_store.get_offline_source(feature_view)
 
-        if not features:
-            features = self._get_available_features(feature_view)
-
-        if self.offline_store.type == "file":
-            return self._get_period_record(feature_view, entity_df, period, features, include, **kwargs)
-        elif self.offline_store.type == "pgsql":
-            join_keys = self._get_join_keys(view=feature_view)
-            table_name = self.offline_store.upload_df(
-                entity_df=entity_df,
-                source=source,
-                join_keys=join_keys,
-            )
-
-            # connect to pgsql db
-            conn = psy_conn(self.offline_store)
-            sql_result, entity_cols = self._get_period_pgsql(
-                feature_view,
-                table_name,
-                period,
-                features,
-                include,
-                list(entity_df.columns[:-1]),
-            )
-            result = pd.DataFrame(
-                sql_df(sql_result.get_sql(), conn), columns=entity_cols + [QUERY_COL, TIME_COL] + features
-            )
-            # remove entity_df and close connection
-            close_conn(conn, tables=[table_name])
-            return result
+        return self.offline_store.get_period_features(
+            entity_df=entity_df,
+            features=feature_objects,
+            source=source,
+            period=period,
+            join_keys=join_keys,
+            ttl=feature_view.ttl,
+            include=include,
+            **kwargs,
+        )
 
     def get_labels(self, label_view, entity_df: pd.DataFrame, include: bool = True, **kwargs):
         """non-time series prediction use: get labels of `entity_df` from `label_views`
@@ -539,7 +523,6 @@ class FeatureStore:
         assert isinstance(self.offline_store, OfflineFileStore), "only OfflineFileStore supportted "
         join_keys = self._get_keys_to_join(view, entity_df.columns)
 
-        # TODO: support multi join keys in future
         if isinstance(view, (FeatureView, LabelView)):
             source = self.sources[view.batch_source]
             assert isinstance(source, FileSource), "only work for file source in _get_point_record"

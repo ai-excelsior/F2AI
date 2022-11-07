@@ -22,7 +22,7 @@ class OfflineFileStore(OfflineStore):
 
     def get_offline_source(self, service: Service) -> FileSource:
         return FileSource(
-            name=service.name,
+            name=f"{service.name}_source",
             path=service.materialize_path,
             timestamp_field="event_timestamp",
             created_timestamp_field="materialize_time",
@@ -101,7 +101,7 @@ class OfflineFileStore(OfflineStore):
         join_keys: List[str] = [],
         ttl: Optional[Period] = None,
         include: bool = True,
-        **kwargs
+        **kwargs,
     ):
         source_df = self._read_file(source=source, features=features, join_keys=join_keys)
 
@@ -113,7 +113,7 @@ class OfflineFileStore(OfflineStore):
             ttl=ttl,
             join_keys=join_keys,
             include=include,
-            **kwargs
+            **kwargs,
         )
 
     def get_period_features(
@@ -125,7 +125,7 @@ class OfflineFileStore(OfflineStore):
         join_keys: List[str] = [],
         ttl: Optional[Period] = None,
         include: bool = True,
-        **kwargs
+        **kwargs,
     ):
         source_df = self._read_file(source=source, features=features, join_keys=join_keys)
 
@@ -138,7 +138,7 @@ class OfflineFileStore(OfflineStore):
             ttl=ttl,
             join_keys=join_keys,
             include=include,
-            **kwargs
+            **kwargs,
         )
 
     def stats(

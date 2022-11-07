@@ -11,13 +11,12 @@ from aie_feast.common.utils import build_agg_query, build_filter_time_query
 from aie_feast.period import Period
 from aie_feast.common.utils import convert_dtype_to_sqlalchemy_type
 from .offline_store import OfflineStore, OfflineStoreType
-from aie_feast.service import Service
 from aie_feast.views import LabelView, FeatureView
 from aie_feast.definitions import Entity
 
 
-TIME_COL = "event_timestamp"
-# DEFAULT_CREATED_TIMESTAMP_FIELD = "created_timestamp"
+DEFAULT_EVENT_TIMESTAMP_FIELD = "event_timestamp"
+DEFAULT_CREATED_TIMESTAMP_FIELD = "created_timestamp"
 ENTITY_EVENT_TIMESTAMP_FIELD = "_entity_event_timestamp_"
 SOURCE_EVENT_TIMESTAMP_FIELD = "_source_event_timestamp_"
 SOURCE_CREATED_TIMESTAMP_FIELD = "_created_timestamp_"
@@ -109,19 +108,6 @@ class OfflinePostgresStore(OfflineStore):
             self.psy_conn.commit()
 
         return table_name
-
-    def upload_df_with_sqlalchemy(
-        self, entity_df: pd.DataFrame, source: SqlSource, join_keys: List[str] = [], table_name: str = None
-    ):
-        time_cols = [source.timestamp_field]
-        if source.created_timestamp_field:
-            time_cols.append(source.created_timestamp_field)
-
-        if table_name is None:
-            table_name = f"f2ai_temp_{uuid.uuid4().hex}"
-
-        engine = self.get_sqlalchemy_engine()
-        entity_df.to_sql(table_name, engine, schema=self.db_schema, if_exists="replace", method="multi")
 
     def read(
         self,
@@ -233,9 +219,144 @@ class OfflinePostgresStore(OfflineStore):
         )
         return sql_query.select(
             Parameter(
-                f"{','.join(join_keys + [ENTITY_EVENT_TIMESTAMP_FIELD +' as '+ TIME_COL]  +[feature.name for feature in features])}"
+                f"{','.join(join_keys + [ENTITY_EVENT_TIMESTAMP_FIELD + ' as ' + DEFAULT_EVENT_TIMESTAMP_FIELD] + [feature.name for feature in features])}"
             )
         )
+
+    def get_period_features(
+        self,
+        entity_df: pd.DataFrame,
+        features: Set[Feature],
+        source: SqlSource,
+        period: Period,
+        join_keys: List[str] = [],
+        ttl: Optional[Period] = None,
+        include: bool = True,
+        **kwargs,
+    ):
+        feature_names = [feature.name for feature in features]
+
+        # upload entity_df to remote database
+        table_name = self.upload_df(
+            entity_df=entity_df,
+            source=source,
+            join_keys=join_keys,
+        )
+
+        # query source
+        time_cols = [f"{source.timestamp_field} as {SOURCE_EVENT_TIMESTAMP_FIELD}"]
+        if source.created_timestamp_field:
+            time_cols.append(f"{source.created_timestamp_field} as {DEFAULT_CREATED_TIMESTAMP_FIELD}")
+        df = (
+            Query.from_(source.query)
+            .select(Parameter(",".join(join_keys + time_cols + feature_names)))
+            .as_("df")
+        )
+
+        # join features
+        if len(join_keys) > 0:
+            sql_join = (
+                Query.from_(
+                    Query.from_(table_name).select(
+                        Parameter(",".join(join_keys + [DEFAULT_EVENT_TIMESTAMP_FIELD]))
+                    )
+                )
+                .inner_join(df)
+                .using(*join_keys)
+                .select(Parameter(f"df.*, {DEFAULT_EVENT_TIMESTAMP_FIELD}"))
+                .as_("sql_join")
+            )
+        else:
+            sql_join = (
+                Query.from_(table_name)
+                .cross_join(df)
+                .cross()
+                .select(Parameter(f"df.*, {DEFAULT_EVENT_TIMESTAMP_FIELD}"))
+                .as_("sql_join")
+            )
+
+        # get period features, filter feature by period
+        if period.is_neg:
+            sql_filter_with_period = (
+                Query.from_(sql_join)
+                .select(sql_join.star)
+                .where(
+                    Parameter(
+                        f" ({SOURCE_EVENT_TIMESTAMP_FIELD}::timestamptz <= {DEFAULT_EVENT_TIMESTAMP_FIELD}::timestamptz) and ({SOURCE_EVENT_TIMESTAMP_FIELD}::timestamptz > {DEFAULT_EVENT_TIMESTAMP_FIELD}::timestamptz + {period.to_pgsql_interval()})  "
+                    )
+                    if include
+                    else Parameter(
+                        f" ({SOURCE_EVENT_TIMESTAMP_FIELD}::timestamptz < {DEFAULT_EVENT_TIMESTAMP_FIELD}::timestamptz) and ({SOURCE_EVENT_TIMESTAMP_FIELD}::timestamptz >= {DEFAULT_EVENT_TIMESTAMP_FIELD}::timestamptz + {period.to_pgsql_interval()})  "
+                    )
+                )
+                .as_("sql_filter_with_period")
+            )
+        else:
+            sql_filter_with_period = (
+                Query.from_(sql_join)
+                .select(sql_join.star)
+                .where(
+                    Parameter(
+                        f" ({SOURCE_EVENT_TIMESTAMP_FIELD}::timestamptz >= {DEFAULT_EVENT_TIMESTAMP_FIELD}::timestamptz) and ({SOURCE_EVENT_TIMESTAMP_FIELD}::timestamptz < {DEFAULT_EVENT_TIMESTAMP_FIELD}::timestamptz + {period.to_pgsql_interval()})  "
+                    )
+                    if include
+                    else Parameter(
+                        f" ({SOURCE_EVENT_TIMESTAMP_FIELD}::timestamptz > {DEFAULT_EVENT_TIMESTAMP_FIELD}::timestamptz) and ({SOURCE_EVENT_TIMESTAMP_FIELD}::timestamptz <= {DEFAULT_EVENT_TIMESTAMP_FIELD}::timestamptz + {period.to_pgsql_interval()})  "
+                    )
+                )
+                .as_("sql_filter_with_period")
+            )
+
+        # get point in time feature
+        if source.created_timestamp_field:
+            sql_result = (
+                Query.from_(
+                    Query.from_(sql_filter_with_period).select(
+                        sql_filter_with_period.star,
+                        Parameter(
+                            f"row_number() over (partition by ({','.join(join_keys+[DEFAULT_EVENT_TIMESTAMP_FIELD, SOURCE_EVENT_TIMESTAMP_FIELD])}) order by {source.created_timestamp_field} DESC)"
+                        ),
+                    )
+                )
+                .select(
+                    Parameter(
+                        ",".join(
+                            join_keys
+                            + [
+                                f"{DEFAULT_EVENT_TIMESTAMP_FIELD} as {QUERY_COL}",
+                                f"{SOURCE_EVENT_TIMESTAMP_FIELD} as {DEFAULT_EVENT_TIMESTAMP_FIELD}",
+                            ]
+                            + feature_names
+                        )
+                    )
+                )
+                .where(Parameter("row_number=1"))
+            )
+        else:
+            sql_result = Query.from_(sql_filter_with_period).select(
+                Parameter(
+                    ",".join(
+                        join_keys
+                        + [
+                            f"{DEFAULT_EVENT_TIMESTAMP_FIELD} as {QUERY_COL}",
+                            f"{SOURCE_EVENT_TIMESTAMP_FIELD} as {DEFAULT_EVENT_TIMESTAMP_FIELD}",
+                        ]
+                        + feature_names
+                    )
+                ),
+            )
+
+        # execute sql
+        with self.psy_conn.cursor() as cursor:
+            cursor.execute(sql_result.get_sql())
+            data = cursor.fetchall()
+
+            # drop tables
+            cursor.execute(f'drop table if exists "{table_name}"')
+
+            return pd.DataFrame(
+                data, columns=join_keys + [QUERY_COL, DEFAULT_EVENT_TIMESTAMP_FIELD] + feature_names
+            )
 
     @classmethod
     def point_in_time_join(
@@ -285,7 +406,7 @@ class OfflinePostgresStore(OfflineStore):
         how="inner",
     ):
         # renames to keep things simple
-        entity_df = entity_df.rename(columns={TIME_COL: ENTITY_EVENT_TIMESTAMP_FIELD})
+        entity_df = entity_df.rename(columns={DEFAULT_EVENT_TIMESTAMP_FIELD: ENTITY_EVENT_TIMESTAMP_FIELD})
         source_df = source_df.rename(columns={timestamp_field: SOURCE_EVENT_TIMESTAMP_FIELD})
 
         if created_timestamp_field:
@@ -308,7 +429,10 @@ class OfflinePostgresStore(OfflineStore):
         df = cls.point_on_time_latest(df, join_keys, created_timestamp_field)
 
         return df.drop(columns=[created_timestamp_field], erros="ignore").rename(
-            columns={ENTITY_EVENT_TIMESTAMP_FIELD: QUERY_COL, SOURCE_EVENT_TIMESTAMP_FIELD: TIME_COL}
+            columns={
+                ENTITY_EVENT_TIMESTAMP_FIELD: QUERY_COL,
+                SOURCE_EVENT_TIMESTAMP_FIELD: DEFAULT_EVENT_TIMESTAMP_FIELD,
+            }
         )
 
     @classmethod
