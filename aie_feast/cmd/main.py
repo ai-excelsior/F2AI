@@ -91,7 +91,7 @@ if __name__ == "__main__":
         )
         # fs.get_latest_entities(fs.services["credit_scoring_v1"])
 
-    stats()
+    # stats()
 
     def get_features():
         entity_link = pd.DataFrame.from_dict(
@@ -140,7 +140,7 @@ if __name__ == "__main__":
         # fs.materialize("traval_time_prediction_embedding_v1")
         fs.materialize("traval_time_prediction_embedding_v1", incremental_begin="3 minutes")
 
-    # do_materailize()
+    do_materailize()
 
     def get_period_features_and_labels():
 

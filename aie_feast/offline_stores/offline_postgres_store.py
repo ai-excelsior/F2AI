@@ -11,6 +11,10 @@ from aie_feast.common.utils import build_agg_query, build_filter_time_query
 from aie_feast.period import Period
 from aie_feast.common.utils import convert_dtype_to_sqlalchemy_type
 from .offline_store import OfflineStore, OfflineStoreType
+from aie_feast.service import Service
+from aie_feast.views import LabelView, FeatureView
+from aie_feast.definitions import Entity
+
 
 TIME_COL = "event_timestamp"
 # DEFAULT_CREATED_TIMESTAMP_FIELD = "created_timestamp"
@@ -134,6 +138,27 @@ class OfflinePostgresStore(OfflineStore):
         all_columns = list(set(time_columns + join_keys + feature_columns))
         source_df = Query.from_(source.name).select(Parameter(",".join(all_columns)))
         return source_df
+
+    def materialize(
+        self,
+        service: Service,
+        feature_views: List[FeatureView],
+        label_views: List[LabelView],
+        sources: List[SqlSource],
+        entities: List[Entity],
+        incremental_begin,
+    ):
+
+        label_view = service.get_label_view(label_views)
+
+        max_timestamp = Query.from_(service.materialize_path).select(
+            fn.Max(Parameter(sources[label_view.batch_source].timestamp_field))
+        )
+        max_timestamp_label = Query.from_(label_view.batch_source).select(
+            fn.Max(Parameter(sources[label_view.batch_source].timestamp_field))
+        )
+
+        return max_timestamp, max_timestamp_label
 
     def stats(
         self,

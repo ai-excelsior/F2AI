@@ -659,11 +659,14 @@ class FeatureStore:
         entities_dict = {entity_name: self.entities[entity_name].join_keys[0] for entity_name in entity_names}
 
         conn = psy_conn(self.offline_store)
-        max_timestamp = Query.from_(service.materialize_path).select(
-            functions.Max(Parameter(label_view_dict["event_time"]))
-        )
-        max_timestamp_label = Query.from_(label_view.batch_source).select(
-            functions.Max(Parameter(label_view_dict["event_time"]))
+
+        max_timestamp, max_timestamp_label = self.offline_store.materialize(
+            service=service,
+            feature_views=self.feature_views,
+            label_views=self.label_views,
+            sources=self.sources,
+            entities=self.entities,
+            incremental_begin=incremental_begin,
         )
 
         label_result = pd.to_datetime(sql_df(max_timestamp_label.get_sql(), conn)[0][0])
