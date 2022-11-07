@@ -16,9 +16,9 @@ def psy_conn(store: OfflinePostgresStore):
     )
 
 
-def close_conn(conn, tables: list = None):
-    for tab in tables:
-        remove_table(tab, conn)
+def close_conn(conn, tables: list = []):
+
+    [remove_table(tab, conn) for tab in tables]
     conn.close()
 
 

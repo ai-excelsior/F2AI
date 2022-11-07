@@ -1,6 +1,6 @@
 from pydantic import Field
 import pandas as pd
-from pypika import Query, Parameter, functions as fn, JoinType
+from pypika import Query, Parameter, functions as fn, JoinType, Table
 from typing import List, Optional, Set
 from aie_feast.definitions import Feature
 from aie_feast.common.source import SqlSource
@@ -71,6 +71,15 @@ class OfflinePostgresStore(OfflineStore):
         sql_agg = build_agg_query(sql_filter, features, group_keys, fn, keys_only)
 
         return sql_agg
+
+    def get_latest_entities(self, source: SqlSource, group_keys: list = [], entities: str = None):
+        source_df = self.read(source=source, features=[], join_keys=group_keys)
+        q = Query.from_(source_df).groupby(*group_keys)
+
+        if entities:
+            q = q.inner_join(Table(entities.name)).using(*group_keys)
+
+        return q.select(*group_keys, fn.Max(Parameter(SOURCE_EVENT_TIMESTAMP_FIELD)))
 
     def get_features(
         self,

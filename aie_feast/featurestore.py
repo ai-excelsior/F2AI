@@ -897,24 +897,34 @@ class FeatureStore:
             close_conn(conn, [f"{TMP_TBL}_{table_suffix}"])
             return result
 
-    def get_latest_entities(self, view: str, entity: List[str] = []):
+    def get_latest_entities(self, view: str, entity: Union[List[str], pd.DataFrame] = None):
         """get latest entity and its timestamp from a single FeatureViews/LabelViews or a materialzed Service
+        entity can either be None(all joined-entities in view), entity names or entity value(specific entities)
 
         Args:
             views (List): view to look up
         """
         view = self._get_views(view)
         avaliable_entity_names = self._get_available_entity_names(view)
-        entity = self._get_available_entity_names(view) if not entity else entity
-
+        if isinstance(entity, pd.DataFrame):
+            entities = entity.columns
+        elif entity:
+            entities = entity
+        else:
+            entities = {
+                join_key
+                for entity_name in avaliable_entity_names
+                for join_key in self.entities[entity_name].join_keys
+            }
         join_keys = list(
             {
                 join_key
                 for entity_name in avaliable_entity_names
                 for join_key in self.entities[entity_name].join_keys
-                if join_key in entity
+                if join_key in entities
             }
         )
+
         if self.offline_store.type == "file":
             if isinstance(view, (FeatureView, LabelView)):
                 source = self.sources[view.batch_source]
@@ -926,34 +936,36 @@ class FeatureStore:
                     timestamp_field=TIME_COL,
                     created_timestamp_field=MATERIALIZE_TIME,
                 )
-            return self.offline_store.get_latest_entities(source=source, join_keys=join_keys)
+            return self.offline_store.get_latest_entities(
+                source=source,
+                group_keys=join_keys,
+                entities=entity if isinstance(entity, pd.DataFrame) else None,
+            )
 
         elif self.offline_store.type == "pgsql":
-            entity_dict = {
-                self.entities[en].join_keys[0] if en in self.entities else None: en for en in entity
-            }
+            if isinstance(entity, pd.DataFrame):
+                table_suffix = to_pgsql(entity, TMP_TBL, self.offline_store)
+                table_name = SqlSource(name=f"{TMP_TBL}_{table_suffix}")
+            else:
+                table_name = None
             conn = psy_conn(self.offline_store)
             if isinstance(view, (FeatureView, LabelView)):
-                q = Query.from_(view.batch_source)
-                q = q.groupby(*list(entity_dict.keys())).select(
-                    *list(entity_dict.keys()),
-                    Parameter(f"max({self.sources[view.batch_source].timestamp_field})"),
-                )
+                source = self.sources[view.batch_source]
             else:
-                q = Query.from_(view.materialize_path)
-                q = q.groupby(*list(entity_dict.values())).select(
-                    *list(entity_dict.values()), Parameter(f"max({TIME_COL})")
+                source = SqlSource(
+                    name=f"{view.name}",
+                    timestamp_field=TIME_COL,
+                    created_timestamp_field=MATERIALIZE_TIME,
                 )
-            df = pd.DataFrame(sql_df(q.get_sql(), conn), columns=list(entity_dict.values()) + [TIME_COL])
-            close_conn(conn)
+            assert source.timestamp_field, "get_latest_entities can only apply on time relative data"
+            result_sql = self.offline_store.get_latest_entities(
+                source=source, group_keys=join_keys, entities=table_name
+            )
+            result = pd.DataFrame(sql_df(result_sql.get_sql(), conn), columns=join_keys + [TIME_COL])
+            close_conn(conn, [f"{TMP_TBL}_{table_suffix}"])
+            return result
 
-        return df
-
-    def get_dataset(
-        self,
-        service_name: str,
-        sampler: callable = None,
-    ) -> Dataset:
+    def get_dataset(self, service_name: str, sampler: callable = None) -> Dataset:
         """get from `start` to `end` length data for training from `views`
 
         Args:

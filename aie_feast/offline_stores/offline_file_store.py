@@ -180,10 +180,13 @@ class OfflineFileStore(OfflineStore):
             )
         return result
 
-    def get_latest_entities(self, source: FileSource, join_keys: list):
-        source_df = self._read_file(source=source, features=[], join_keys=join_keys)
+    def get_latest_entities(self, source: FileSource, group_keys: list, entities: pd.DataFrame = None):
+        source_df = self._read_file(source=source, features=[], join_keys=group_keys)
+        if entities is not None:
+            source_df = source_df.merge(entities, on=group_keys, how="inner")
+
         df = source_df.sort_values(by=source.timestamp_field, ascending=False, ignore_index=True)
-        return df.drop_duplicates(subset=join_keys, keep="first")
+        return df.drop_duplicates(subset=group_keys, keep="first")
 
     @classmethod
     def point_in_time_join(

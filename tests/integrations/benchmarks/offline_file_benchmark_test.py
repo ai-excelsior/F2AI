@@ -79,7 +79,6 @@ def test_get_latest_entity_from_feature_view(make_credit_score):
     store = FeatureStore(project_folder)
     measured_time = timeit.timeit(lambda: store.get_latest_entities("loan_features"), number=10)
     print(f"get_latest_entities performance: {measured_time}s")
-    print(store.get_latest_entities("loan_features"))
 
 
 def test_sampler_with_groups(make_credit_score):
