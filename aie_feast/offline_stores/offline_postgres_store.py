@@ -1,11 +1,15 @@
-from pydantic import Field
+from __future__ import annotations
+import uuid
 import pandas as pd
+from io import StringIO
+from typing import List, Optional, Set, TYPE_CHECKING
+from pydantic import Field, PrivateAttr
 from pypika import Query, Parameter, functions as fn, JoinType, Table
-from typing import List, Optional, Set
 from aie_feast.definitions import Feature
 from aie_feast.common.source import SqlSource
 from aie_feast.common.utils import build_agg_query, build_filter_time_query
 from aie_feast.period import Period
+from aie_feast.common.utils import convert_dtype_to_sqlalchemy_type
 from .offline_store import OfflineStore, OfflineStoreType
 
 TIME_COL = "event_timestamp"
@@ -16,7 +20,13 @@ SOURCE_CREATED_TIMESTAMP_FIELD = "_created_timestamp_"
 QUERY_COL = "query_timestamp"
 
 
+if TYPE_CHECKING:
+    from psycopg2 import connection
+    from aie_feast.service import Service
+
+
 class OfflinePostgresStore(OfflineStore):
+
     type: OfflineStoreType = OfflineStoreType.PGSQL
 
     host: str
@@ -25,6 +35,89 @@ class OfflinePostgresStore(OfflineStore):
     db_schema: str = Field(alias="schema", default="public")
     user: str
     password: str
+
+    _conn: Optional[connection] = PrivateAttr(default=None)
+
+    @property
+    def connect_url(self):
+        return f"postgresql+psycopg2://{self.user}:{self.password}@{self.host}:{self.port}/{self.database}"
+
+    @property
+    def psy_conn(self):
+        from psycopg2 import connect
+
+        if self._conn is None:
+            self._conn = connect(
+                user=self.user,
+                password=self.password,
+                host=self.host,
+                port=self.port,
+                dbname=self.database,
+            )
+
+        return self._conn
+
+    def get_offline_source(self, service: Service) -> SqlSource:
+        return SqlSource(
+            name=service.name,
+            query=service.materialize_path,
+            timestamp_field="event_timestamp",
+            created_timestamp_field="materialize_time",
+        )
+
+    def get_sqlalchemy_engine(self):
+        from sqlalchemy import create_engine
+
+        return create_engine(self.connect_url)
+
+    def _create_sqlalchemy_table(self, df: pd.DataFrame, table_name: str, index_columns: List[str]):
+        from sqlalchemy import Column, Table, MetaData
+
+        column_names_and_types = [
+            (str(df.columns[i]), convert_dtype_to_sqlalchemy_type(df.iloc[:, i]))
+            for i in range(len(df.columns))
+        ]
+        columns = [Column(name, typ, index=name in index_columns) for name, typ in column_names_and_types]
+        return Table(table_name, MetaData(), *columns)
+
+    def upload_df(
+        self, entity_df: pd.DataFrame, source: SqlSource, join_keys: List[str] = [], table_name: str = None
+    ):
+        time_cols = [source.timestamp_field]
+        if source.created_timestamp_field:
+            time_cols.append(source.created_timestamp_field)
+
+        if table_name is None:
+            table_name = f"f2ai_tmp_{uuid.uuid4().hex[:8]}"
+
+        engine = self.get_sqlalchemy_engine()
+        table = self._create_sqlalchemy_table(
+            entity_df, table_name=table_name, index_columns=time_cols + join_keys
+        )
+        table.create(engine, checkfirst=True)
+
+        with self.psy_conn.cursor() as cursor:
+            buffer = StringIO()
+            entity_df.to_csv(buffer, index=False, header=False)
+            buffer.seek(0)
+
+            cursor.copy_from(buffer, table=table_name, sep=",", columns=entity_df.columns)
+            self.psy_conn.commit()
+
+        return table_name
+
+    def upload_df_with_sqlalchemy(
+        self, entity_df: pd.DataFrame, source: SqlSource, join_keys: List[str] = [], table_name: str = None
+    ):
+        time_cols = [source.timestamp_field]
+        if source.created_timestamp_field:
+            time_cols.append(source.created_timestamp_field)
+
+        if table_name is None:
+            table_name = f"f2ai_temp_{uuid.uuid4().hex}"
+
+        engine = self.get_sqlalchemy_engine()
+        entity_df.to_sql(table_name, engine, schema=self.db_schema, if_exists="replace", method="multi")
 
     def read(
         self,

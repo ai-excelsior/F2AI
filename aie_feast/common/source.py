@@ -44,7 +44,6 @@ class RequestSource(Source):
 
 class SqlSource(Source):
     query: str
-    name: str
 
     def __init__(__pydantic_self__, **data: Any) -> None:
 

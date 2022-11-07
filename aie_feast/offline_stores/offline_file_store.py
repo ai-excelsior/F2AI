@@ -1,5 +1,3 @@
-from aie_feast.views import FeatureView, LabelView
-from aie_feast.definitions import Entity
 import pandas as pd
 from typing import List, Optional, Set
 from aie_feast.definitions import Feature
@@ -21,6 +19,14 @@ QUERY_COL = "query_timestamp"
 
 class OfflineFileStore(OfflineStore):
     type: OfflineStoreType = OfflineStoreType.FILE
+
+    def get_offline_source(self, service: Service) -> FileSource:
+        return FileSource(
+            name=service.name,
+            path=service.materialize_path,
+            timestamp_field="event_timestamp",
+            created_timestamp_field="materialize_time",
+        )
 
     def _read_file(self, source: FileSource, features: Set[Feature] = {}, join_keys: List[str] = []):
         feature_columns = [feature.name for feature in features]

@@ -242,3 +242,58 @@ def parse_oss_url(url: str) -> Tuple[str, str, str]:
 def get_bucket_from_oss_url(url: str):
     bucket_name, key = parse_oss_url(url)
     return get_bucket(bucket_name), key
+
+
+# the code below copied from https://github.com/pandas-dev/pandas/blob/91111fd99898d9dcaa6bf6bedb662db4108da6e6/pandas/io/sql.py#L1155
+def convert_dtype_to_sqlalchemy_type(col):
+    from sqlalchemy.types import (
+        TIMESTAMP,
+        BigInteger,
+        Boolean,
+        Date,
+        DateTime,
+        Float,
+        Integer,
+        SmallInteger,
+        Text,
+        Time,
+    )
+    from pandas._libs.lib import infer_dtype
+
+    col_type = infer_dtype(col, skipna=True)
+
+    if col_type == "datetime64" or col_type == "datetime":
+        try:
+            if col.dt.tz is not None:
+                return TIMESTAMP(timezone=True)
+        except AttributeError:
+            if getattr(col, "tz", None) is not None:
+                return TIMESTAMP(timezone=True)
+        return DateTime
+
+    if col_type == "timedelta64":
+        return BigInteger
+    elif col_type == "floating":
+        if col.dtype == "float32":
+            return Float(precision=23)
+        else:
+            return Float(precision=53)
+    elif col_type == "integer":
+        if col.dtype.name.lower() in ("int8", "uint8", "int16"):
+            return SmallInteger
+        elif col.dtype.name.lower() in ("uint16", "int32"):
+            return Integer
+        elif col.dtype.name.lower() == "uint64":
+            raise ValueError("Unsigned 64 bit integer datatype is not supported")
+        else:
+            return BigInteger
+    elif col_type == "boolean":
+        return Boolean
+    elif col_type == "date":
+        return Date
+    elif col_type == "time":
+        return Time
+    elif col_type == "complex":
+        raise ValueError("Complex datatypes not supported")
+
+    return Text
