@@ -102,8 +102,17 @@ class FeatureStore:
             features = buildin_features
         return features
 
-    def _get_keys_to_join(self, view, entity_columns=[]):
-        avaliable_entity_names = []
+    def _get_keys_to_join(self, view, entity_columns=[]) -> list:
+        """_summary_
+
+        Args:
+            view (_type_):  FeatureView, LabelView or Service
+            entity_columns (list, optional): filter
+
+        Returns:
+            list: col name to join
+        """
+
         if isinstance(view, FeatureView):
             avaliable_entity_names = list(view.entities)
         elif isinstance(view, LabelView):

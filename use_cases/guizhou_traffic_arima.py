@@ -32,7 +32,7 @@ if __name__ == "__main__":
     entities = [
         fs.entities[entity_name]
         for entity_name in fs.entities.keys()
-        if entity_name in fs._get_available_entity_names(fs.services["traval_time_prediction_embedding_v1"])
+        if entity_name in fs._get_feature_to_use(fs.services["traval_time_prediction_embedding_v1"])
     ]
 
     # print(
