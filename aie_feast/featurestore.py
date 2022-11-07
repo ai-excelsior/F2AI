@@ -75,6 +75,20 @@ class FeatureStore:
             "unique",
         ], f"{fn}is not a available function, you can use fs.query() to customize your function"
 
+    def _get_feature_to_use(self, views, features):
+        if isinstance(views, FeatureView):
+            buildin_features = views.get_feature_objects()
+        elif isinstance(views, LabelView):
+            buildin_features = views.get_label_objects()
+        else:  # Service
+            buildin_features = views.get_feature_objects(self.feature_views) | views.get_label_objects(
+                self.label_views
+            )
+        if features:
+            features = set(features)
+            features = [feature for feature in buildin_features if feature.name in features]
+        return features
+
     def _get_available_features(
         self, view: Union[FeatureView, Service], is_numeric: bool = False
     ) -> List[str]:
@@ -295,6 +309,8 @@ class FeatureStore:
             }
         )
 
+        features = self._get_feature_to_use(view, features)
+
         if isinstance(view, (FeatureView, LabelView)):
             source = self.sources[view.batch_source]
             assert isinstance(source, FileSource), "only work for file source in _get_point_record"
@@ -305,19 +321,6 @@ class FeatureStore:
                 timestamp_field=TIME_COL,
                 created_timestamp_field=MATERIALIZE_TIME,
             )
-
-        if isinstance(view, FeatureView):
-            buildin_features = view.get_feature_objects()
-        elif isinstance(view, LabelView):
-            buildin_features = view.get_label_objects()
-        else:  # Service
-            buildin_features = view.get_feature_objects(self.feature_views) | view.get_label_objects(
-                self.label_views
-            )
-
-        if features:
-            features = set(features)
-            features = [feature for feature in buildin_features if feature.name in features]
 
         return self.offline_store.get_features(
             entity_df=entity_df,
@@ -353,6 +356,9 @@ class FeatureStore:
                 if join_key in entity_columns
             }
         )
+
+        features = self._get_feature_to_use(views, features)
+
         table_name = SqlSource(name=table_name, timestamp_field=TIME_COL)
         if isinstance(views, (FeatureView, LabelView)):
             join_keys = entity_names
@@ -364,18 +370,6 @@ class FeatureStore:
                 timestamp_field=TIME_COL,
                 created_timestamp_field=MATERIALIZE_TIME,
             )
-        ###
-        if isinstance(views, FeatureView):
-            buildin_features = views.get_feature_objects()
-        elif isinstance(views, LabelView):
-            buildin_features = views.get_label_objects()
-        else:  # Service
-            buildin_features = views.get_feature_objects(self.feature_views) | views.get_label_objects(
-                self.label_views
-            )
-        if features:
-            features = set(features)
-            features = [feature for feature in buildin_features if feature.name in features]
 
         return (
             self.offline_store.get_features(
@@ -544,15 +538,7 @@ class FeatureStore:
                 created_timestamp_field=MATERIALIZE_TIME,
             )
 
-        if isinstance(view, FeatureView):
-            buildin_features = view.get_feature_objects()
-        elif isinstance(view, LabelView):
-            buildin_features = view.get_label_objects()
-        else:  # Service
-            buildin_features = view.get_feature_objects(self.feature_views)
-        if features:
-            features = set(features)
-            features = [feature for feature in buildin_features if feature.name in features]
+        features = self._get_feature_to_use(view, features)
 
         return self.offline_store.get_period_features(
             entity_df=entity_df,
