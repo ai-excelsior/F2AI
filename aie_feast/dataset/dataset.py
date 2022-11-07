@@ -37,7 +37,6 @@ class IterableDataset(IterableDataset):
         self.all_labels = self.get_feature_period(self.service, True)
         self.table_suffix = table_suffix
         self.batch = batch if batch else len(self.entity_index) // 10
-        self.merge = 0
 
     def __iter__(self):
         if self.fs.offline_store.type == "file":
@@ -50,11 +49,6 @@ class IterableDataset(IterableDataset):
                 )
                 if not to_return[0].isnull().all().all() and not to_return[1].isnull().all().all():
                     yield to_return
-        elif self.fs.offline_store.type == "pgsql":  # TODO: not completed
-            for i in range(len(self.entity_index)):
-                data_sample = self.get_context(i)
-                if not data_sample[0].empty and not data_sample[1].empty:
-                    yield data_sample
 
     def get_context(self, i: int) -> Tuple[pd.DataFrame, pd.DataFrame]:
         feature_list = []
@@ -92,7 +86,7 @@ class IterableDataset(IterableDataset):
             entity = (
                 Query.from_(f"{SAM_TBL}_{self.table_suffix}")
                 .select(*self.entity_name)
-                .where(Parameter(f"row_nbr={i}"))
+                .where(Parameter(f"row_nbr >= {i*self.batch} and row_number < {(i+1)*self.batch}"))
             )
             feature_views_pd = deepcopy(entity)
             label_views_pd = deepcopy(entity)
