@@ -20,7 +20,7 @@ from aie_feast.common.get_config import (
     get_feature_views,
     get_source_cfg,
 )
-from aie_feast.common.utils import to_file, build_agg_query, remove_prefix
+from aie_feast.common.utils import to_file, remove_prefix
 from aie_feast.common.psl_utils import execute_sql, psy_conn, to_pgsql, close_conn, sql_df
 from aie_feast.period import Period
 
@@ -133,7 +133,7 @@ class FeatureStore:
 
         return entity_names
 
-    def _get_views(self, view_name):
+    def _get_views(self, view_name) -> Union[FeatureView, LabelView, Service]:
         """_summary_
 
         Args:
@@ -142,6 +142,7 @@ class FeatureStore:
         Returns:
             _type_: FeatureView, LabelView or Service
         """
+
         if view_name in self.feature_views.keys():
             return self.feature_views[view_name]
         elif view_name in self.label_views.keys():
@@ -150,6 +151,14 @@ class FeatureStore:
             return self.services[view_name]
         else:
             raise ValueError("Can't find any views/services")
+
+    def _get_join_keys(self, view: Union[FeatureView, LabelView, Service]):
+        if isinstance(view, (FeatureView, LabelView)):
+            entities = {self.entities[entity_name] for entity_name in view.entities}
+        else:
+            entities = view.get_entities(feature_views=self.feature_views, label_views=self.label_views)
+
+        return [join_key for entity in entities for join_key in entity.join_keys]
 
     def get_features(
         self,
@@ -209,17 +218,30 @@ class FeatureStore:
         feature_view = self._get_views(feature_view)
         self.__check_format(entity_df)
         period = Period.from_str(period)
-        features = self._get_feature_to_use(feature_view, features)
+
+        if isinstance(feature_view, (FeatureView, LabelView)):
+            source = self.sources[feature_view.batch_source]
+        else:
+            source = self.offline_store.get_offline_source(feature_view)
+
+        if not features:
+            features = self._get_available_features(feature_view)
 
         if self.offline_store.type == "file":
             return self._get_period_record(feature_view, entity_df, period, features, include, **kwargs)
         elif self.offline_store.type == "pgsql":
-            table_suffix = to_pgsql(entity_df, TMP_TBL, self.offline_store)
+            join_keys = self._get_join_keys(view=feature_view)
+            table_name = self.offline_store.upload_df(
+                entity_df=entity_df,
+                source=source,
+                join_keys=join_keys,
+            )
+
             # connect to pgsql db
             conn = psy_conn(self.offline_store)
             sql_result, entity_cols = self._get_period_pgsql(
                 feature_view,
-                f"{TMP_TBL}_{table_suffix}",
+                table_name,
                 period,
                 features,
                 include,
@@ -229,7 +251,7 @@ class FeatureStore:
                 sql_df(sql_result.get_sql(), conn), columns=entity_cols + [QUERY_COL, TIME_COL] + features
             )
             # remove entity_df and close connection
-            close_conn(conn, tables=[f"{TMP_TBL}_{table_suffix}"])
+            close_conn(conn, tables=[table_name])
             return result
 
     def get_labels(self, label_view, entity_df: pd.DataFrame, include: bool = True, **kwargs):
@@ -799,7 +821,6 @@ class FeatureStore:
         elif self.offline_store.type == "pgsql":
             conn = psy_conn(self.offline_store)
             table_suffix = to_pgsql(entity_df, TMP_TBL, self.offline_store)
-            table_name = SqlSource(name=f"{TMP_TBL}_{table_suffix}", timestamp_field=TIME_COL)
             if isinstance(view, (FeatureView, LabelView)):
                 source = self.sources[view.batch_source]
                 assert isinstance(source, SqlSource), "only work for Sql source"
@@ -811,7 +832,7 @@ class FeatureStore:
                     created_timestamp_field=MATERIALIZE_TIME,
                 )
             result_sql = self.offline_store.stats(
-                entity_df=table_name,
+                entity_df=entity_df,
                 features=features,
                 source=source,
                 fn=fn,
