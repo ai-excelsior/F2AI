@@ -186,23 +186,26 @@ class FeatureStore:
 
         self.__check_format(entity_df)
         feature_view = self._get_views(feature_view)
-        features = self._get_feature_to_use(feature_view, features)
+        assert isinstance(
+            feature_view, (FeatureView, LabelView, Service)
+        ), "only allowed FeatureView, LabelView and Service"
+        feature_objects = self._get_feature_to_use(feature_view, features)
+        join_keys = self._get_keys_to_join(feature_view, entity_df.columns)
 
-        if self.offline_store.type == "file":
-            return self._get_point_record(feature_view, entity_df, features, include, **kwargs)
-        elif self.offline_store.type == "pgsql":
-            table_suffix = to_pgsql(entity_df, TMP_TBL, self.offline_store)
-            # connect to pgsql db
-            conn = psy_conn(self.offline_store)
-            sql_result, entity_name, features = self._get_point_pgsql(
-                feature_view, f"{TMP_TBL}_{table_suffix}", features, include, entity_df.columns
-            )
-            result = pd.DataFrame(
-                sql_df(sql_result.get_sql(), conn), columns=entity_name + [TIME_COL] + features
-            )
-            # remove entity_df and close connection
-            close_conn(conn, tables=[f"{TMP_TBL}_{table_suffix}"])
-            return result
+        if isinstance(feature_view, (FeatureView, LabelView)):
+            source = self.sources[feature_view.batch_source]
+        else:
+            source = self.offline_store.get_offline_source(feature_view)
+
+        return self.offline_store.get_features(
+            entity_df=entity_df,
+            features=feature_objects,
+            source=source,
+            join_keys=join_keys,
+            ttl=feature_view.ttl,
+            include=include,
+            **kwargs,
+        )
 
     def get_period_features(
         self,
@@ -257,24 +260,24 @@ class FeatureStore:
         """
         self.__check_format(entity_df)
         label_view = self._get_views(label_view)
-        labels = self._get_feature_to_use(label_view)
+        assert isinstance(label_view, (LabelView, Service)), "only allowed LabelView and Service"
+        feature_objects = self._get_feature_to_use(label_view)
+        join_keys = self._get_keys_to_join(label_view, entity_df.columns)
 
-        if self.offline_store.type == "file":
-            return self._get_point_record(label_view, entity_df, labels, include, **kwargs)
-        elif self.offline_store.type == "pgsql":
-            table_suffix = to_pgsql(entity_df, TMP_TBL, self.offline_store)
-            # connect to pgsql db
-            conn = psy_conn(self.offline_store)
-            sql_result, entity_name, features = self._get_point_pgsql(
-                label_view, f"{TMP_TBL}_{table_suffix}", labels, include, entity_df.columns
-            )
-            result = pd.DataFrame(
-                sql_df(sql_result.get_sql(), conn),
-                columns=entity_name + [TIME_COL] + features,
-            )
-            # remove entity_df and close connection
-            close_conn(conn, tables=[f"{TMP_TBL}_{table_suffix}"])
-            return result
+        if isinstance(label_view, (FeatureView, LabelView)):
+            source = self.sources[label_view.batch_source]
+        else:
+            source = self.offline_store.get_offline_source(label_view)
+
+        return self.offline_store.get_features(
+            entity_df=entity_df,
+            features=feature_objects,
+            source=source,
+            join_keys=join_keys,
+            ttl=label_view.ttl,
+            include=include,
+            **kwargs,
+        )
 
     def get_period_labels(
         self, label_view: str, entity_df: pd.DataFrame, period: str, include: bool = False, **kwargs
@@ -289,10 +292,8 @@ class FeatureStore:
         """
         self.__check_format(entity_df)
         label_view = self._get_views(label_view)
-        assert isinstance(label_view, LabelView), "only allowed LabelView"
-
-        labels = self._get_feature_to_use(label_view)
         period = Period.from_str(period)
+        label_objects = self._get_feature_to_use(label_view)
         join_keys = self._get_keys_to_join(label_view, entity_df.columns)
 
         if isinstance(label_view, (FeatureView, LabelView)):
@@ -302,7 +303,7 @@ class FeatureStore:
 
         return self.offline_store.get_period_features(
             entity_df=entity_df,
-            features=labels,
+            features=label_objects,
             source=source,
             period=period,
             join_keys=join_keys,
@@ -686,59 +687,23 @@ class FeatureStore:
             assert join_keys, "no key available for keys_only=True"
             features = []
 
-        if self.offline_store.type == "file":
-            if isinstance(view, (FeatureView, LabelView)):
-                source = self.sources[view.batch_source]
-                assert isinstance(source, FileSource), "only work for file source in _get_point_record"
-                assert source.timestamp_field, "stats can only apply on time relative data"
-            else:
-                source = FileSource(
-                    name=f"{view.name}_source",
-                    path=os.path.join(self.project_folder, view.materialize_path),
-                    timestamp_field=TIME_COL,
-                    created_timestamp_field=MATERIALIZE_TIME,
-                )
-            return self.offline_store.stats(
-                entity_df=entity_df,
-                features=features,
-                source=source,
-                fn=fn,
-                start=start,
-                group_keys=join_keys,
-                include=include,
-                keys_only=keys_only,
-                join_keys=len(entity_df.columns[:-1]),
-            )
-        elif self.offline_store.type == "pgsql":
-            conn = psy_conn(self.offline_store)
-            table_suffix = to_pgsql(entity_df, TMP_TBL, self.offline_store)
-            if isinstance(view, (FeatureView, LabelView)):
-                source = self.sources[view.batch_source]
-                assert isinstance(source, SqlSource), "only work for Sql source"
-                assert source.timestamp_field, "stats can only apply on time relative data"
-            else:
-                source = SqlSource(
-                    name=f"{view.name}",
-                    timestamp_field=TIME_COL,
-                    created_timestamp_field=MATERIALIZE_TIME,
-                )
-            result_sql = self.offline_store.stats(
-                entity_df=entity_df,
-                features=features,
-                source=source,
-                fn=fn,
-                start=start,
-                group_keys=join_keys,
-                include=include,
-                keys_only=keys_only,
-                join_keys=len(entity_df.columns[:-1]),
-            )
-            result = pd.DataFrame(
-                sql_df(result_sql.get_sql(), conn), columns=[f"{c.name}_{fn}" for c in features] + join_keys
-            )
+        if isinstance(view, (FeatureView, LabelView)):
+            source = self.sources[view.batch_source]
+            assert source.timestamp_field, "stats can only apply on time relative data"
+        else:
+            source = self.offline_store.get_offline_source(view)
 
-            close_conn(conn, [f"{TMP_TBL}_{table_suffix}"])
-            return result
+        return self.offline_store.stats(
+            entity_df=entity_df,
+            features=features,
+            source=source,
+            fn=fn,
+            start=start,
+            group_keys=join_keys,
+            include=include,
+            keys_only=keys_only,
+            join_keys=len(entity_df.columns[:-1]),
+        )
 
     def get_latest_entities(self, view: str, entity: Union[List[str], pd.DataFrame] = None):
         """get latest entity and its timestamp from a single FeatureViews/LabelViews or a materialzed Service

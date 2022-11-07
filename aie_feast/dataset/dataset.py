@@ -1,4 +1,3 @@
-from __future__ import all_feature_names
 from collections import defaultdict
 import pandas as pd
 import os
@@ -152,6 +151,7 @@ class IterableDataset(IterableDataset):
                         include=True,
                         join_keys=self.join_keys,
                         ttl=self.service.ttl,
+                        return_df=False,
                     )
                     # tmp_result = Query.from_(tmp_result[0]).select( #TODO
                     #     *tmp_result[1], Parameter(f"{QUERY_COL} as {TIME_COL}"), *features
@@ -159,13 +159,14 @@ class IterableDataset(IterableDataset):
                 else:
                     tmp_result = self.fs.get_features(
                         source=source,
-                        query=entity.select(
+                        entity_df=entity.select(
                             *self.join_keys, Parameter(f"{TIME_COL} as {ENTITY_EVENT_TIMESTAMP_FIELD}")
                         ),
                         features=features,
                         include=True,
                         join_keys=self.join_keys,
                         ttl=self.service.ttl,
+                        return_df=False,
                     )
                 feature_views_pd = (
                     Query.from_(feature_views_pd)
@@ -186,6 +187,7 @@ class IterableDataset(IterableDataset):
                         include=True,
                         join_keys=self.join_keys,
                         ttl=self.service.ttl,
+                        return_df=False,
                     )
                     # TODO
                     # tmp_result = Query.from_(tmp_result).select(
@@ -199,13 +201,14 @@ class IterableDataset(IterableDataset):
                 else:
                     tmp_result = self.fs.get_features(
                         source=source,
-                        query=entity.select(
+                        entity_df=entity.select(
                             *self.join_keys, Parameter(f"{TIME_COL} as {ENTITY_EVENT_TIMESTAMP_FIELD}")
                         ),
                         features=features,
                         include=True,
                         join_keys=self.join_keys,
                         ttl=self.service.ttl,
+                        return_df=False,
                     )
                 label_views_pd = (
                     Query.from_(label_views_pd)

@@ -22,7 +22,6 @@ SOURCE_EVENT_TIMESTAMP_FIELD = "_source_event_timestamp_"
 SOURCE_CREATED_TIMESTAMP_FIELD = "_created_timestamp_"
 QUERY_COL = "query_timestamp"
 
-
 if TYPE_CHECKING:
     from psycopg2 import connection
     from aie_feast.service import Service
@@ -72,6 +71,23 @@ class OfflinePostgresStore(OfflineStore):
         from sqlalchemy import create_engine
 
         return create_engine(self.connect_url)
+
+    def _get_entity(self, entity_df, source, join_keys):
+        table_name = None
+        if isinstance(entity_df, pd.DataFrame):
+            table_name = self.upload_df(
+                entity_df=entity_df,
+                source=source,
+                join_keys=join_keys,
+            )
+            entity_df = SqlSource(name=table_name, timestamp_field=DEFAULT_EVENT_TIMESTAMP_FIELD)
+
+        if isinstance(entity_df, SqlSource):
+            entity_df = self.read(
+                source=entity_df, features=[], join_keys=join_keys, alias=ENTITY_EVENT_TIMESTAMP_FIELD
+            )
+
+        return entity_df, table_name
 
     def _create_sqlalchemy_table(self, df: pd.DataFrame, table_name: str, index_columns: List[str]):
         from sqlalchemy import Column, Table, MetaData
@@ -159,15 +175,7 @@ class OfflinePostgresStore(OfflineStore):
         join_keys: bool = False,
     ):
         source_df = self.read(source=source, features=features, join_keys=group_keys)
-        if isinstance(entity_df, SqlSource):
-            entity_df = self.read(
-                source=entity_df,
-                features=[],
-                join_keys=group_keys if join_keys else [],
-                alias=ENTITY_EVENT_TIMESTAMP_FIELD,
-            )
-        else:
-            entity_df = entity_df
+        entity_df, table_name = self._get_entity(entity_df, source, group_keys if join_keys else [])
 
         if join_keys:
             sql_join = Query.from_(source_df).inner_join(entity_df).using(*group_keys)
@@ -177,7 +185,10 @@ class OfflinePostgresStore(OfflineStore):
         sql_filter = build_filter_time_query(sql_join, start, include)
         sql_agg = build_agg_query(sql_filter, features, group_keys, fn, keys_only)
 
-        return sql_agg
+        df = self._get_dataframe(group_keys, [], [f"{c.name}_{fn}" for c in features], sql_agg)
+        self._drop_table(table_name)
+
+        return df
 
     def get_latest_entities(self, source: SqlSource, group_keys: list = [], entities: str = None):
         source_df = self.read(source=source, features=[], join_keys=group_keys)
@@ -190,7 +201,7 @@ class OfflinePostgresStore(OfflineStore):
 
     def get_features(
         self,
-        query: Union[SqlSource, Query],
+        entity_df: Union[SqlSource, Query],
         features: Set[Feature],
         source: SqlSource,
         join_keys: List[str] = [],
@@ -200,12 +211,8 @@ class OfflinePostgresStore(OfflineStore):
     ):
 
         source_df = self.read(source=source, features=features, join_keys=join_keys)
-        if isinstance(query, SqlSource):
-            entity_df = self.read(
-                source=query, features=[], join_keys=join_keys, alias=ENTITY_EVENT_TIMESTAMP_FIELD
-            )
-        else:
-            entity_df = query
+        entity_df, table_name = self._get_entity(entity_df, source, join_keys)
+        feature_names = [feature.name for feature in features]
 
         sql_query = self.point_in_time_join(
             entity_df=entity_df,
@@ -217,15 +224,30 @@ class OfflinePostgresStore(OfflineStore):
             include=include,
             **kwargs,
         )
-        return sql_query.select(
+        sql_result = sql_query.select(
             Parameter(
-                f"{','.join(join_keys + [ENTITY_EVENT_TIMESTAMP_FIELD + ' as ' + DEFAULT_EVENT_TIMESTAMP_FIELD] + [feature.name for feature in features])}"
+                f"{','.join(join_keys + [ENTITY_EVENT_TIMESTAMP_FIELD+' as '+DEFAULT_EVENT_TIMESTAMP_FIELD ] + feature_names)}"
             )
         )
+        # execute sql
+        df = self._get_dataframe(join_keys, [DEFAULT_EVENT_TIMESTAMP_FIELD], feature_names, sql_result)
+        self._drop_table(table_name)
+        return df
+
+    def _drop_table(self, table_name):
+        with self.psy_conn.cursor() as cursor:
+            cursor.execute(f'drop table if exists "{table_name}"')
+
+    def _get_dataframe(self, join_keys, timecol, feature_names, sql_result):
+        with self.psy_conn.cursor() as cursor:
+            cursor.execute(sql_result.get_sql())
+            data = cursor.fetchall()
+
+            return pd.DataFrame(data, columns=join_keys + timecol + feature_names)
 
     def get_period_features(
         self,
-        entity_df: pd.DataFrame,
+        entity_df: Union[pd.DataFrame, Query, SqlSource],
         features: Set[Feature],
         source: SqlSource,
         period: Period,
@@ -235,12 +257,19 @@ class OfflinePostgresStore(OfflineStore):
         **kwargs,
     ):
         feature_names = [feature.name for feature in features]
+        source_df = self.read(source=source, features=features, join_keys=join_keys)
+        entity_df, table_name = self._get_entity(entity_df, source, join_keys)
 
-        # upload entity_df to remote database
-        table_name = self.upload_df(
+        sql_result = self.point_on_time_join(
             entity_df=entity_df,
-            source=source,
+            source_df=source_df,
+            period=period,
+            timestamp_field=source.timestamp_field,
+            created_timestamp_field=source.created_timestamp_field,
+            ttl=ttl,
             join_keys=join_keys,
+            include=include,
+            **kwargs,
         )
 
         # query source
@@ -347,16 +376,11 @@ class OfflinePostgresStore(OfflineStore):
             )
 
         # execute sql
-        with self.psy_conn.cursor() as cursor:
-            cursor.execute(sql_result.get_sql())
-            data = cursor.fetchall()
-
-            # drop tables
-            cursor.execute(f'drop table if exists "{table_name}"')
-
-            return pd.DataFrame(
-                data, columns=join_keys + [QUERY_COL, DEFAULT_EVENT_TIMESTAMP_FIELD] + feature_names
-            )
+        df = self._get_dataframe(
+            join_keys, [QUERY_COL, DEFAULT_EVENT_TIMESTAMP_FIELD], feature_names, sql_result
+        )
+        self._drop_table(table_name)
+        return df
 
     @classmethod
     def point_in_time_join(
@@ -421,7 +445,7 @@ class OfflinePostgresStore(OfflineStore):
                 source_df = source_df[source_df[SOURCE_EVENT_TIMESTAMP_FIELD] >= min_entity_timestamp]
 
         if len(join_keys) > 0:
-            df = source_df.merge(entity_df, on=join_keys, how="inner")
+            df = source_df.merge(entity_df, on=join_keys, how=how)
         else:
             df = source_df.merge(entity_df, how="cross")
 
