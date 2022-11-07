@@ -47,7 +47,7 @@ class OfflineFileStore(OfflineStore):
     ):
         all_cols_name = service.get_feature_names(feature_views) | service.get_label_names(label_views)
         label_view = service.get_label_view(label_views)
-        labels = label_view.get_labels()
+        labels = label_view.get_label_objects()
         join_keys = list(
             {
                 join_key
@@ -73,7 +73,7 @@ class OfflineFileStore(OfflineStore):
                 if n in all_cols_name and n not in joined_frame.columns
             ]
             if feature_name:  # this view has new features other than those in joined_frame
-                features = [n for n in feature_view.get_features() if n.name in feature_name]
+                features = [n for n in feature_view.get_feature_objects() if n.name in feature_name]
                 join_keys = list(
                     {
                         join_key
@@ -246,6 +246,7 @@ class OfflineFileStore(OfflineStore):
         ttl: Optional[Period] = None,
         join_keys: List[str] = [],
         include: bool = True,
+        how: str = "inner",
     ):
         # renames to keep things simple
         entity_df = entity_df.rename(columns={TIME_COL: ENTITY_EVENT_TIMESTAMP_FIELD})
@@ -263,7 +264,7 @@ class OfflineFileStore(OfflineStore):
                 source_df = source_df[source_df[SOURCE_EVENT_TIMESTAMP_FIELD] >= min_entity_timestamp]
 
         if len(join_keys) > 0:
-            df = source_df.merge(entity_df, on=join_keys, how="inner")
+            df = source_df.merge(entity_df, on=join_keys, how=how)
         else:
             df = source_df.merge(entity_df, how="cross")
 

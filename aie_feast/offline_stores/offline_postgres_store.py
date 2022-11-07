@@ -2,7 +2,7 @@ from __future__ import annotations
 import uuid
 import pandas as pd
 from io import StringIO
-from typing import List, Optional, Set, TYPE_CHECKING
+from typing import List, Optional, Set, TYPE_CHECKING, Union
 from pydantic import Field, PrivateAttr
 from pypika import Query, Parameter, functions as fn, JoinType, Table
 from aie_feast.definitions import Feature
@@ -162,7 +162,7 @@ class OfflinePostgresStore(OfflineStore):
 
     def stats(
         self,
-        entity_df: SqlSource,
+        entity_df: Union[SqlSource, Query],
         features: Set[Feature],
         source: SqlSource,
         start,
@@ -173,12 +173,15 @@ class OfflinePostgresStore(OfflineStore):
         join_keys: bool = False,
     ):
         source_df = self.read(source=source, features=features, join_keys=group_keys)
-        entity_df = self.read(
-            source=entity_df,
-            features=[],
-            join_keys=group_keys if join_keys else [],
-            alias=ENTITY_EVENT_TIMESTAMP_FIELD,
-        )
+        if isinstance(entity_df, SqlSource):
+            entity_df = self.read(
+                source=entity_df,
+                features=[],
+                join_keys=group_keys if join_keys else [],
+                alias=ENTITY_EVENT_TIMESTAMP_FIELD,
+            )
+        else:
+            entity_df = entity_df
 
         if join_keys:
             sql_join = Query.from_(source_df).inner_join(entity_df).using(*group_keys)
@@ -201,7 +204,7 @@ class OfflinePostgresStore(OfflineStore):
 
     def get_features(
         self,
-        query: SqlSource,
+        query: Union[SqlSource, Query],
         features: Set[Feature],
         source: SqlSource,
         join_keys: List[str] = [],
@@ -211,9 +214,12 @@ class OfflinePostgresStore(OfflineStore):
     ):
 
         source_df = self.read(source=source, features=features, join_keys=join_keys)
-        entity_df = self.read(
-            source=query, features=[], join_keys=join_keys, alias=ENTITY_EVENT_TIMESTAMP_FIELD
-        )
+        if isinstance(query, SqlSource):
+            entity_df = self.read(
+                source=query, features=[], join_keys=join_keys, alias=ENTITY_EVENT_TIMESTAMP_FIELD
+            )
+        else:
+            entity_df = query
 
         sql_query = self.point_in_time_join(
             entity_df=entity_df,
@@ -227,7 +233,7 @@ class OfflinePostgresStore(OfflineStore):
         )
         return sql_query.select(
             Parameter(
-                f"{','.join(join_keys + [ENTITY_EVENT_TIMESTAMP_FIELD]  +[feature.name for feature in features])}"
+                f"{','.join(join_keys + [ENTITY_EVENT_TIMESTAMP_FIELD +' as '+ TIME_COL]  +[feature.name for feature in features])}"
             )
         )
 

@@ -226,7 +226,7 @@ class FeatureStore:
         """
         feature_view = self._get_views(feature_view)
         self.__check_format(entity_df)
-        period = Period.from_str(period)
+        period = -Period.from_str(period)
 
         if isinstance(feature_view, (FeatureView, LabelView)):
             source = self.sources[feature_view.batch_source]
@@ -306,6 +306,7 @@ class FeatureStore:
         self.__check_format(entity_df)
         label_view = self._get_views(label_view)
         labels = self._get_feature_to_use(label_view)
+        period = Period.from_str(period)
 
         if self.offline_store.type == "file":
             return self._get_period_record(label_view, entity_df, period, labels, include, **kwargs)
@@ -924,9 +925,12 @@ class FeatureStore:
             sampler (callable, optional): sampler
         """
         return Dataset(
-            fs=self,
-            service_name=service_name,
+            fs=self.offline_store,
+            service=self.services[service_name],
             sampler=sampler,
+            project_folder=self.project_folder,
+            feature_views=self.feature_views,
+            label_views=self.label_views,
         )
 
     def query(self, query: str = None, return_df: bool = True):
