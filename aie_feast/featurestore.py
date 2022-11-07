@@ -846,6 +846,7 @@ class FeatureStore:
             if isinstance(view, (FeatureView, LabelView)):
                 source = self.sources[view.batch_source]
                 assert isinstance(source, FileSource), "only work for file source in _get_point_record"
+                assert source.timestamp_field, "stats can only apply on time relative data"
             else:
                 source = FileSource(
                     name=f"{view.name}_source",
@@ -853,7 +854,6 @@ class FeatureStore:
                     timestamp_field=TIME_COL,
                     created_timestamp_field=MATERIALIZE_TIME,
                 )
-            assert source.timestamp_field, "stats can only apply on time relative data"
             return self.offline_store.stats(
                 entity_df=entity_df,
                 features=features,
@@ -871,13 +871,14 @@ class FeatureStore:
             table_name = SqlSource(name=f"{TMP_TBL}_{table_suffix}", timestamp_field=TIME_COL)
             if isinstance(view, (FeatureView, LabelView)):
                 source = self.sources[view.batch_source]
+                assert isinstance(source, SqlSource), "only work for Sql source"
+                assert source.timestamp_field, "stats can only apply on time relative data"
             else:
                 source = SqlSource(
                     name=f"{view.name}",
                     timestamp_field=TIME_COL,
                     created_timestamp_field=MATERIALIZE_TIME,
                 )
-            assert source.timestamp_field, "stats can only apply on time relative data"
             result_sql = self.offline_store.stats(
                 entity_df=table_name,
                 features=features,
@@ -890,8 +891,7 @@ class FeatureStore:
                 join_keys=len(entity_df.columns[:-1]),
             )
             result = pd.DataFrame(
-                sql_df(result_sql.get_sql(), conn),
-                columns=[f"{c.name}_{fn}" for c in features] + join_keys,
+                sql_df(result_sql.get_sql(), conn), columns=[f"{c.name}_{fn}" for c in features] + join_keys
             )
 
             close_conn(conn, [f"{TMP_TBL}_{table_suffix}"])
@@ -928,7 +928,8 @@ class FeatureStore:
         if self.offline_store.type == "file":
             if isinstance(view, (FeatureView, LabelView)):
                 source = self.sources[view.batch_source]
-                assert isinstance(source, FileSource), "only work for file source in _get_point_record"
+                assert isinstance(source, FileSource), "only work for File source"
+                assert source.timestamp_field, "get_latest_entities can only apply on time relative data"
             else:
                 source = FileSource(
                     name=f"{view.name}_source",
@@ -951,13 +952,12 @@ class FeatureStore:
             conn = psy_conn(self.offline_store)
             if isinstance(view, (FeatureView, LabelView)):
                 source = self.sources[view.batch_source]
+                assert isinstance(source, SqlSource), "only work for Sql source"
+                assert source.timestamp_field, "get_latest_entities can only apply on time relative data"
             else:
                 source = SqlSource(
-                    name=f"{view.name}",
-                    timestamp_field=TIME_COL,
-                    created_timestamp_field=MATERIALIZE_TIME,
+                    name=f"{view.name}", timestamp_field=TIME_COL, created_timestamp_field=MATERIALIZE_TIME
                 )
-            assert source.timestamp_field, "get_latest_entities can only apply on time relative data"
             result_sql = self.offline_store.get_latest_entities(
                 source=source, group_keys=join_keys, entities=table_name
             )
