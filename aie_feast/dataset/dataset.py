@@ -1,3 +1,4 @@
+from __future__ import all_feature_names
 from collections import defaultdict
 import pandas as pd
 import os
@@ -170,7 +171,7 @@ class IterableDataset(IterableDataset):
                     Query.from_(feature_views_pd)
                     .left_join(tmp_result)
                     .using(Parameter(",".join(self.join_keys + [TIME_COL])))
-                    .select(Parameter(",".join(self.join_keys + [f.name for f in features])))
+                    .select(feature_views_pd.star, Parameter(",".join([f.name for f in features])))
                 )
 
             for period, features in self.all_labels.items():
@@ -210,16 +211,22 @@ class IterableDataset(IterableDataset):
                     Query.from_(label_views_pd)
                     .left_join(tmp_result)
                     .using(*(self.join_keys + [TIME_COL]))
-                    .select(Parameter(",".join(self.join_keys + [f.name for f in features])))
+                    .select(label_views_pd.star, Parameter(",".join([f.name for f in features])))
                 )  # tmp_result[1] + TIME_COL
             #     label_list += features
             # label_views_pd = Query.from_(label_views_pd).select(*self.entity_name, *label_list)
 
             feature_views_pd = pd.DataFrame(
-                sql_df(feature_views_pd.get_sql(), conn), columns=self.join_keys + feature_list
+                sql_df(feature_views_pd.get_sql(), conn),
+                columns=self.join_keys
+                + [TIME_COL]
+                + [f.name for item in self.all_features.values() for f in item],
             )
             label_views_pd = pd.DataFrame(
-                sql_df(label_views_pd.get_sql(), conn), columns=self.join_keys + label_list
+                sql_df(label_views_pd.get_sql(), conn),
+                columns=self.join_keys
+                + [TIME_COL]
+                + [f.name for item in self.all_labels.values() for f in item],
             )
         self.data_sample = (feature_views_pd.drop(columns=to_drop), label_views_pd.drop(columns=to_drop))
         return feature_views_pd.drop(columns=to_drop), label_views_pd.drop(columns=to_drop)
