@@ -55,6 +55,19 @@ def test_get_latest_entities_from_feature_view(make_guizhou_traffic):
     project_folder = make_guizhou_traffic("pgsql")
     store = FeatureStore(project_folder)
     measured_time = timeit.timeit(
+        lambda: store.get_latest_entities(
+            "gy_link_travel_time_features",
+            pd.DataFrame({"link_id": ["3377906281518510514", "4377906284141600514"]}),
+        ),
+        number=10,
+    )
+    print(f"stats performance pgsql: {measured_time}s")
+
+
+def test_get_latest_entity_from_feature_view(make_guizhou_traffic):
+    project_folder = make_guizhou_traffic("pgsql")
+    store = FeatureStore(project_folder)
+    measured_time = timeit.timeit(
         lambda: store.get_latest_entities("gy_link_travel_time_features"), number=10
     )
     print(f"stats performance pgsql: {measured_time}s")
