@@ -1,3 +1,4 @@
+from hologram import T
 import pandas as pd
 import os
 import json
@@ -128,7 +129,7 @@ class FeatureStore:
         else:
             raise TypeError("must be FeatureViews, LabelViews or Service")
 
-        if len(entity_columns) > 0:  # need filter
+        if entity_columns:  # need filter
             entity_names = list(
                 {
                     join_key
@@ -536,7 +537,7 @@ class FeatureStore:
             join_keys=len(entity_df.columns[:-1]),
         )
 
-    def get_latest_entities(self, view: str, entity: Union[List[str], pd.DataFrame] = None):
+    def get_latest_entities(self, view: str, entity: pd.DataFrame = None):
         """get latest entity and its timestamp from a single FeatureViews/LabelViews or a materialzed Service
         entity can either be None(all joined-entities in view), entity names or entity value(specific entities)
 
@@ -545,51 +546,20 @@ class FeatureStore:
         """
         view = self._get_views(view)
         if isinstance(entity, pd.DataFrame):
-            entities = entity.columns
+            entities = list(entity.columns)
+            entity[TIME_COL] = 0
         else:
             entities = entity
-
+            entity = None
         join_keys = self._get_keys_to_join(view, entities)
 
-        if self.offline_store.type == "file":
-            if isinstance(view, (FeatureView, LabelView)):
-                source = self.sources[view.batch_source]
-                assert isinstance(source, FileSource), "only work for File source"
-                assert source.timestamp_field, "get_latest_entities can only apply on time relative data"
-            else:
-                source = FileSource(
-                    name=f"{view.name}_source",
-                    path=os.path.join(self.project_folder, view.materialize_path),
-                    timestamp_field=TIME_COL,
-                    created_timestamp_field=MATERIALIZE_TIME,
-                )
-            return self.offline_store.get_latest_entities(
-                source=source,
-                group_keys=join_keys,
-                entities=entity if isinstance(entity, pd.DataFrame) else None,
-            )
+        if isinstance(view, (FeatureView, LabelView)):
+            source = self.sources[view.batch_source]
+            assert source.timestamp_field, "stats can only apply on time relative data"
+        else:
+            source = self.offline_store.get_offline_source(view)
 
-        elif self.offline_store.type == "pgsql":
-            if isinstance(entity, pd.DataFrame):
-                table_suffix = to_pgsql(entity, TMP_TBL, self.offline_store)
-                table_name = SqlSource(name=f"{TMP_TBL}_{table_suffix}")
-            else:
-                table_name = None
-            conn = psy_conn(self.offline_store)
-            if isinstance(view, (FeatureView, LabelView)):
-                source = self.sources[view.batch_source]
-                assert isinstance(source, SqlSource), "only work for Sql source"
-                assert source.timestamp_field, "get_latest_entities can only apply on time relative data"
-            else:
-                source = SqlSource(
-                    name=f"{view.name}", timestamp_field=TIME_COL, created_timestamp_field=MATERIALIZE_TIME
-                )
-            result_sql = self.offline_store.get_latest_entities(
-                source=source, group_keys=join_keys, entities=table_name
-            )
-            result = pd.DataFrame(sql_df(result_sql.get_sql(), conn), columns=join_keys + [TIME_COL])
-            close_conn(conn, [f"{TMP_TBL}_{table_suffix}"])
-            return result
+        return self.offline_store.get_latest_entities(source=source, group_keys=join_keys, entity_df=entity)
 
     def get_dataset(self, service_name: str, sampler: callable = None) -> Dataset:
         """get from `start` to `end` length data for training from `views`

@@ -7,7 +7,7 @@ from pydantic import Field, PrivateAttr
 from pypika import Query, Parameter, functions as fn, JoinType, Table
 from aie_feast.definitions import Feature
 from aie_feast.common.source import SqlSource
-from aie_feast.common.utils import build_agg_query, build_filter_time_query
+from aie_feast.common.utils import TIME_COL, build_agg_query, build_filter_time_query
 from aie_feast.period import Period
 from aie_feast.common.utils import convert_dtype_to_sqlalchemy_type
 from .offline_store import OfflineStore, OfflineStoreType
@@ -72,7 +72,14 @@ class OfflinePostgresStore(OfflineStore):
 
         return create_engine(self.connect_url)
 
-    def _get_entity(self, entity_df, source, join_keys):
+    def _get_entity(
+        self,
+        entity_df,
+        source,
+        join_keys,
+        timestamp_field: str = DEFAULT_EVENT_TIMESTAMP_FIELD,
+        alias: str = ENTITY_EVENT_TIMESTAMP_FIELD,
+    ):
         table_name = None
         if isinstance(entity_df, pd.DataFrame):
             table_name = self.upload_df(
@@ -80,12 +87,10 @@ class OfflinePostgresStore(OfflineStore):
                 source=source,
                 join_keys=join_keys,
             )
-            entity_df = SqlSource(name=table_name, timestamp_field=DEFAULT_EVENT_TIMESTAMP_FIELD)
+            entity_df = SqlSource(name=table_name, timestamp_field=timestamp_field)
 
         if isinstance(entity_df, SqlSource):
-            entity_df = self.read(
-                source=entity_df, features=[], join_keys=join_keys, alias=ENTITY_EVENT_TIMESTAMP_FIELD
-            )
+            entity_df = self.read(source=entity_df, features=[], join_keys=join_keys, alias=alias)
 
         return entity_df, table_name
 
@@ -190,14 +195,19 @@ class OfflinePostgresStore(OfflineStore):
 
         return df
 
-    def get_latest_entities(self, source: SqlSource, group_keys: list = [], entities: str = None):
+    def get_latest_entities(self, source: SqlSource, group_keys: list = [], entity_df: pd.DataFrame = None):
         source_df = self.read(source=source, features=[], join_keys=group_keys)
         q = Query.from_(source_df).groupby(*group_keys)
 
-        if entities:
-            q = q.inner_join(Table(entities.name)).using(*group_keys)
+        if entity_df is not None:
+            entity_df, table_name = self._get_entity(entity_df, source, group_keys)
+            q = q.inner_join(entity_df).using(*group_keys)
 
-        return q.select(*group_keys, fn.Max(Parameter(SOURCE_EVENT_TIMESTAMP_FIELD)))
+        sql_result = q.select(*group_keys, fn.Max(Parameter(SOURCE_EVENT_TIMESTAMP_FIELD)))
+        df = self._get_dataframe(group_keys, [TIME_COL], [], sql_result)
+        if entity_df is not None:
+            self._drop_table(table_name)
+        return df
 
     def get_features(
         self,
@@ -237,11 +247,13 @@ class OfflinePostgresStore(OfflineStore):
     def _drop_table(self, table_name):
         with self.psy_conn.cursor() as cursor:
             cursor.execute(f'drop table if exists "{table_name}"')
+            self.psy_conn.commit()
 
     def _get_dataframe(self, join_keys, timecol, feature_names, sql_result):
         with self.psy_conn.cursor() as cursor:
             cursor.execute(sql_result.get_sql())
             data = cursor.fetchall()
+            self.psy_conn.commit()
 
             return pd.DataFrame(data, columns=join_keys + timecol + feature_names)
 
