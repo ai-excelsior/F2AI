@@ -28,14 +28,6 @@ class OfflineFileStore(OfflineStore):
             created_timestamp_field="materialize_time",
         )
 
-    def _read_file(self, source: FileSource, features: Set[Feature] = {}, join_keys: List[str] = []):
-        feature_columns = [feature.name for feature in features]
-
-        return source.read_file(
-            str_cols=join_keys,
-            keep_cols=feature_columns,
-        )
-
     def materialize(
         self,
         service: Service,
@@ -105,7 +97,7 @@ class OfflineFileStore(OfflineStore):
     ):
         source_df = self._read_file(source=source, features=features, join_keys=join_keys)
 
-        return self.point_in_time_join(
+        return self._point_in_time_join(
             entity_df=entity_df,
             source_df=source_df,
             timestamp_field=source.timestamp_field,
@@ -129,7 +121,7 @@ class OfflineFileStore(OfflineStore):
     ):
         source_df = self._read_file(source=source, features=features, join_keys=join_keys)
 
-        return self.point_on_time_join(
+        return self._point_on_time_join(
             entity_df=entity_df,
             source_df=source_df,
             period=period,
@@ -195,8 +187,19 @@ class OfflineFileStore(OfflineStore):
         df = source_df.sort_values(by=source.timestamp_field, ascending=False, ignore_index=True)
         return df.drop_duplicates(subset=group_keys, keep="first")
 
+    def query(self, *args, **kwargs) -> None:
+        assert False, "query is not implemented for OfflineFileStore"
+
+    def _read_file(self, source: FileSource, features: Set[Feature] = {}, join_keys: List[str] = []):
+        feature_columns = [feature.name for feature in features]
+
+        return source.read_file(
+            str_cols=join_keys,
+            keep_cols=feature_columns,
+        )
+
     @classmethod
-    def point_in_time_join(
+    def _point_in_time_join(
         cls,
         entity_df: pd.DataFrame,
         source_df: pd.DataFrame,
@@ -229,15 +232,15 @@ class OfflineFileStore(OfflineStore):
             df = source_df.merge(entity_df, how="cross")
 
         if timestamp_field:
-            df = cls.point_in_time_filter(df, include=include, ttl=ttl)
-            df = cls.point_in_time_latest(df, join_keys, created_timestamp_field)
+            df = cls._point_in_time_filter(df, include=include, ttl=ttl)
+            df = cls._point_in_time_latest(df, join_keys, created_timestamp_field)
 
         return df.drop(
             columns=[SOURCE_EVENT_TIMESTAMP_FIELD, created_timestamp_field], errors="ignore"
         ).rename(columns={ENTITY_EVENT_TIMESTAMP_FIELD: TIME_COL})
 
     @classmethod
-    def point_on_time_join(
+    def _point_on_time_join(
         cls,
         entity_df: pd.DataFrame,
         source_df: pd.DataFrame,
@@ -269,15 +272,15 @@ class OfflineFileStore(OfflineStore):
         else:
             df = source_df.merge(entity_df, how="cross")
 
-        df = cls.point_on_time_filter(df, period, include=include, ttl=ttl)
-        df = cls.point_on_time_latest(df, join_keys, created_timestamp_field)
+        df = cls._point_on_time_filter(df, period, include=include, ttl=ttl)
+        df = cls._point_on_time_latest(df, join_keys, created_timestamp_field)
 
         return df.drop(columns=[created_timestamp_field], errors="ignore").rename(
             columns={ENTITY_EVENT_TIMESTAMP_FIELD: QUERY_COL, SOURCE_EVENT_TIMESTAMP_FIELD: TIME_COL}
         )
 
     @classmethod
-    def point_in_time_filter(
+    def _point_in_time_filter(
         cls,
         df: pd.DataFrame,
         include: bool = True,
@@ -302,7 +305,7 @@ class OfflineFileStore(OfflineStore):
         return df[candidates]
 
     @classmethod
-    def point_on_time_filter(
+    def _point_on_time_filter(
         cls,
         df: pd.DataFrame,
         period: Period,
@@ -352,7 +355,7 @@ class OfflineFileStore(OfflineStore):
         return df[candidates]
 
     @classmethod
-    def point_in_time_latest(
+    def _point_in_time_latest(
         cls,
         df: pd.DataFrame,
         group_keys: List[str] = [],
@@ -373,7 +376,7 @@ class OfflineFileStore(OfflineStore):
         return df
 
     @classmethod
-    def point_on_time_latest(
+    def _point_on_time_latest(
         cls,
         df: pd.DataFrame,
         group_keys: List[str] = [],

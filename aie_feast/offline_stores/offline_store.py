@@ -1,7 +1,7 @@
 from __future__ import annotations
 from pydantic import BaseModel
 from enum import Enum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 import abc
 
 if TYPE_CHECKING:
@@ -27,5 +27,14 @@ class OfflineStore(BaseModel):
 
         Returns:
             Source
+        """
+        pass
+
+    @abc.abstractmethod
+    def query(self, query: str, *args, **kwargs) -> Any:
+        """
+        Run a query with specific offline store. egg:
+            if you are using pgsql, this will run a query via psycopg2
+            if you are using spark, this will run a query via sparksql
         """
         pass

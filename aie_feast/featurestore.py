@@ -6,10 +6,7 @@ import docker
 from datetime import datetime
 from aie_feast.common.jinja import jinja_env
 from typing import Dict, List, Union
-from pypika import Query, Parameter
 from aie_feast.common.source import FileSource, SqlSource
-from aie_feast.offline_stores.offline_file_store import OfflineFileStore
-from aie_feast.offline_stores.offline_postgres_store import OfflinePostgresStore
 from aie_feast.views import FeatureView, LabelView
 from aie_feast.service import Service
 from aie_feast.dataset.dataset import Dataset
@@ -22,7 +19,7 @@ from aie_feast.common.get_config import (
     get_source_cfg,
 )
 from aie_feast.common.utils import to_file, remove_prefix
-from aie_feast.common.psl_utils import execute_sql, psy_conn, to_pgsql, close_conn, sql_df
+from aie_feast.common.psl_utils import psy_conn, to_pgsql, close_conn, sql_df
 from aie_feast.period import Period
 from aie_feast.definitions import Feature
 
@@ -577,22 +574,8 @@ class FeatureStore:
             label_views=self.label_views,
         )
 
-    def query(self, query: str = None, return_df: bool = True):
-        """customized query, only works when connection.type != 'file'
-
-        Args:
-            query (str, optional): full sql query to execute in db
+    def query(self, *args, **kwargs):
+        """Run a query though different types of offline store.
+        The usecase of this method is highly depending on different types of offline store.
         """
-        assert (
-            self.offline_store.type != "file"
-        ), "query doesnt work for file type project, you can manualy read local files in pandas"
-        if self.offline_store.type == "pgsql":
-            conn = psy_conn(self.offline_store)
-            if return_df:
-                result = pd.DataFrame(sql_df(query, conn))
-            else:
-                execute_sql(query, conn)
-                result = None
-                conn.commit()
-            close_conn(conn)
-            return result
+        return self.offline_store.query(*args, **kwargs)
