@@ -323,9 +323,9 @@ class FeatureStore:
         if self.offline_store.type == "file":
             self._offline_record_materialize(self.services[service_name], incremental_begin)
         elif self.offline_store.type == "pgsql":
-            self._offline_pgsql_materialize(self.services[service_name], incremental_begin)
+            self._offline_pgsql_materialize_dbt(self.services[service_name], incremental_begin)
 
-    def _offline_pgsql_materialize(self, service: Service, incremental_begin):
+    def _offline_pgsql_materialize_dbt(self, service: Service, incremental_begin):
         try:
             incremental_begin = pd.to_datetime(incremental_begin, utc=True) if incremental_begin else None
         except Exception:
@@ -367,7 +367,7 @@ class FeatureStore:
 
         conn = psy_conn(self.offline_store)
 
-        max_timestamp, max_timestamp_label = self.offline_store.materialize(
+        max_timestamp, max_timestamp_label = self.offline_store.materialize_dbt(
             service=service,
             feature_views=self.feature_views,
             label_views=self.label_views,
@@ -406,6 +406,38 @@ class FeatureStore:
         json_var = json.dumps(dict_var)
         self.schedule_local_dbt_container(service.materialize_path, json_var, dbt_path)
         # os.system(f"cd {dbt_path} && dbt run --profiles-dir {dbt_path} --vars '{json_var}' ")
+
+    def _offline_pgsql_materialize(
+        self, service: Service, start: str = None, end: str = None, fromnow: str = None
+    ):
+        try:
+            start = pd.to_datetime(start, utc=True) if start else None
+            end = pd.to_datetime(end, utc=True) if end else None
+        except:
+            raise TypeError("please check your `start` ,`end` type")
+
+        try:
+            fromnow = Period.from_str(fromnow) if fromnow else None
+        except:
+            raise TypeError("please check your `fromnow` type")
+
+        conn = psy_conn(self.offline_store)
+
+        result_sql = self.offline_store.materialize(
+            service=service,
+            feature_views=self.feature_views,
+            label_views=self.label_views,
+            sources=self.sources,
+            entities=self.entities,
+            start=start,
+            end=end,
+            fromnow=fromnow,
+        )
+
+        result = sql_df(result_sql.get_sql(), conn)
+
+        conn.close()
+        return result
 
     def schedule_local_dbt_container(self, profile_name: str, vars: Dict, dbt_path: str):
         docker_client = docker.from_env()

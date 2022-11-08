@@ -141,13 +141,18 @@ class OfflinePostgresStore(OfflineStore):
         time_columns = [f"{source.timestamp_field} as {alias}"]
         if source.created_timestamp_field:
             time_columns.append(source.created_timestamp_field)
+        # time_columns = []
+        # if source.timestamp_field:
+        #     time_columns.append(f"{source.timestamp_field} as {alias}")
+        # if source.created_timestamp_field:
+        #     time_columns.append(source.created_timestamp_field)
 
         feature_columns = [feature.name for feature in features]
         all_columns = list(set(time_columns + join_keys + feature_columns))
         source_df = Query.from_(source.name).select(Parameter(",".join(all_columns)))
         return source_df
 
-    def materialize(
+    def materialize_dbt(
         self,
         service: Service,
         feature_views: List[FeatureView],
@@ -167,6 +172,52 @@ class OfflinePostgresStore(OfflineStore):
         )
 
         return max_timestamp, max_timestamp_label
+
+    def materialize(
+        self,
+        service: Service,
+        feature_views: List[FeatureView],
+        label_views: List[LabelView],
+        sources: List[SqlSource],
+        entities: List[Entity],
+        start: str,
+        end: str,
+        fromnow: str,
+    ):
+
+        label_view = service.get_label_view(label_views)
+        feature_views = service.get_feature_views(feature_views)
+        entity_dataframe = self.read(
+            source=sources[label_view.batch_source],
+            features=label_view.get_label_objects(),
+            join_keys=[entities[entity].join_keys[0] for entity in label_view.entities],
+            alias=DEFAULT_EVENT_TIMESTAMP_FIELD,
+        )
+
+        time_columns = []
+        if sources[label_view.batch_source].timestamp_field:
+            time_columns.append(sources[label_view.batch_source].timestamp_field)
+        if sources[label_view.batch_source].created_timestamp_field:
+            time_columns.append(sources[label_view.batch_source].created_timestamp_field)
+        result_sql = entity_dataframe
+
+        for featureview in feature_views.values():
+            entity_cols = [entities[entity].join_keys[0] for entity in featureview.entities]
+            features = featureview.get_feature_objects()
+            query = sources[label_view.batch_source]
+            source = sources[featureview.batch_source]
+            all_join_cols = time_columns + entity_cols
+
+            fearure_df = self.get_features(
+                query=query,
+                features=features,
+                source=source,
+                join_keys=entity_cols,
+                ttl=featureview.ttl,
+            )
+            result_sql = Query.from_(result_sql).left_join(fearure_df).using(*all_join_cols)
+            result_sql = result_sql.select("*")
+        return result_sql
 
     def stats(
         self,
