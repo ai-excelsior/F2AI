@@ -9,7 +9,7 @@ from aie_feast.definitions import Entity
 from aie_feast.period import Period
 from .offline_store import OfflineStore, OfflineStoreType
 from copy import deepcopy
-import os
+
 
 TIME_COL = "event_timestamp"
 ENTITY_EVENT_TIMESTAMP_FIELD = "_entity_event_timestamp_"
@@ -24,20 +24,18 @@ class OfflineFileStore(OfflineStore):
     def get_context(
         self,
         source: FileSource,
-        entity_df: pd.DataFrame,
-        i: int = 0,
-        batch: int = 10,
+        entity: pd.DataFrame,
         all_features: dict = None,
         all_labels: dict = None,
         feature_list: list = [],
         label_list: list = [],
         ttl: Optional[Period] = None,
         join_keys: list = None,
+        entity_cols: list = [],
     ):
-        entity = entity_df.iloc[i * batch : (i + 1) * batch]
+
         feature_views_pd = deepcopy(entity)
         label_views_pd = deepcopy(entity)
-        to_drop = entity.columns
 
         for period, features in all_features.items():
             if period:
@@ -48,8 +46,9 @@ class OfflineFileStore(OfflineStore):
                     features=features,
                     include=True,
                     ttl=ttl,
-                    how="right",
+                    how="inner",
                     join_keys=join_keys,
+                    entity_cols=entity_cols,
                 )
                 tmp_result.drop(columns=[TIME_COL], inplace=True)
                 tmp_result.rename(columns={QUERY_COL: TIME_COL}, inplace=True)  # always merge on TIME_COL
@@ -60,8 +59,9 @@ class OfflineFileStore(OfflineStore):
                     features=features,
                     include=True,
                     ttl=ttl,
-                    how="right",
+                    how="inner",
                     join_keys=join_keys,
+                    entity_cols=entity_cols,
                 )
             feature_views_pd = feature_views_pd.merge(tmp_result, how="left", on=list(entity.columns))
 
@@ -74,8 +74,9 @@ class OfflineFileStore(OfflineStore):
                     features=features,
                     include=True,
                     ttl=ttl,
-                    how="right",
+                    how="inner",
                     join_keys=join_keys,
+                    entity_cols=entity_cols,
                 )
                 tmp_result.drop(columns=[TIME_COL], inplace=True)
                 tmp_result.rename(columns={QUERY_COL: TIME_COL}, inplace=True)  # always merge on TIME_COL
@@ -86,11 +87,15 @@ class OfflineFileStore(OfflineStore):
                     features=features,
                     include=True,
                     ttl=ttl,
-                    how="right",
+                    how="inner",
                     join_keys=join_keys,
+                    entity_cols=entity_cols,
                 )
             label_views_pd = label_views_pd.merge(tmp_result, how="left", on=list(entity.columns))
-        return feature_views_pd[feature_list], label_views_pd[label_list]
+        return (
+            feature_views_pd[join_keys + [TIME_COL] + feature_list],
+            label_views_pd[join_keys + [TIME_COL] + label_list],
+        )
 
     def get_offline_source(self, service: Service) -> FileSource:
         return FileSource(
@@ -167,7 +172,9 @@ class OfflineFileStore(OfflineStore):
         include: bool = True,
         **kwargs,
     ):
-        source_df = self._read_file(source=source, features=features, join_keys=join_keys)
+        source_df = self._read_file(
+            source=source, features=features, join_keys=join_keys + kwargs.pop("entity_cols", [])
+        )
 
         return self._point_in_time_join(
             entity_df=entity_df,
@@ -191,7 +198,9 @@ class OfflineFileStore(OfflineStore):
         include: bool = True,
         **kwargs,
     ):
-        source_df = self._read_file(source=source, features=features, join_keys=join_keys)
+        source_df = self._read_file(
+            source=source, features=features, join_keys=join_keys + kwargs.pop("entity_cols", [])
+        )
 
         return self._point_on_time_join(
             entity_df=entity_df,
