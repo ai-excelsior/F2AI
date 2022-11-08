@@ -1,6 +1,6 @@
 :orphan:
 
-f2ai
+aie_feast
 =========
 
 .. toctree::
