@@ -187,7 +187,7 @@ class FeatureStore:
             feature_view, (FeatureView, LabelView, Service)
         ), "only allowed FeatureView, LabelView and Service"
         feature_objects = self._get_feature_to_use(feature_view, features)
-        join_keys = self._get_keys_to_join(feature_view, entity_df.columns)
+        join_keys = self._get_keys_to_join(feature_view, list(entity_df.columns))
 
         if isinstance(feature_view, (FeatureView, LabelView)):
             source = self.sources[feature_view.batch_source]
@@ -229,7 +229,7 @@ class FeatureStore:
         ), "only allowed FeatureView, LabelView and Service"
         period = -Period.from_str(period)
         feature_objects = self._get_feature_to_use(feature_view, features)
-        join_keys = self._get_keys_to_join(feature_view, entity_df.columns)
+        join_keys = self._get_keys_to_join(feature_view, list(entity_df.columns))
 
         if isinstance(feature_view, (FeatureView, LabelView)):
             source = self.sources[feature_view.batch_source]
@@ -259,7 +259,7 @@ class FeatureStore:
         label_view = self._get_views(label_view)
         assert isinstance(label_view, (LabelView, Service)), "only allowed LabelView and Service"
         feature_objects = self._get_feature_to_use(label_view)
-        join_keys = self._get_keys_to_join(label_view, entity_df.columns)
+        join_keys = self._get_keys_to_join(label_view, list(entity_df.columns))
 
         if isinstance(label_view, (FeatureView, LabelView)):
             source = self.sources[label_view.batch_source]
@@ -291,7 +291,7 @@ class FeatureStore:
         label_view = self._get_views(label_view)
         period = Period.from_str(period)
         label_objects = self._get_feature_to_use(label_view)
-        join_keys = self._get_keys_to_join(label_view, entity_df.columns)
+        join_keys = self._get_keys_to_join(label_view, list(entity_df.columns))
 
         if isinstance(label_view, (FeatureView, LabelView)):
             source = self.sources[label_view.batch_source]
@@ -495,7 +495,7 @@ class FeatureStore:
 
         if entity_df is not None:
             self.__check_format(entity_df)
-            entities = entity_df.columns
+            entities = list(entity_df.columns)
             entity_df[TIME_COL] = pd.to_datetime(entity_df[TIME_COL], utc=True)
             start = pd.to_datetime(0, utc=True)
         else:
