@@ -1,4 +1,5 @@
 from collections import defaultdict
+from pyexpat import features
 import pandas as pd
 import os
 from typing import TYPE_CHECKING, Tuple
@@ -62,177 +63,126 @@ class IterableDataset(IterableDataset):
                 yield to_return
 
     def get_context(self, i: int) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        feature_list = []
-        label_list = []
-        if self.fs.type == "file":
-            entity = self.entity_index.iloc[i * self.batch : (i + 1) * self.batch]
-            feature_views_pd = deepcopy(entity)
-            label_views_pd = deepcopy(entity)
-            to_drop = entity.columns
-            source = FileSource(
-                name=f"{self.service.name}_source",
-                path=os.path.join(self.project_folder, self.service.materialize_path),
-                timestamp_field=TIME_COL,
-                created_timestamp_field=MATERIALIZE_TIME,
-            )
-            for period, features in self.all_features.items():
-                if period:
-                    tmp_result = self.fs.get_period_features(
-                        source=source,
-                        entity_df=entity,
-                        period=-Period.from_str(period),
-                        features=features,
-                        include=True,
-                        ttl=self.service.ttl,
-                        how="right",
-                        join_keys=self.join_keys,
-                    )
-                    tmp_result.drop(columns=[TIME_COL], inplace=True)
-                    tmp_result.rename(columns={QUERY_COL: TIME_COL}, inplace=True)  # always merge on TIME_COL
-                else:
-                    tmp_result = self.fs.get_features(
-                        source=source,
-                        entity_df=entity,
-                        features=features,
-                        include=True,
-                        ttl=self.service.ttl,
-                        how="right",
-                        join_keys=self.join_keys,
-                    )
-                feature_views_pd = feature_views_pd.merge(tmp_result, how="left", on=list(entity.columns))
+        source = self.fs.get_offline_source(self.service)
+        self.data_sample = self.fs.get_context(
+            source=source,
+            entity_df=self.entity_index,
+            i=i,
+            batch=self.batch,
+            all_features=self.all_features,
+            all_labels=self.all_labels,
+            feature_list=list(self.service.get_feature_names(self.feature_views)),
+            label_list=list(self.service.get_label_names(self.label_views)),
+            ttl=self.service.ttl,
+            join_keys=self.join_keys,
+        )
+        # self.data_sample = (feature_views_pd.drop(columns=to_drop), label_views_pd.drop(columns=to_drop))
 
-            for period, features in self.all_labels.items():
-                if period:
-                    tmp_result = self.fs.get_period_features(
-                        source=source,
-                        entity_df=entity,
-                        period=Period.from_str(period),
-                        features=features,
-                        include=True,
-                        ttl=self.service.ttl,
-                        how="right",
-                        join_keys=self.join_keys,
-                    )
-                    tmp_result.drop(columns=[TIME_COL], inplace=True)
-                    tmp_result.rename(columns={QUERY_COL: TIME_COL}, inplace=True)  # always merge on TIME_COL
-                else:
-                    tmp_result = self.fs.get_features(
-                        source=source,
-                        entity_df=entity,
-                        features=features,
-                        include=True,
-                        ttl=self.service.ttl,
-                        how="right",
-                        join_keys=self.join_keys,
-                    )
-                label_views_pd = label_views_pd.merge(tmp_result, how="left", on=list(entity.columns))
-        elif self.fs.type == "pgsql":
-            source = SqlSource(
-                name=f"{self.service.name}",
-                timestamp_field=TIME_COL,
-                created_timestamp_field=MATERIALIZE_TIME,
-            )
-            conn = psy_conn(self.fs)
-            entity = Query.from_(f"{SAM_TBL}_{self.table_suffix}").where(
-                Parameter(f"row_nbr >= {i*self.batch} and row_nbr < {(i+1)*self.batch}")
-            )
-            feature_views_pd = entity.select(*self.join_keys, TIME_COL)
-            label_views_pd = entity.select(*self.join_keys, TIME_COL)
-            to_drop = self.join_keys
-            for period, features in self.all_features.items():
-                if period:
-                    tmp_result = self.fs.get_period_features(
-                        source=source,
-                        entity_df=entity.select(
-                            *self.join_keys, Parameter(f"{TIME_COL} as {ENTITY_EVENT_TIMESTAMP_FIELD}")
-                        ),
-                        period=-Period.from_str(period),
-                        features=features,
-                        include=True,
-                        join_keys=self.join_keys,
-                        ttl=self.service.ttl,
-                        return_df=False,
-                    )
-                    # tmp_result = Query.from_(tmp_result[0]).select( #TODO
-                    #     *tmp_result[1], Parameter(f"{QUERY_COL} as {TIME_COL}"), *features
-                    # )  # always merge on TIME_COL, remove cols not in feature schema
-                else:
-                    tmp_result = self.fs.get_features(
-                        source=source,
-                        entity_df=entity.select(
-                            *self.join_keys, Parameter(f"{TIME_COL} as {ENTITY_EVENT_TIMESTAMP_FIELD}")
-                        ),
-                        features=features,
-                        include=True,
-                        join_keys=self.join_keys,
-                        ttl=self.service.ttl,
-                        return_df=False,
-                    )
-                feature_views_pd = (
-                    Query.from_(feature_views_pd)
-                    .left_join(tmp_result)
-                    .using(Parameter(",".join(self.join_keys + [TIME_COL])))
-                    .select(feature_views_pd.star, Parameter(",".join([f.name for f in features])))
-                )
+        # elif self.fs.type == "pgsql":
+        #     source = SqlSource(
+        #         name=f"{self.service.name}",
+        #         timestamp_field=TIME_COL,
+        #         created_timestamp_field=MATERIALIZE_TIME,
+        #     )
+        #     conn = psy_conn(self.fs)
+        #     entity = Query.from_(f"{SAM_TBL}_{self.table_suffix}").where(
+        #         Parameter(f"row_nbr >= {i*self.batch} and row_nbr < {(i+1)*self.batch}")
+        #     )
+        #     feature_views_pd = entity.select(*self.join_keys, TIME_COL)
+        #     label_views_pd = entity.select(*self.join_keys, TIME_COL)
+        #     to_drop = self.join_keys
+        #     for period, features in self.all_features.items():
+        #         if period:
+        #             tmp_result = self.fs.get_period_features(
+        #                 source=source,
+        #                 entity_df=entity.select(
+        #                     *self.join_keys, Parameter(f"{TIME_COL} as {ENTITY_EVENT_TIMESTAMP_FIELD}")
+        #                 ),
+        #                 period=-Period.from_str(period),
+        #                 features=features,
+        #                 include=True,
+        #                 join_keys=self.join_keys,
+        #                 ttl=self.service.ttl,
+        #                 return_df=False,
+        #             )
+        #             # tmp_result = Query.from_(tmp_result[0]).select( #TODO
+        #             #     *tmp_result[1], Parameter(f"{QUERY_COL} as {TIME_COL}"), *features
+        #             # )  # always merge on TIME_COL, remove cols not in feature schema
+        #         else:
+        #             tmp_result = self.fs.get_features(
+        #                 source=source,
+        #                 entity_df=entity.select(
+        #                     *self.join_keys, Parameter(f"{TIME_COL} as {ENTITY_EVENT_TIMESTAMP_FIELD}")
+        #                 ),
+        #                 features=features,
+        #                 include=True,
+        #                 join_keys=self.join_keys,
+        #                 ttl=self.service.ttl,
+        #                 return_df=False,
+        #             )
+        #         feature_views_pd = (
+        #             Query.from_(feature_views_pd)
+        #             .left_join(tmp_result)
+        #             .using(Parameter(",".join(self.join_keys + [TIME_COL])))
+        #             .select(feature_views_pd.star, Parameter(",".join([f.name for f in features])))
+        #         )
 
-            for period, features in self.all_labels.items():
-                if period:
-                    tmp_result = self.fs.get_period_features(
-                        source=source,
-                        entity_df=entity.select(
-                            *self.join_keys, Parameter(f"{TIME_COL} as {ENTITY_EVENT_TIMESTAMP_FIELD}")
-                        ),
-                        period=Period.from_str(period),
-                        features=features,
-                        include=True,
-                        join_keys=self.join_keys,
-                        ttl=self.service.ttl,
-                        return_df=False,
-                    )
-                    # TODO
-                    # tmp_result = Query.from_(tmp_result).select(
-                    #     Parameter(
-                    #         f"{','.join(self.entity_name + [ENTITY_EVENT_TIMESTAMP_FIELD]  +[feature.name for feature in features])}"
-                    #     )
-                    # )
+        #     for period, features in self.all_labels.items():
+        #         if period:
+        #             tmp_result = self.fs.get_period_features(
+        #                 source=source,
+        #                 entity_df=entity.select(
+        #                     *self.join_keys, Parameter(f"{TIME_COL} as {ENTITY_EVENT_TIMESTAMP_FIELD}")
+        #                 ),
+        #                 period=Period.from_str(period),
+        #                 features=features,
+        #                 include=True,
+        #                 join_keys=self.join_keys,
+        #                 ttl=self.service.ttl,
+        #                 return_df=False,
+        #             )
+        #             # TODO
+        #             # tmp_result = Query.from_(tmp_result).select(
+        #             #     Parameter(
+        #             #         f"{','.join(self.entity_name + [ENTITY_EVENT_TIMESTAMP_FIELD]  +[feature.name for feature in features])}"
+        #             #     )
+        #             # )
 
-                    #     *tmp_result[1], Parameter(f"{QUERY_COL} as {TIME_COL}"), *features
-                    # )  # always merge on TIME_COL, remove cols not in feature schema
-                else:
-                    tmp_result = self.fs.get_features(
-                        source=source,
-                        entity_df=entity.select(
-                            *self.join_keys, Parameter(f"{TIME_COL} as {ENTITY_EVENT_TIMESTAMP_FIELD}")
-                        ),
-                        features=features,
-                        include=True,
-                        join_keys=self.join_keys,
-                        ttl=self.service.ttl,
-                        return_df=False,
-                    )
-                label_views_pd = (
-                    Query.from_(label_views_pd)
-                    .left_join(tmp_result)
-                    .using(*(self.join_keys + [TIME_COL]))
-                    .select(label_views_pd.star, Parameter(",".join([f.name for f in features])))
-                )  # tmp_result[1] + TIME_COL
-            #     label_list += features
-            # label_views_pd = Query.from_(label_views_pd).select(*self.entity_name, *label_list)
+        #             #     *tmp_result[1], Parameter(f"{QUERY_COL} as {TIME_COL}"), *features
+        #             # )  # always merge on TIME_COL, remove cols not in feature schema
+        #         else:
+        #             tmp_result = self.fs.get_features(
+        #                 source=source,
+        #                 entity_df=entity.select(
+        #                     *self.join_keys, Parameter(f"{TIME_COL} as {ENTITY_EVENT_TIMESTAMP_FIELD}")
+        #                 ),
+        #                 features=features,
+        #                 include=True,
+        #                 join_keys=self.join_keys,
+        #                 ttl=self.service.ttl,
+        #                 return_df=False,
+        #             )
+        #         label_views_pd = (
+        #             Query.from_(label_views_pd)
+        #             .left_join(tmp_result)
+        #             .using(*(self.join_keys + [TIME_COL]))
+        #             .select(label_views_pd.star, Parameter(",".join([f.name for f in features])))
+        #         )  # tmp_result[1] + TIME_COL
+        #     #     label_list += features
+        #     # label_views_pd = Query.from_(label_views_pd).select(*self.entity_name, *label_list)
 
-            feature_views_pd = pd.DataFrame(
-                sql_df(feature_views_pd.get_sql(), conn),
-                columns=self.join_keys
-                + [TIME_COL]
-                + [f.name for item in self.all_features.values() for f in item],
-            )
-            label_views_pd = pd.DataFrame(
-                sql_df(label_views_pd.get_sql(), conn),
-                columns=self.join_keys
-                + [TIME_COL]
-                + [f.name for item in self.all_labels.values() for f in item],
-            )
-        self.data_sample = (feature_views_pd.drop(columns=to_drop), label_views_pd.drop(columns=to_drop))
-        return feature_views_pd.drop(columns=to_drop), label_views_pd.drop(columns=to_drop)
+        #     feature_views_pd = pd.DataFrame(
+        #         sql_df(feature_views_pd.get_sql(), conn),
+        #         columns=self.join_keys
+        #         + [TIME_COL]
+        #         + [f.name for item in self.all_features.values() for f in item],
+        #     )
+        #     label_views_pd = pd.DataFrame(
+        #         sql_df(label_views_pd.get_sql(), conn),
+        #         columns=self.join_keys
+        #         + [TIME_COL]
+        #         + [f.name for item in self.all_labels.values() for f in item],
+        #     )
 
     def get_feature_period(self, service: "Service", with_labels=False) -> dict:
         """_summary_

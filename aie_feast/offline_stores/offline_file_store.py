@@ -8,7 +8,8 @@ from aie_feast.views import LabelView, FeatureView
 from aie_feast.definitions import Entity
 from aie_feast.period import Period
 from .offline_store import OfflineStore, OfflineStoreType
-
+from copy import deepcopy
+import os
 
 TIME_COL = "event_timestamp"
 ENTITY_EVENT_TIMESTAMP_FIELD = "_entity_event_timestamp_"
@@ -19,6 +20,77 @@ QUERY_COL = "query_timestamp"
 
 class OfflineFileStore(OfflineStore):
     type: OfflineStoreType = OfflineStoreType.FILE
+
+    def get_context(
+        self,
+        source: FileSource,
+        entity_df: pd.DataFrame,
+        i: int = 0,
+        batch: int = 10,
+        all_features: dict = None,
+        all_labels: dict = None,
+        feature_list: list = [],
+        label_list: list = [],
+        ttl: Optional[Period] = None,
+        join_keys: list = None,
+    ):
+        entity = entity_df.iloc[i * batch : (i + 1) * batch]
+        feature_views_pd = deepcopy(entity)
+        label_views_pd = deepcopy(entity)
+        to_drop = entity.columns
+
+        for period, features in all_features.items():
+            if period:
+                tmp_result = self.get_period_features(
+                    source=source,
+                    entity_df=entity,
+                    period=-Period.from_str(period),
+                    features=features,
+                    include=True,
+                    ttl=ttl,
+                    how="right",
+                    join_keys=join_keys,
+                )
+                tmp_result.drop(columns=[TIME_COL], inplace=True)
+                tmp_result.rename(columns={QUERY_COL: TIME_COL}, inplace=True)  # always merge on TIME_COL
+            else:
+                tmp_result = self.get_features(
+                    source=source,
+                    entity_df=entity,
+                    features=features,
+                    include=True,
+                    ttl=ttl,
+                    how="right",
+                    join_keys=join_keys,
+                )
+            feature_views_pd = feature_views_pd.merge(tmp_result, how="left", on=list(entity.columns))
+
+        for period, features in all_labels.items():
+            if period:
+                tmp_result = self.get_period_features(
+                    source=source,
+                    entity_df=entity,
+                    period=Period.from_str(period),
+                    features=features,
+                    include=True,
+                    ttl=ttl,
+                    how="right",
+                    join_keys=join_keys,
+                )
+                tmp_result.drop(columns=[TIME_COL], inplace=True)
+                tmp_result.rename(columns={QUERY_COL: TIME_COL}, inplace=True)  # always merge on TIME_COL
+            else:
+                tmp_result = self.get_features(
+                    source=source,
+                    entity_df=entity,
+                    features=features,
+                    include=True,
+                    ttl=ttl,
+                    how="right",
+                    join_keys=join_keys,
+                )
+            label_views_pd = label_views_pd.merge(tmp_result, how="left", on=list(entity.columns))
+        return feature_views_pd[feature_list], label_views_pd[label_list]
 
     def get_offline_source(self, service: Service) -> FileSource:
         return FileSource(
