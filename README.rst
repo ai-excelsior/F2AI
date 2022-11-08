@@ -54,4 +54,8 @@ Architecture
 
 .. note::
    This is a  working flow when using F2AI instead of technical architecture.
+<<<<<<< HEAD
 >>>>>>> 5992223 ([PGDF-263] basic readme.)
+=======
+>>>>>>> b65e974 ([PGDF-263] basic readme.)
+>>>>>>> ff1dbf0 ([PGDF-263] basic readme.)
