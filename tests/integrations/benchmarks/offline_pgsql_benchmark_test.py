@@ -1,13 +1,11 @@
 import pandas as pd
 import timeit
-from os import path
 from aie_feast import FeatureStore
 from aie_feast.common.sampler import GroupFixednbrSampler
 from aie_feast.common.psl_utils import sql_df, psy_conn
 
 
 def get_guizhou_traffic_entities(store):
-
     query_entities = pd.DataFrame(
         sql_df(
             sql=f"select link_id,event_timestamp from {store.services['traval_time_prediction_embedding_v1'].materialize_path} limit 100",
@@ -71,6 +69,17 @@ def test_get_latest_entity_from_feature_view(make_guizhou_traffic):
         lambda: store.get_latest_entities("gy_link_travel_time_features"), number=10
     )
     print(f"stats performance pgsql: {measured_time}s")
+
+
+def test_get_period_features_from_feature_view(make_guizhou_traffic):
+    project_folder = make_guizhou_traffic("pgsql")
+    store = FeatureStore(project_folder)
+    entity_df = get_guizhou_traffic_entities(store)
+    measured_time = timeit.timeit(
+        lambda: store.get_period_features("gy_link_travel_time_features", entity_df, period="10 minutes"),
+        number=10,
+    )
+    print(f"get_features performance pgsql: {measured_time}s")
 
 
 def test_dataset_to_pytorch_pgsql(make_guizhou_traffic):
