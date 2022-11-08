@@ -8,7 +8,6 @@
 *.pk
 *.test.py
 !aiefeast
-/**.yaml
 **/*.pyc
 **/**/*.pyc
 .vscode
