@@ -1,5 +1,6 @@
 from __future__ import annotations
 import uuid
+from numpy import source
 import pandas as pd
 from io import StringIO
 from typing import List, Optional, Set, TYPE_CHECKING, Union
@@ -222,7 +223,6 @@ class OfflinePostgresStore(OfflineStore):
 
         source_df = self.read(source=source, features=features, join_keys=join_keys)
         entity_df, table_name = self._get_entity(entity_df, source, join_keys)
-        feature_names = [feature.name for feature in features]
 
         sql_query = self._point_in_time_join(
             entity_df=entity_df,
@@ -234,12 +234,11 @@ class OfflinePostgresStore(OfflineStore):
             include=include,
             **kwargs,
         )
-        sql_result = sql_query.select(
-            Parameter(
-                f"{','.join(join_keys + [ENTITY_EVENT_TIMESTAMP_FIELD+' as '+DEFAULT_EVENT_TIMESTAMP_FIELD ] + feature_names)}"
-            )
-        )
         # execute sql
+        feature_names = [feature.name for feature in features]
+        sql_result = sql_query.select(
+            Parameter(f"{','.join(join_keys + [ENTITY_EVENT_TIMESTAMP_FIELD ] + feature_names)}")
+        )
         df = self._get_dataframe(join_keys, [DEFAULT_EVENT_TIMESTAMP_FIELD], feature_names, sql_result)
         self._drop_table(table_name)
         return df
@@ -268,15 +267,14 @@ class OfflinePostgresStore(OfflineStore):
         include: bool = True,
         **kwargs,
     ):
-        feature_names = [feature.name for feature in features]
+
         source_df = self.read(source=source, features=features, join_keys=join_keys)
         entity_df, table_name = self._get_entity(entity_df, source, join_keys)
 
-        sql_result = self._point_on_time_join(
+        sql_query = self._point_on_time_join(
             entity_df=entity_df,
             source_df=source_df,
             period=period,
-            timestamp_field=source.timestamp_field,
             created_timestamp_field=source.created_timestamp_field,
             ttl=ttl,
             join_keys=join_keys,
@@ -284,110 +282,12 @@ class OfflinePostgresStore(OfflineStore):
             **kwargs,
         )
 
-        # query source
-        time_cols = [f"{source.timestamp_field} as {SOURCE_EVENT_TIMESTAMP_FIELD}"]
-        if source.created_timestamp_field:
-            time_cols.append(f"{source.created_timestamp_field} as {DEFAULT_CREATED_TIMESTAMP_FIELD}")
-        df = (
-            Query.from_(source.query)
-            .select(Parameter(",".join(join_keys + time_cols + feature_names)))
-            .as_("df")
+        feature_names = [feature.name for feature in features]
+        sql_result = sql_query.select(
+            Parameter(
+                f"{','.join(join_keys + [ENTITY_EVENT_TIMESTAMP_FIELD,SOURCE_EVENT_TIMESTAMP_FIELD] + feature_names)}"
+            )
         )
-
-        # join features
-        if len(join_keys) > 0:
-            sql_join = (
-                Query.from_(
-                    Query.from_(table_name).select(
-                        Parameter(",".join(join_keys + [DEFAULT_EVENT_TIMESTAMP_FIELD]))
-                    )
-                )
-                .inner_join(df)
-                .using(*join_keys)
-                .select(Parameter(f"df.*, {DEFAULT_EVENT_TIMESTAMP_FIELD}"))
-                .as_("sql_join")
-            )
-        else:
-            sql_join = (
-                Query.from_(table_name)
-                .cross_join(df)
-                .cross()
-                .select(Parameter(f"df.*, {DEFAULT_EVENT_TIMESTAMP_FIELD}"))
-                .as_("sql_join")
-            )
-
-        # get period features, filter feature by period
-        if period.is_neg:
-            sql_filter_with_period = (
-                Query.from_(sql_join)
-                .select(sql_join.star)
-                .where(
-                    Parameter(
-                        f" ({SOURCE_EVENT_TIMESTAMP_FIELD}::timestamptz <= {DEFAULT_EVENT_TIMESTAMP_FIELD}::timestamptz) and ({SOURCE_EVENT_TIMESTAMP_FIELD}::timestamptz > {DEFAULT_EVENT_TIMESTAMP_FIELD}::timestamptz + {period.to_pgsql_interval()})  "
-                    )
-                    if include
-                    else Parameter(
-                        f" ({SOURCE_EVENT_TIMESTAMP_FIELD}::timestamptz < {DEFAULT_EVENT_TIMESTAMP_FIELD}::timestamptz) and ({SOURCE_EVENT_TIMESTAMP_FIELD}::timestamptz >= {DEFAULT_EVENT_TIMESTAMP_FIELD}::timestamptz + {period.to_pgsql_interval()})  "
-                    )
-                )
-                .as_("sql_filter_with_period")
-            )
-        else:
-            sql_filter_with_period = (
-                Query.from_(sql_join)
-                .select(sql_join.star)
-                .where(
-                    Parameter(
-                        f" ({SOURCE_EVENT_TIMESTAMP_FIELD}::timestamptz >= {DEFAULT_EVENT_TIMESTAMP_FIELD}::timestamptz) and ({SOURCE_EVENT_TIMESTAMP_FIELD}::timestamptz < {DEFAULT_EVENT_TIMESTAMP_FIELD}::timestamptz + {period.to_pgsql_interval()})  "
-                    )
-                    if include
-                    else Parameter(
-                        f" ({SOURCE_EVENT_TIMESTAMP_FIELD}::timestamptz > {DEFAULT_EVENT_TIMESTAMP_FIELD}::timestamptz) and ({SOURCE_EVENT_TIMESTAMP_FIELD}::timestamptz <= {DEFAULT_EVENT_TIMESTAMP_FIELD}::timestamptz + {period.to_pgsql_interval()})  "
-                    )
-                )
-                .as_("sql_filter_with_period")
-            )
-
-        # get point in time feature
-        if source.created_timestamp_field:
-            sql_result = (
-                Query.from_(
-                    Query.from_(sql_filter_with_period).select(
-                        sql_filter_with_period.star,
-                        Parameter(
-                            f"row_number() over (partition by ({','.join(join_keys+[DEFAULT_EVENT_TIMESTAMP_FIELD, SOURCE_EVENT_TIMESTAMP_FIELD])}) order by {source.created_timestamp_field} DESC)"
-                        ),
-                    )
-                )
-                .select(
-                    Parameter(
-                        ",".join(
-                            join_keys
-                            + [
-                                f"{DEFAULT_EVENT_TIMESTAMP_FIELD} as {QUERY_COL}",
-                                f"{SOURCE_EVENT_TIMESTAMP_FIELD} as {DEFAULT_EVENT_TIMESTAMP_FIELD}",
-                            ]
-                            + feature_names
-                        )
-                    )
-                )
-                .where(Parameter("row_number=1"))
-            )
-        else:
-            sql_result = Query.from_(sql_filter_with_period).select(
-                Parameter(
-                    ",".join(
-                        join_keys
-                        + [
-                            f"{DEFAULT_EVENT_TIMESTAMP_FIELD} as {QUERY_COL}",
-                            f"{SOURCE_EVENT_TIMESTAMP_FIELD} as {DEFAULT_EVENT_TIMESTAMP_FIELD}",
-                        ]
-                        + feature_names
-                    )
-                ),
-            )
-
-        # execute sql
         df = self._get_dataframe(
             join_keys, [QUERY_COL, DEFAULT_EVENT_TIMESTAMP_FIELD], feature_names, sql_result
         )
@@ -432,7 +332,7 @@ class OfflinePostgresStore(OfflineStore):
 
         if timestamp_field:
             sql_query = cls._point_in_time_filter(sql_join, include=include, ttl=ttl)
-            sql_query = cls._point_in_time_latest(sql_join, join_keys, created_timestamp_field)
+            sql_query = cls._point_in_time_latest(sql_query, join_keys, created_timestamp_field)
         return sql_query
 
     @classmethod
@@ -441,43 +341,32 @@ class OfflinePostgresStore(OfflineStore):
         entity_df: pd.DataFrame,
         source_df: pd.DataFrame,
         period: str,
-        timestamp_field: Optional[str],
         created_timestamp_field: Optional[str] = None,
         ttl: Optional[Period] = None,
         join_keys: List[str] = [],
         include: bool = True,
-        is_label: bool = False,
         how="inner",
     ):
-        # renames to keep things simple
-        entity_df = entity_df.rename(columns={DEFAULT_EVENT_TIMESTAMP_FIELD: ENTITY_EVENT_TIMESTAMP_FIELD})
-        source_df = source_df.rename(columns={timestamp_field: SOURCE_EVENT_TIMESTAMP_FIELD})
-
-        if created_timestamp_field:
-            entity_df = entity_df.drop(columns=[created_timestamp_field], erros="ignore")
-
-        # pre filter source_df by ttl
         if ttl:
-            min_entity_timestamp = entity_df[ENTITY_EVENT_TIMESTAMP_FIELD].min() - ttl.to_pandas_dateoffset()
+            min_entity_timestamp = Query.from_(entity_df).select(
+                fn.Min(Parameter(ENTITY_EVENT_TIMESTAMP_FIELD)) + ttl.to_pgsql_interval()
+            )
             if include:
-                source_df = source_df[source_df[SOURCE_EVENT_TIMESTAMP_FIELD] > min_entity_timestamp]
+                pre_fil = Parameter(SOURCE_EVENT_TIMESTAMP_FIELD) > min_entity_timestamp
             else:
-                source_df = source_df[source_df[SOURCE_EVENT_TIMESTAMP_FIELD] >= min_entity_timestamp]
+                pre_fil = Parameter(SOURCE_EVENT_TIMESTAMP_FIELD) >= min_entity_timestamp
+            source_df = source_df.where(pre_fil)
+        # query source
 
         if len(join_keys) > 0:
-            df = source_df.merge(entity_df, on=join_keys, how=how)
+            sql_join = Query.from_(source_df).join(entity_df, JoinType.__getattr__(how)).using(*join_keys)
         else:
-            df = source_df.merge(entity_df, how="cross")
+            sql_join = Query.from_(source_df).cross_join(entity_df).cross()
 
-        df = cls._point_on_time_filter(df, period, include=include, ttl=ttl, is_label=is_label)
-        df = cls._point_on_time_latest(df, join_keys, created_timestamp_field)
+        sql_query = cls._point_on_time_filter(sql_join, period=period, include=include, ttl=ttl)
+        sql_query = cls._point_on_time_latest(sql_query, join_keys, created_timestamp_field)
 
-        return df.drop(columns=[created_timestamp_field], erros="ignore").rename(
-            columns={
-                ENTITY_EVENT_TIMESTAMP_FIELD: QUERY_COL,
-                SOURCE_EVENT_TIMESTAMP_FIELD: DEFAULT_EVENT_TIMESTAMP_FIELD,
-            }
-        )
+        return sql_query
 
     @classmethod
     def _point_in_time_filter(
@@ -495,25 +384,24 @@ class OfflinePostgresStore(OfflineStore):
             if ttl:
                 candidates = candidates & (
                     Parameter(source_timestamp_field)
-                    > Parameter(entity_timestamp_field) + ttl.to_pgsql_interval()
+                    > Parameter(entity_timestamp_field) - ttl.to_pgsql_interval()
                 )
         else:
             candidates = Parameter(entity_timestamp_field) >= Parameter(source_timestamp_field)
             if ttl:
                 candidates = candidates & (
                     Parameter(source_timestamp_field)
-                    >= Parameter(entity_timestamp_field) + ttl.to_pgsql_interval()
+                    >= Parameter(entity_timestamp_field) - ttl.to_pgsql_interval()
                 )
         return df.where(candidates)
 
     @classmethod
     def _point_on_time_filter(
         cls,
-        df: pd.DataFrame,
+        df: Query,
         period: str,
         include: bool = True,
         ttl: Optional[Period] = None,
-        is_label=False,
         entity_timestamp_field: str = ENTITY_EVENT_TIMESTAMP_FIELD,
         source_timestamp_field: str = SOURCE_EVENT_TIMESTAMP_FIELD,
     ):
@@ -521,37 +409,51 @@ class OfflinePostgresStore(OfflineStore):
 
         earliest_timestamp = None
         if ttl:
-            earliest_timestamp = df[entity_timestamp_field] - ttl.to_pandas_dateoffset()
+            earliest_timestamp = Parameter(entity_timestamp_field) - ttl.to_pgsql_interval()
 
-        if is_label:  # get forward data
+        if period.is_neg:
             if include:
-                candidates = (df[entity_timestamp_field] <= df[source_timestamp_field]) & (
-                    df[entity_timestamp_field] > df[source_timestamp_field] - ttl.to_pandas_dateoffset()
+                candidates = (
+                    Parameter(f"{entity_timestamp_field}::timestamptz")
+                    >= Parameter(f"{source_timestamp_field}::timestamptz")
+                ) & (
+                    Parameter(f"{entity_timestamp_field}::timestamptz")
+                    < Parameter(f"{source_timestamp_field}::timestamptz - {period.to_pgsql_interval()}")
                 )
                 if ttl:
-                    candidates = candidates & (df[source_timestamp_field] > earliest_timestamp)
+                    candidates = candidates & (Parameter(source_timestamp_field) > earliest_timestamp)
             else:
-                candidates = (df[entity_timestamp_field] < df[source_timestamp_field]) & (
-                    df[entity_timestamp_field] >= df[source_timestamp_field] - ttl.to_pandas_dateoffset()
+                candidates = (
+                    Parameter(f"{entity_timestamp_field}::timestamptz")
+                    > Parameter(f"{source_timestamp_field}::timestamptz")
+                ) & (
+                    Parameter(f"{entity_timestamp_field}::timestamptz")
+                    <= Parameter(f"{source_timestamp_field}::timestamptz - {period.to_pgsql_interval()}")
                 )
-
                 if ttl:
-                    candidates = candidates & (df[source_timestamp_field] >= earliest_timestamp)
-            return df[candidates]
-        else:  # get backward data
+                    candidates = candidates & (Parameter(source_timestamp_field) >= earliest_timestamp)
+        else:
             if include:
-                candidates = (df[entity_timestamp_field] >= df[source_timestamp_field]) & (
-                    df[entity_timestamp_field] < df[source_timestamp_field].map(lambda x: x + period)
+                candidates = (
+                    Parameter(f"{entity_timestamp_field}::timestamptz")
+                    <= Parameter(f"{source_timestamp_field}::timestamptz")
+                ) & (
+                    Parameter(f"{entity_timestamp_field}::timestamptz")
+                    > Parameter(f"{source_timestamp_field}::timestamptz - {period.to_pgsql_interval()}")
                 )
                 if ttl:
-                    candidates = candidates & (df[source_timestamp_field] > earliest_timestamp)
+                    candidates = candidates & (Parameter(source_timestamp_field) > earliest_timestamp)
             else:
-                candidates = (df[entity_timestamp_field] > df[source_timestamp_field]) & (
-                    df[entity_timestamp_field] <= df[source_timestamp_field].map(lambda x: x + period)
+                candidates = (
+                    Parameter(f"{entity_timestamp_field}::timestamptz")
+                    < Parameter(f"{source_timestamp_field}::timestamptz")
+                ) & (
+                    Parameter(f"{entity_timestamp_field}::timestamptz")
+                    >= Parameter(f"{source_timestamp_field}::timestamptz - {period.to_pgsql_interval()}")
                 )
                 if ttl:
-                    candidates = candidates & (df[source_timestamp_field] >= earliest_timestamp)
-        return df[candidates]
+                    candidates = candidates & (Parameter(source_timestamp_field) >= earliest_timestamp)
+        return df.where(candidates)
 
     @classmethod
     def _point_in_time_latest(
@@ -576,17 +478,21 @@ class OfflinePostgresStore(OfflineStore):
     @classmethod
     def _point_on_time_latest(
         cls,
-        df: pd.DataFrame,
+        df: Query,
         group_keys: List[str] = [],
         created_timestamp_field: Optional[str] = None,
         entity_timestamp_field: str = ENTITY_EVENT_TIMESTAMP_FIELD,
         source_timestamp_field: str = SOURCE_EVENT_TIMESTAMP_FIELD,
     ):
         if created_timestamp_field:
-            df.sort_values(by=[created_timestamp_field], ascending=False, ignore_index=True, inplace=True)
-            df.drop_duplicates(
-                subset=group_keys + [entity_timestamp_field, source_timestamp_field],
-                keep="first",
-                inplace=True,
+            latest_time = df.groupby(
+                Parameter(",".join(group_keys + [entity_timestamp_field, source_timestamp_field]))
+            ).select(
+                fn.Max(Parameter(created_timestamp_field), created_timestamp_field),
+                Parameter(",".join(group_keys + [entity_timestamp_field, source_timestamp_field])),
             )
+            df = df.inner_join(latest_time).using(
+                *(group_keys + [entity_timestamp_field, created_timestamp_field])
+            )
+
         return df

@@ -224,9 +224,7 @@ class FeatureStore:
         """
         self.__check_format(entity_df)
         feature_view = self._get_views(feature_view)
-        assert isinstance(
-            feature_view, (FeatureView, LabelView, Service)
-        ), "only allowed FeatureView, LabelView and Service"
+        assert isinstance(feature_view, (FeatureView, Service)), "only allowed FeatureView and Service"
         period = -Period.from_str(period)
         feature_objects = self._get_feature_to_use(feature_view, features)
         join_keys = self._get_keys_to_join(feature_view, list(entity_df.columns))
@@ -235,6 +233,7 @@ class FeatureStore:
             source = self.sources[feature_view.batch_source]
         else:
             source = self.offline_store.get_offline_source(feature_view)
+        assert source.timestamp_field, "no period can be applied on non-relavent data"
 
         return self.offline_store.get_period_features(
             entity_df=entity_df,
