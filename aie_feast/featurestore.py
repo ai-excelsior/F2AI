@@ -3,6 +3,8 @@ import os
 import json
 import docker
 from datetime import datetime
+
+from sqlalchemy import TIME
 from aie_feast.common.jinja import jinja_env
 from typing import Dict, List, Union
 from aie_feast.common.source import FileSource
@@ -599,7 +601,6 @@ class FeatureStore:
             fs=self.offline_store,
             service=self.services[service_name],
             sampler=sampler,
-            project_folder=self.project_folder,
             feature_views=self.feature_views,
             label_views=self.label_views,
         )

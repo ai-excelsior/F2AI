@@ -122,8 +122,10 @@ def test_dataset_to_pytorch(make_credit_score):
             group_ids=None,
             group_names=None,
             start="2020-08-20",
-            end="2021-08-30",
+            end="2021-09-01",
         ),
     )
-    measured_time = timeit.timeit(lambda: list(ds.to_pytorch()), number=1)
+    measured_time = timeit.timeit(
+        lambda: list(ds.to_pytorch(entity_cols=["zipcode", "dob_ssn", "loan_id"])), number=1
+    )
     print(f"dataset.to_pytorch performance: {measured_time}s")
