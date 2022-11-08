@@ -82,7 +82,7 @@ class OfflinePostgresStore(OfflineStore):
     ):
         table_name = None
         if isinstance(entity_df, pd.DataFrame):
-            table_name = self.upload_df(
+            table_name = self._upload_entity_df(
                 entity_df=entity_df,
                 source=source,
                 join_keys=join_keys,
@@ -104,7 +104,7 @@ class OfflinePostgresStore(OfflineStore):
         columns = [Column(name, typ, index=name in index_columns) for name, typ in column_names_and_types]
         return Table(table_name, MetaData(), *columns)
 
-    def upload_df(
+    def _upload_entity_df(
         self, entity_df: pd.DataFrame, source: SqlSource, join_keys: List[str] = [], table_name: str = None
     ):
         time_cols = [source.timestamp_field]
@@ -224,7 +224,7 @@ class OfflinePostgresStore(OfflineStore):
         entity_df, table_name = self._get_entity(entity_df, source, join_keys)
         feature_names = [feature.name for feature in features]
 
-        sql_query = self.point_in_time_join(
+        sql_query = self._point_in_time_join(
             entity_df=entity_df,
             source_df=source_df,
             timestamp_field=source.timestamp_field,
@@ -272,7 +272,7 @@ class OfflinePostgresStore(OfflineStore):
         source_df = self.read(source=source, features=features, join_keys=join_keys)
         entity_df, table_name = self._get_entity(entity_df, source, join_keys)
 
-        sql_result = self.point_on_time_join(
+        sql_result = self._point_on_time_join(
             entity_df=entity_df,
             source_df=source_df,
             period=period,
@@ -394,8 +394,16 @@ class OfflinePostgresStore(OfflineStore):
         self._drop_table(table_name)
         return df
 
+    def query(self, query: str, return_df: bool = True, *args, **kwargs):
+        with self.psy_conn.cursor() as cursor:
+            cursor.execute(query)
+            if return_df:
+                return pd.DataFrame(cursor.fetchall())
+            else:
+                return cursor.fetchall()
+
     @classmethod
-    def point_in_time_join(
+    def _point_in_time_join(
         cls,
         entity_df: Query,
         source_df: Query,
@@ -423,12 +431,12 @@ class OfflinePostgresStore(OfflineStore):
             sql_join = Query.from_(source_df).cross_join(entity_df).cross()
 
         if timestamp_field:
-            sql_query = cls.point_in_time_filter(sql_join, include=include, ttl=ttl)
-            sql_query = cls.point_in_time_latest(sql_join, join_keys, created_timestamp_field)
+            sql_query = cls._point_in_time_filter(sql_join, include=include, ttl=ttl)
+            sql_query = cls._point_in_time_latest(sql_join, join_keys, created_timestamp_field)
         return sql_query
 
     @classmethod
-    def point_on_time_join(
+    def _point_on_time_join(
         cls,
         entity_df: pd.DataFrame,
         source_df: pd.DataFrame,
@@ -461,8 +469,8 @@ class OfflinePostgresStore(OfflineStore):
         else:
             df = source_df.merge(entity_df, how="cross")
 
-        df = cls.point_on_time_filter(df, period, include=include, ttl=ttl, is_label=is_label)
-        df = cls.point_on_time_latest(df, join_keys, created_timestamp_field)
+        df = cls._point_on_time_filter(df, period, include=include, ttl=ttl, is_label=is_label)
+        df = cls._point_on_time_latest(df, join_keys, created_timestamp_field)
 
         return df.drop(columns=[created_timestamp_field], erros="ignore").rename(
             columns={
@@ -472,7 +480,7 @@ class OfflinePostgresStore(OfflineStore):
         )
 
     @classmethod
-    def point_in_time_filter(
+    def _point_in_time_filter(
         cls,
         df: Query,
         include: bool = True,
@@ -499,7 +507,7 @@ class OfflinePostgresStore(OfflineStore):
         return df.where(candidates)
 
     @classmethod
-    def point_on_time_filter(
+    def _point_on_time_filter(
         cls,
         df: pd.DataFrame,
         period: str,
@@ -546,7 +554,7 @@ class OfflinePostgresStore(OfflineStore):
         return df[candidates]
 
     @classmethod
-    def point_in_time_latest(
+    def _point_in_time_latest(
         cls,
         df: Query,
         group_keys: List[str] = [],
@@ -566,7 +574,7 @@ class OfflinePostgresStore(OfflineStore):
         return df.inner_join(latest_time).using(*(sort_by + group_keys + [entity_timestamp_field]))
 
     @classmethod
-    def point_on_time_latest(
+    def _point_on_time_latest(
         cls,
         df: pd.DataFrame,
         group_keys: List[str] = [],
