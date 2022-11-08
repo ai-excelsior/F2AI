@@ -10,7 +10,6 @@ sphinx:
   fail_on_warning: true
 
 python:
-  path: .
   install:
     - requirements: requirements.txt
     - requirements: docs/requirements.txt
