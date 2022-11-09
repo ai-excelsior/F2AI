@@ -88,15 +88,15 @@ def test_dataset_to_pytorch_pgsql(make_guizhou_traffic):
     ds = store.get_dataset(
         service_name="traval_time_prediction_embedding_v1",
         sampler=GroupFixednbrSampler(
-            time_bucket="1 minutes",
+            time_bucket="1 hours",
             stride=1,
             group_ids=None,
             group_names=None,
-            start="2016-03-01 00:00:00",
-            end="2016-03-01 00:01:00",
+            start="2016-03-05 00:00:00",
+            end="2016-03-06 00:00:00",
         ),
     )
-    measured_time = timeit.timeit(lambda: list(ds.to_pytorch()), number=1)
+    measured_time = timeit.timeit(lambda: list(ds.to_pytorch(64)), number=1)
     print(f"dataset.to_pytorch pgsql performance: {measured_time}s")
 
 

@@ -18,82 +18,6 @@ QUERY_COL = "query_timestamp"
 class OfflineFileStore(OfflineStore):
     type: OfflineStoreType = OfflineStoreType.FILE
 
-    def get_context(
-        self,
-        source: FileSource,
-        entity: pd.DataFrame,
-        all_features: dict = None,
-        all_labels: dict = None,
-        feature_list: list = [],
-        label_list: list = [],
-        ttl: Optional[Period] = None,
-        join_keys: list = None,
-        entity_cols: list = [],
-    ):
-
-        feature_views_pd = deepcopy(entity)
-        label_views_pd = deepcopy(entity)
-
-        for period, features in all_features.items():
-            if period:
-                tmp_result = self.get_period_features(
-                    source=source,
-                    entity_df=entity,
-                    period=-Period.from_str(period),
-                    features=features,
-                    include=True,
-                    ttl=ttl,
-                    how="inner",
-                    join_keys=join_keys,
-                    entity_cols=entity_cols,
-                )
-                tmp_result.drop(columns=[TIME_COL], inplace=True)
-                tmp_result.rename(columns={QUERY_COL: TIME_COL}, inplace=True)  # always merge on TIME_COL
-            else:
-                tmp_result = self.get_features(
-                    source=source,
-                    entity_df=entity,
-                    features=features,
-                    include=True,
-                    ttl=ttl,
-                    how="inner",
-                    join_keys=join_keys,
-                    entity_cols=entity_cols,
-                )
-            feature_views_pd = feature_views_pd.merge(tmp_result, how="left", on=list(entity.columns))
-
-        for period, features in all_labels.items():
-            if period:
-                tmp_result = self.get_period_features(
-                    source=source,
-                    entity_df=entity,
-                    period=Period.from_str(period),
-                    features=features,
-                    include=True,
-                    ttl=ttl,
-                    how="inner",
-                    join_keys=join_keys,
-                    entity_cols=entity_cols,
-                )
-                tmp_result.drop(columns=[TIME_COL], inplace=True)
-                tmp_result.rename(columns={QUERY_COL: TIME_COL}, inplace=True)  # always merge on TIME_COL
-            else:
-                tmp_result = self.get_features(
-                    source=source,
-                    entity_df=entity,
-                    features=features,
-                    include=True,
-                    ttl=ttl,
-                    how="inner",
-                    join_keys=join_keys,
-                    entity_cols=entity_cols,
-                )
-            label_views_pd = label_views_pd.merge(tmp_result, how="left", on=list(entity.columns))
-        return (
-            feature_views_pd[join_keys + [TIME_COL] + feature_list],
-            label_views_pd[join_keys + [TIME_COL] + label_list],
-        )
-
     def get_offline_source(self, service: Service) -> FileSource:
         return FileSource(
             name=f"{service.name}_source",
@@ -353,9 +277,10 @@ class OfflineFileStore(OfflineStore):
         df = cls._point_on_time_filter(df, period, include=include, ttl=ttl)
         df = cls._point_on_time_latest(df, join_keys, created_timestamp_field)
 
-        return df.drop(columns=[created_timestamp_field], errors="ignore").rename(
+        df = df.drop(columns=[created_timestamp_field], errors="ignore").rename(
             columns={ENTITY_EVENT_TIMESTAMP_FIELD: QUERY_COL, SOURCE_EVENT_TIMESTAMP_FIELD: TIME_COL}
         )
+        return df.sort_values(by=[QUERY_COL, TIME_COL], ascending=False, ignore_index=True)
 
     @classmethod
     def _point_in_time_filter(

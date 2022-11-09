@@ -79,8 +79,10 @@ class OfflinePostgresStore(OfflineStore):
         join_keys,
         timestamp_field: str = DEFAULT_EVENT_TIMESTAMP_FIELD,
         alias: str = ENTITY_EVENT_TIMESTAMP_FIELD,
+        **kwargs,
     ):
         table_name = None
+        #  features = []
         if isinstance(entity_df, pd.DataFrame):
             table_name = self._upload_entity_df(
                 entity_df=entity_df,
@@ -90,7 +92,9 @@ class OfflinePostgresStore(OfflineStore):
             entity_df = SqlSource(name=table_name, timestamp_field=timestamp_field)
 
         if isinstance(entity_df, SqlSource):
-            entity_df = self.read(source=entity_df, features=[], join_keys=join_keys, alias=alias)
+            entity_df = self.read(
+                source=entity_df, features=kwargs.get("residue", []), join_keys=join_keys, alias=alias
+            )
 
         return entity_df, table_name
 
@@ -146,7 +150,7 @@ class OfflinePostgresStore(OfflineStore):
         if source.created_timestamp_field:
             time_columns.append(source.created_timestamp_field)
 
-        feature_columns = [feature.name for feature in features]
+        feature_columns = [feature if isinstance(feature, str) else feature.name for feature in features]
         all_columns = list(set(time_columns + join_keys + feature_columns))
         source_df = Query.from_(source.query).select(Parameter(",".join(all_columns)))
         return source_df
@@ -306,8 +310,11 @@ class OfflinePostgresStore(OfflineStore):
         **kwargs,
     ):
 
-        source_df = self.read(source=source, features=features, join_keys=join_keys)
-        entity_df, table_name = self._get_entity(entity_df, source, join_keys)
+        entity_cols = kwargs.pop("entity_cols", [])
+        source_df = self.read(source=source, features=features, join_keys=join_keys + entity_cols)
+
+        residue = [c for c in entity_df.columns if c not in join_keys + [DEFAULT_EVENT_TIMESTAMP_FIELD]]
+        entity_df, table_name = self._get_entity(entity_df, source, join_keys, residue=residue)
 
         sql_query = self._point_in_time_join(
             entity_df=entity_df,
@@ -322,11 +329,22 @@ class OfflinePostgresStore(OfflineStore):
         # execute sql
         feature_names = [feature.name for feature in features]
         sql_result = sql_query.select(
-            Parameter(f"{','.join(join_keys + [ENTITY_EVENT_TIMESTAMP_FIELD ] + feature_names)}")
+            Parameter(
+                f"{','.join(list(set(join_keys + entity_cols))+ [ENTITY_EVENT_TIMESTAMP_FIELD ] + list(set(residue + feature_names)))}"
+            )
         )
-        df = self._get_dataframe(join_keys, [DEFAULT_EVENT_TIMESTAMP_FIELD], feature_names, sql_result)
+        df = self._get_dataframe(
+            list(set(join_keys + entity_cols)),
+            [DEFAULT_EVENT_TIMESTAMP_FIELD],
+            list(set(residue + feature_names)),
+            sql_result,
+        )
         self._drop_table(table_name)
-        return df
+        return df.sort_values(
+            by=list(set(join_keys + entity_cols)) + [DEFAULT_EVENT_TIMESTAMP_FIELD],
+            ascending=True,
+            ignore_index=True,
+        )
 
     def _drop_table(self, table_name):
         with self.psy_conn.cursor() as cursor:
@@ -341,85 +359,6 @@ class OfflinePostgresStore(OfflineStore):
 
             return pd.DataFrame(data, columns=join_keys + timecol + feature_names)
 
-    def get_context(
-        self,
-        source: SqlSource,
-        entity_df: pd.DataFrame,
-        i: int = 0,
-        batch: int = 10,
-        all_features: dict = None,
-        all_labels: dict = None,
-        feature_list: list = [],
-        label_list: list = [],
-        ttl: Optional[Period] = None,
-        join_keys: list = None,
-    ):
-        entity = entity_df.iloc[i * batch : (i + 1) * batch]
-        feature_views_pd = deepcopy(entity)
-        label_views_pd = deepcopy(entity)
-
-        for period, features in all_features.items():
-            if period:
-                tmp_result = self.get_period_features(
-                    source=source,
-                    entity_df=entity,
-                    period=-Period.from_str(period),
-                    features=features,
-                    include=True,
-                    ttl=ttl,
-                    how="right",
-                    join_keys=join_keys,
-                )
-                tmp_result.drop(columns=[DEFAULT_EVENT_TIMESTAMP_FIELD], inplace=True)
-                tmp_result.rename(
-                    columns={QUERY_COL: DEFAULT_EVENT_TIMESTAMP_FIELD}, inplace=True
-                )  # always merge on TIME_COL
-            else:
-                tmp_result = self.get_features(
-                    source=source,
-                    entity_df=entity,
-                    features=features,
-                    include=True,
-                    ttl=ttl,
-                    how="right",
-                    join_keys=join_keys,
-                )
-            feature_views_pd = feature_views_pd.merge(tmp_result, how="left", on=list(entity.columns))
-            feature_views_pd[DEFAULT_EVENT_TIMESTAMP_FIELD] = pd.to_datetime(
-                feature_views_pd[DEFAULT_EVENT_TIMESTAMP_FIELD], utc=True
-            )
-        for period, features in all_labels.items():
-            if period:
-                tmp_result = self.get_period_features(
-                    source=source,
-                    entity_df=entity,
-                    period=Period.from_str(period),
-                    features=features,
-                    include=True,
-                    ttl=ttl,
-                    how="right",
-                    join_keys=join_keys,
-                )
-                tmp_result.drop(columns=[DEFAULT_EVENT_TIMESTAMP_FIELD], inplace=True)
-                tmp_result.rename(
-                    columns={QUERY_COL: DEFAULT_EVENT_TIMESTAMP_FIELD}, inplace=True
-                )  # always merge on TIME_COL
-            else:
-                tmp_result = self.get_features(
-                    source=source,
-                    entity_df=entity,
-                    features=features,
-                    include=True,
-                    ttl=ttl,
-                    how="right",
-                    join_keys=join_keys,
-                )
-            label_views_pd = label_views_pd.merge(tmp_result, how="left", on=list(entity.columns))
-            label_views_pd[DEFAULT_EVENT_TIMESTAMP_FIELD] = pd.to_datetime(
-                label_views_pd[DEFAULT_EVENT_TIMESTAMP_FIELD], utc=True
-            )
-        return feature_views_pd[feature_list], label_views_pd[label_list]
-
     def get_period_features(
         self,
         entity_df: Union[pd.DataFrame, Query, SqlSource],
@@ -431,9 +370,11 @@ class OfflinePostgresStore(OfflineStore):
         include: bool = True,
         **kwargs,
     ):
+        entity_cols = kwargs.pop("entity_cols", [])
+        source_df = self.read(source=source, features=features, join_keys=join_keys + entity_cols)
 
-        source_df = self.read(source=source, features=features, join_keys=join_keys)
-        entity_df, table_name = self._get_entity(entity_df, source, join_keys)
+        residue = [c for c in entity_df.columns if c not in join_keys + [DEFAULT_EVENT_TIMESTAMP_FIELD]]
+        entity_df, table_name = self._get_entity(entity_df, source, join_keys, residue=residue)
 
         sql_query = self._point_on_time_join(
             entity_df=entity_df,
@@ -449,14 +390,21 @@ class OfflinePostgresStore(OfflineStore):
         feature_names = [feature.name for feature in features]
         sql_result = sql_query.select(
             Parameter(
-                f"{','.join(join_keys + [ENTITY_EVENT_TIMESTAMP_FIELD,SOURCE_EVENT_TIMESTAMP_FIELD] + feature_names)}"
+                f"{','.join(list(set(join_keys + entity_cols))+ [ENTITY_EVENT_TIMESTAMP_FIELD,SOURCE_EVENT_TIMESTAMP_FIELD] + list(set(feature_names+residue)))}"
             )
         )
         df = self._get_dataframe(
-            join_keys, [QUERY_COL, DEFAULT_EVENT_TIMESTAMP_FIELD], feature_names, sql_result
+            list(set(join_keys + entity_cols)),
+            [QUERY_COL, DEFAULT_EVENT_TIMESTAMP_FIELD],
+            list(set(feature_names + residue)),
+            sql_result,
         )
         self._drop_table(table_name)
-        return df
+        return df.sort_values(
+            by=list(set(join_keys + entity_cols)) + [QUERY_COL, DEFAULT_EVENT_TIMESTAMP_FIELD],
+            ascending=True,
+            ignore_index=True,
+        )
 
     def query(self, query: str, return_df: bool = True, *args, **kwargs):
         with self.psy_conn.cursor() as cursor:
