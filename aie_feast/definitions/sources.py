@@ -1,11 +1,19 @@
 from typing import Dict, List, Optional, Any
 from pydantic import BaseModel, Field
 from enum import Enum
-from aie_feast.definitions import FeatureSchema, OfflineStoreType
 from aie_feast.common.utils import read_file
+
+from .offline_store import OfflineStoreType
+from .features import FeatureSchema
 
 
 class Source(BaseModel):
+    """An abstract class which describe the common part of a Source. A source usually defines where to access data and what the time semantic it has. In F2AI, we have 2 kinds of time semantic:
+
+    1. timestamp_field: the event timestamp which represent when the record happened, which is the main part of point-in-time join.
+    2. created_timestamp_field: the created timestamp which represent when the record created, which usually happened in multi cycles of feature generation scenario.
+    """
+
     name: str
     description: Optional[str]
     timestamp_field: Optional[str]

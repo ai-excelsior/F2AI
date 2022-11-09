@@ -1,9 +1,17 @@
 import pandas as pd
 from typing import List, Optional, Set
-from aie_feast.common.source import FileSource
 from aie_feast.common.utils import get_stats_result
-from aie_feast.definitions import Feature, Entity, Period, FeatureView, LabelView, Service
-from .offline_store import OfflineStore, OfflineStoreType
+from aie_feast.definitions import (
+    Feature,
+    Entity,
+    Period,
+    FeatureView,
+    LabelView,
+    Service,
+    OfflineStoreType,
+    OfflineStore,
+    FileSource,
+)
 
 
 DEFAULT_EVENT_TIMESTAMP_FIELD = "event_timestamp"

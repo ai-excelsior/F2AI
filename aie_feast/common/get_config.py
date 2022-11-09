@@ -1,12 +1,15 @@
 import os
 import glob
 from typing import List, Dict
-from aie_feast.offline_stores.offline_file_store import OfflineFileStore
-from aie_feast.offline_stores.offline_postgres_store import OfflinePostgresStore
-from aie_feast.offline_stores.offline_spark_store import OfflineSparkStore
-from aie_feast.definitions import OfflineStoreType, Entity, FeatureView, LabelView, Service
-
-from .source import Source, parse_source_yaml
+from aie_feast.definitions import (
+    OfflineStoreType,
+    Entity,
+    FeatureView,
+    LabelView,
+    Service,
+    Source,
+    parse_source_yaml,
+)
 from .read_file import read_yml
 from .utils import remove_prefix
 
@@ -23,25 +26,6 @@ def listdir_with_extensions(path: str, extensions: List[str] = []) -> List[str]:
 
 def listdir_yamls(path: str) -> List[str]:
     return listdir_with_extensions(path, extensions=["yml", "yaml"])
-
-
-def get_offline_store_from_cfg(url: str):
-    """connect to pgsql using configs in feature_store.yml
-
-    Args:
-        url (str): url of .yml
-    """
-    cfg = read_yml(url)
-    if cfg["offline_store"]["type"] == OfflineStoreType.FILE:
-        offline_store = OfflineFileStore()
-    elif cfg["offline_store"]["type"] == OfflineStoreType.PGSQL:
-        offline_store = OfflinePostgresStore(**cfg["offline_store"]["pgsql_conf"])
-    elif cfg["offline_store"]["type"] == OfflineStoreType.SPARK:
-        offline_store = OfflineSparkStore(type=cfg["offline_store"]["type"])
-    else:
-        raise TypeError("offline_store must be one of [file, influxdb, pgsql]")
-
-    return offline_store
 
 
 def get_service_cfg(url: str) -> Dict[str, Service]:
