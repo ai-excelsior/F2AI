@@ -22,13 +22,7 @@ from aie_feast.definitions import Feature, Period, FeatureView, LabelView, Servi
 
 
 TIME_COL = "event_timestamp"  # timestamp of action taken in original tables or period-query result, or query time in single-query result table
-CREATE_COL = "created_timestamp"  # timestamp of record of the action taken in original tables, or timestamp of action taken in single-query result table
-QUERY_COL = "query_timestamp"  # only use in period query, query time in period-query result table
-TMP_TBL = "entity_df"  # temp table upload in database
 MATERIALIZE_TIME = "materialize_time"  # timestamp to done materialize, only used in materialized result
-ENTITY_EVENT_TIMESTAMP_FIELD = "_entity_event_timestamp_"
-SOURCE_EVENT_TIMESTAMP_FIELD = "_source_event_timestamp_"
-
 
 class FeatureStore:
     def __init__(self, project_folder=None, url=None, token=None, projectID=None):
@@ -315,7 +309,6 @@ class FeatureStore:
             **kwargs,
         )
 
-    # def materialize(self, service_name: str, incremental_begin: str = None):
     def materialize(self, service_name: str, fromnow: str = None):
         """incrementally join `views` to generate tables
 
