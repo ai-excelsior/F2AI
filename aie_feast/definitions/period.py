@@ -5,7 +5,9 @@ import re
 from datetime import timedelta
 
 
-class AvaliablePeriods(Enum):
+class AvailablePeriods(Enum):
+    """Available Period definitions which supported by F2AI."""
+
     YEARS = "years"
     MONTHS = "months"
     WEEKS = "weeks"
@@ -19,8 +21,10 @@ class AvaliablePeriods(Enum):
 
 
 class Period(BaseModel):
+    """A wrapper of different representations of a time range. Useful to convert to underline utils like pandas DateOffset, Postgres interval strings."""
+
     n: int = 1
-    unit: AvaliablePeriods = AvaliablePeriods.DAYS
+    unit: AvailablePeriods = AvailablePeriods.DAYS
 
     def __init__(__pydantic_self__, **data: Any) -> None:
         if not data.get("unit", "s").endswith("s"):
@@ -46,15 +50,15 @@ class Period(BaseModel):
         return f"interval '{self.n} {self.unit.value}'"
 
     def to_py_timedelta(self):
-        if self.unit == AvaliablePeriods.YEARS:
+        if self.unit == AvailablePeriods.YEARS:
             return timedelta(days=365 * self.n)
-        if self.unit == AvaliablePeriods.MONTHS:
+        if self.unit == AvailablePeriods.MONTHS:
             return timedelta(days=30 * self.n)
         return timedelta(**{self.unit.value: self.n})
 
     @classmethod
     def from_str(cls, s: str):
-        """Construct a period from str, egg: 10 years, 1day
+        """Construct a period from str, egg: 10 years, 1day, -1 month.
 
         Args:
             s (str): string representation of a period

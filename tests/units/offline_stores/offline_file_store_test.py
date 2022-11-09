@@ -4,7 +4,7 @@ from aie_feast.offline_stores.offline_file_store import (
     ENTITY_EVENT_TIMESTAMP_FIELD,
     SOURCE_EVENT_TIMESTAMP_FIELD,
 )
-from aie_feast.period import Period
+from aie_feast.definitions import Period
 
 mock_point_in_time_filter_df = pd.DataFrame(
     {

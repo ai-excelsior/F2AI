@@ -6,10 +6,9 @@ from copy import deepcopy
 from typing import List, Optional, Set, TYPE_CHECKING, Union
 from pydantic import Field, PrivateAttr
 from pypika import Query, Parameter, functions as fn, JoinType
-from aie_feast.definitions import Feature, Entity
+from aie_feast.definitions import Feature, Entity, Period
 from aie_feast.common.source import SqlSource
 from aie_feast.common.utils import build_agg_query, build_filter_time_query
-from aie_feast.period import Period
 from aie_feast.common.utils import convert_dtype_to_sqlalchemy_type
 from .offline_store import OfflineStore, OfflineStoreType
 from aie_feast.views import LabelView, FeatureView
