@@ -1,43 +1,30 @@
 import pytest
-import subprocess
 import os
+
+from .git_utils import git_clean, git_clone, git_reset, git_pull
+from .constants import TEMP_DIR
+
 
 GUIZHOU_TRAFFIC_CFG = {
     "repo": "git@code.unianalysis.com:f2ai-examples/guizhou_traffic.git",
     "infra": {
         "file": {
-            "cwd": "/tmp/f2ai-credit-guizhou_traffic_file",
+            "cwd": os.path.join(TEMP_DIR, "f2ai-credit-guizhou_traffic_file"),
             "branch": "main",
         },
         "pgsql": {
-            "cwd": "/tmp/f2ai-guizhou_traffic_pgsql",
+            "cwd": os.path.join(TEMP_DIR, "f2ai-guizhou_traffic_pgsql"),
             "branch": "ver_pgsql",
         },
     },
 }
 
 
-def git_clone(cwd: str, repo: str, branch: str):
-    return subprocess.run(
-        ["git", "clone", "--branch", branch, "--depth", "1", repo, cwd],
-        check=True,
-    )
-
-
-def git_reset(cwd: str, branch: str, mode: str = "hard"):
-    return subprocess.run(["git", "reset", f"--{mode}", branch], cwd=cwd, check=True)
-
-
-def git_clean(cwd: str):
-    return subprocess.run(["git", "clean", "-df"], cwd=cwd, check=True)
-
-
-def git_pull(cwd: str, branch: str):
-    return subprocess.run(["git", "pull", "--rebase", "origin", branch], cwd=cwd, check=True)
-
-
 @pytest.fixture(scope="session")
 def make_guizhou_traffic():
+    if not os.path.exists(TEMP_DIR):
+        os.makedirs(TEMP_DIR)
+
     def get_guizhou_traffic(infra="file"):
         repo = GUIZHOU_TRAFFIC_CFG["repo"]
         infra = GUIZHOU_TRAFFIC_CFG["infra"][infra]
