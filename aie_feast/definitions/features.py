@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from .dtypes import FeatureDTypes, NUMERIC_FEATURE_D_TYPES
 
 if TYPE_CHECKING:
-    from ..views import BaseView
+    from .base_view import BaseView
 
 
 class SchemaType(str, Enum):
@@ -83,7 +83,7 @@ class SchemaAnchor(BaseModel):
         Returns:
             List[Feature]
         """
-        from aie_feast.views import FeatureView
+        from .feature_view import FeatureView
 
         view: BaseView = views[self.view_name]
         schema_type = SchemaType.FEATURE if isinstance(view, FeatureView) else SchemaType.LABEL
