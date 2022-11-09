@@ -322,27 +322,27 @@ class FeatureStore:
             **kwargs,
         )
 
-    def materialize(self, service_name: str, fromnow: str = None):
-        """incrementally join `views` to generate tables
+    # def materialize(self, service_name: str, fromnow: str = None):
+    #     """incrementally join `views` to generate tables
 
-        Args:
-            service_name (str): name of service to materialize
-            incremental_begin (str): begin of materialization
-                `None`: all-data for type=file, otherwise last materialzation time
-                date-like str: corresponding date, e.g.: `2020-01-03 00:09:08`
-                int-like + fre str:  latest int freq, e.g.: `30 days`
+    #     Args:
+    #         service_name (str): name of service to materialize
+    #         incremental_begin (str): begin of materialization
+    #             `None`: all-data for type=file, otherwise last materialzation time
+    #             date-like str: corresponding date, e.g.: `2020-01-03 00:09:08`
+    #             int-like + fre str:  latest int freq, e.g.: `30 days`
 
-        """
+    #     """
 
-        if self.offline_store.type == "file":
-            # self._offline_record_materialize(self.services[service_name], incremental_begin)
-            self._offline_record_materialize(self.services[service_name], incremental_begin=fromnow)
+    #     if self.offline_store.type == "file":
+    #         # self._offline_record_materialize(self.services[service_name], incremental_begin)
+    #         self._offline_record_materialize(self.services[service_name], incremental_begin=fromnow)
 
-        elif self.offline_store.type == "pgsql":
-            self._offline_pgsql_materialize(self.services[service_name], fromnow=fromnow)
-            # self._offline_pgsql_materialize_dbt(self.services[service_name], incremental_begin)
+    #     elif self.offline_store.type == "pgsql":
+    #         self._offline_pgsql_materialize(self.services[service_name], fromnow=fromnow)
+    #         # self._offline_pgsql_materialize_dbt(self.services[service_name], incremental_begin)
 
-    def materialize_new(self, service_name: str, start: str = None, end: str = None, fromnow: str = None):
+    def materialize(self, service_name: str, start: str = None, end: str = None, fromnow: str = None):
         """incrementally join `views` to generate tables
 
         Args:
@@ -472,37 +472,6 @@ class FeatureStore:
         self.schedule_local_dbt_container(service.materialize_path, json_var, dbt_path)
         # os.system(f"cd {dbt_path} && dbt run --profiles-dir {dbt_path} --vars '{json_var}' ")
 
-    def _offline_pgsql_materialize(
-        self, service: Service, start: str = None, end: str = None, fromnow: str = None
-    ):
-        try:
-            start = pd.to_datetime(start, utc=True) if start else None
-            end = pd.to_datetime(end, utc=True) if end else None
-        except:
-            raise TypeError("please check your `start` ,`end` type")
-
-        try:
-            fromnow = (
-                pd.to_datetime(datetime.now()) - Period.from_str(fromnow).to_py_timedelta()
-                if fromnow
-                else None
-            )
-        except:
-            raise TypeError("please check your `fromnow` type")
-
-        result = self.offline_store.materialize(
-            service=service,
-            feature_views=self.feature_views,
-            label_views=self.label_views,
-            sources=self.sources,
-            entities=self.entities,
-            start=start,
-            end=end,
-            fromnow=fromnow,
-        )
-
-        return result
-
     def schedule_local_dbt_container(self, profile_name: str, vars: Dict, dbt_path: str):
         docker_client = docker.from_env()
         dbt_profiles = jinja_env.get_template("profiles.yaml").render(
@@ -529,37 +498,37 @@ class FeatureStore:
             remove=True,
         )
 
-    def _offline_record_materialize(self, service: Service, incremental_begin):
-        """materialize offline file
+    # def _offline_record_materialize(self, service: Service, incremental_begin):
+    #     """materialize offline file
 
-        Args:
-            service (Service): service entity
-            incremental_begin: time to begin materialize
-        """
-        try:
-            incremental_begin = pd.to_datetime(incremental_begin if incremental_begin else 0, utc=True)
-        except Exception:
-            incremental_begin = Period.from_str(incremental_begin)
-        except:
-            raise TypeError("please check your `incremental_begin` type")
+    #     Args:
+    #         service (Service): service entity
+    #         incremental_begin: time to begin materialize
+    #     """
+    #     try:
+    #         incremental_begin = pd.to_datetime(incremental_begin if incremental_begin else 0, utc=True)
+    #     except Exception:
+    #         incremental_begin = Period.from_str(incremental_begin)
+    #     except:
+    #         raise TypeError("please check your `incremental_begin` type")
 
-        joined_frame = self.offline_store.materialize(
-            service=service,
-            feature_views=self.feature_views,
-            label_views=self.label_views,
-            sources=self.sources,
-            entities=self.entities,
-            incremental_begin=incremental_begin,
-        )
-        joined_frame[MATERIALIZE_TIME] = pd.to_datetime(datetime.now(), utc=True)
-        to_file(
-            joined_frame,
-            os.path.join(self.project_folder, f"{service.materialize_path}"),
-            f"{service.materialize_path}".split(".")[-1],
-        )
-        print(
-            f"materialize done, file saved at {os.path.join(self.project_folder, service.materialize_path)}"
-        )
+    #     joined_frame = self.offline_store.materialize(
+    #         service=service,
+    #         feature_views=self.feature_views,
+    #         label_views=self.label_views,
+    #         sources=self.sources,
+    #         entities=self.entities,
+    #         incremental_begin=incremental_begin,
+    #     )
+    #     joined_frame[MATERIALIZE_TIME] = pd.to_datetime(datetime.now(), utc=True)
+    #     to_file(
+    #         joined_frame,
+    #         os.path.join(self.project_folder, f"{service.materialize_path}"),
+    #         f"{service.materialize_path}".split(".")[-1],
+    #     )
+    #     print(
+    #         f"materialize done, file saved at {os.path.join(self.project_folder, service.materialize_path)}"
+    #     )
 
     def stats(
         self,

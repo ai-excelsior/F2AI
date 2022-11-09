@@ -248,7 +248,6 @@ class OfflinePostgresStore(OfflineStore):
         df["materialize_time"] = pd.to_datetime(datetime.datetime.now(), utc=True)
 
         return df
-        # return df
 
     def stats(
         self,
