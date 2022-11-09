@@ -77,6 +77,7 @@ class OfflinePostgresStore(OfflineStore):
         alias: str = ENTITY_EVENT_TIMESTAMP_FIELD,
         **kwargs,
     ) -> Tuple(Query, str):
+
         table_name = None
         #  features = []
         if isinstance(entity_df, pd.DataFrame):
@@ -505,8 +506,8 @@ class OfflinePostgresStore(OfflineStore):
         """_summary_
 
         Args:
-            entity_df (pd.DataFrame): query condition specified by users
-            source_df (pd.DataFrame): query taken from data
+            entity_df (Query): query condition specified by users
+            source_df (Query): query taken from data
             created_timestamp_field (Optional[str], optional): timestamp of upload of datas. Defaults to None.
             ttl (Optional[Period], optional): requirement of timeliness of featureview . Defaults to None means no requirement
             join_keys (List[str], optional): intersection of entities defined in yaml and entity_df.columns. Defaults to [].
@@ -541,8 +542,8 @@ class OfflinePostgresStore(OfflineStore):
     @classmethod
     def _point_on_time_join(
         cls,
-        entity_df: pd.DataFrame,
-        source_df: pd.DataFrame,
+        entity_df: Query,
+        source_df: Query,
         period: Period,
         created_timestamp_field: Optional[str] = None,
         ttl: Optional[Period] = None,
@@ -553,8 +554,8 @@ class OfflinePostgresStore(OfflineStore):
         """_summary_
 
         Args:
-            entity_df (pd.DataFrame): query condition specified by users
-            source_df (pd.DataFrame): query taken from data
+            entity_df (Query): query condition specified by users
+            source_df (Query): query taken from data
             period (Period): period to take, negative means look back from entity_timestamp_field, positive means look_forward from entity_timestamp_field
             created_timestamp_field (Optional[str], optional): timestamp of upload of datas. Defaults to None.
             ttl (Optional[Period], optional): requirement of timeliness of featureview . Defaults to None means no requirement
