@@ -160,9 +160,4 @@ class Dataset:
         """convert to iterablt pytorch dataset really hold data"""
         entity_index = self.sampler()
 
-        return IterableDataset(
-            fs=self.fs,
-            service=self.service,
-            entity_index=entity_index,
-            batch=batch,
-        )
+        return IterableDataset(fs=self.fs, service=self.service, entity_index=entity_index, batch=batch)
