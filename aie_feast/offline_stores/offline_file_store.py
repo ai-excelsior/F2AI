@@ -10,6 +10,8 @@ DEFAULT_EVENT_TIMESTAMP_FIELD = "event_timestamp"
 ENTITY_EVENT_TIMESTAMP_FIELD = "_entity_event_timestamp_"
 SOURCE_EVENT_TIMESTAMP_FIELD = "_source_event_timestamp_"
 QUERY_COL = "query_timestamp"
+TIME_COL = "event_timestamp"
+MATERIALIZE_TIME = "materialize_time"
 
 
 class OfflineFileStore(OfflineStore):
@@ -30,8 +32,11 @@ class OfflineFileStore(OfflineStore):
         label_views: List[LabelView],
         sources: List[FileSource],
         entities: List[Entity],
-        incremental_begin,
+        start: str = None,
+        end: str = None,
+        fromnow: str = None,
     ):
+
         all_cols_name = service.get_feature_names(feature_views) | service.get_label_names(label_views)
         label_view = service.get_label_view(label_views)
         labels = label_view.get_label_objects()
@@ -53,6 +58,15 @@ class OfflineFileStore(OfflineStore):
             joined_frame = joined_frame[joined_frame[DEFAULT_EVENT_TIMESTAMP_FIELD] >= incremental_begin]
         else:
             joined_frame = joined_frame[joined_frame[DEFAULT_EVENT_TIMESTAMP_FIELD] >= incremental_begin]
+        # if isinstance(incremental_begin, Period):
+        #     incremental_begin = joined_frame[TIME_COL].max() - incremental_begin.to_pandas_dateoffset()
+        #     joined_frame = joined_frame[joined_frame[TIME_COL] >= incremental_begin]
+        # else:
+        #     joined_frame = joined_frame[joined_frame[TIME_COL] >= incremental_begin]
+        if start and end:
+            joined_frame = joined_frame[(joined_frame[TIME_COL] >= start) & (joined_frame[TIME_COL] <= end)]
+        elif fromnow:
+            joined_frame = joined_frame[joined_frame[TIME_COL] >= fromnow]
 
         # join features dataframe
         for feature_view in service.get_feature_views(feature_views):
@@ -80,6 +94,16 @@ class OfflineFileStore(OfflineStore):
                     include=True,
                     how="right",
                 )
+
+        # joined_frame[MATERIALIZE_TIME] = pd.to_datetime(datetime.now(), utc=True)
+        # to_file(
+        #     joined_frame,
+        #     os.path.join(self.project_folder, f"{service.materialize_path}"),
+        #     f"{service.materialize_path}".split(".")[-1],
+        # )
+        # print(
+        #     f"materialize done, file saved at {os.path.join(self.project_folder, service.materialize_path)}"
+        # )
         return joined_frame
 
     def get_features(

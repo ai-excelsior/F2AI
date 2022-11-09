@@ -177,13 +177,13 @@ class OfflinePostgresStore(OfflineStore):
         fromnow: str,
     ):
 
-        label_view = service.get_label_view(label_views)
+        label_view = service.get_label_views(label_views)
         feature_views = service.get_feature_views(feature_views)
-        labels = label_view.get_label_objects()
-        all_entity_cols = [entities[entity].join_keys[0] for entity in label_view.entities]
+        labels = label_view[0].get_label_objects()
+        all_entity_cols = [entities[entity].join_keys[0] for entity in label_view[0].entities]
         all_feature_names = set([label.name for label in labels])
         entity_dataframe = self.read(
-            source=sources[label_view.batch_source],
+            source=sources[label_view[0].batch_source],
             features=labels,
             join_keys=all_entity_cols,
             alias=ENTITY_EVENT_TIMESTAMP_FIELD,

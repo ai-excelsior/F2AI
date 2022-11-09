@@ -342,6 +342,57 @@ class FeatureStore:
             self._offline_pgsql_materialize(self.services[service_name], fromnow=fromnow)
             # self._offline_pgsql_materialize_dbt(self.services[service_name], incremental_begin)
 
+    def materialize_new(self, service_name: str, start: str = None, end: str = None, fromnow: str = None):
+        """incrementally join `views` to generate tables
+
+        Args:
+            service_name (str): name of service to materialize
+            start (str): begin of materialization
+            end(str):end of materialization
+            fromnow(str) : time interval from now
+
+        """
+
+        try:
+            start = pd.to_datetime(start, utc=True) if start else None
+            end = pd.to_datetime(end, utc=True) if end else None
+        except:
+            raise TypeError("please check your `start` ,`end` type")
+
+        try:
+            fromnow = (
+                pd.to_datetime(datetime.now()) - Period.from_str(fromnow).to_py_timedelta()
+                if fromnow
+                else None
+            )
+        except:
+            raise TypeError("please check your `fromnow` type")
+
+        result = self.offline_store.materialize(
+            service=self.services[service_name],
+            feature_views=self.feature_views,
+            label_views=self.label_views,
+            sources=self.sources,
+            entities=self.entities,
+            start=start,
+            end=end,
+            fromnow=fromnow,
+        )
+
+        if self.offline_store.type == "file":
+            result[MATERIALIZE_TIME] = pd.to_datetime(datetime.now(), utc=True)
+            to_file(
+                result,
+                os.path.join(self.project_folder, f"{service_name.materialize_path}"),
+                f"{service_name.materialize_path}".split(".")[-1],
+            )
+            print(
+                f"materialize done, file saved at {os.path.join(self.project_folder, service_name.materialize_path)}"
+            )
+
+        elif self.offline_store.type == "pgsql":
+            pass
+
     def _offline_pgsql_materialize_dbt(self, service: Service, incremental_begin):
         try:
             incremental_begin = pd.to_datetime(incremental_begin, utc=True) if incremental_begin else None
