@@ -108,21 +108,3 @@ def test_materialize(make_guizhou_traffic):
         number=2,
     )
     print(f"materialize performance pgsql: {measured_time}s")
-
-
-# def test_dataset_to_pytorch_pgsql(make_guizhou_traffic):
-#     project_folder = make_guizhou_traffic("pgsql")
-#     store = FeatureStore(project_folder)
-#     ds = store.get_dataset(
-#         service_name="traval_time_prediction_embedding_v1",
-#         sampler=GroupFixednbrSampler(
-#             time_bucket="12 hours",
-#             stride=1,
-#             group_ids=None,
-#             group_names=None,
-#             start="2016-03-01 08:02:00",
-#             end="2016-07-01 00:00:00",
-#         ),
-#     )
-#     measured_time = timeit.timeit(lambda: list(ds.to_pytorch()), number=1)
-#     print(f"dataset.to_pytorch pgsql performance: {measured_time}s")

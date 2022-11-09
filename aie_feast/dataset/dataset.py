@@ -102,6 +102,7 @@ class IterableDataset(IterableDataset):
                     entity_cols=entity_cols,
                 )
             label_views_pd[TIME_COL] = pd.to_datetime(label_views_pd[TIME_COL], utc=True)
+
         self.data_sample = (
             feature_views_pd[
                 entity_cols + [TIME_COL] + list(self.service.get_feature_names(self.fs.feature_views))
