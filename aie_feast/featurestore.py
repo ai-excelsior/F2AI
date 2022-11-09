@@ -79,6 +79,7 @@ class FeatureStore:
             views (_type_): FeatureView, LabelView or Service
             features (list, optional): feature(label) to use
             is_numeric (bool, optional): whether return numeric feature(label) only
+            choose: whether to return features or labels or both
 
         Returns:
             _type_: corresponding feature(label)
@@ -381,7 +382,7 @@ class FeatureStore:
         entity_names = list(service.get_entities(self.feature_views, self.label_views))
         entities_dict = {entity_name: self.entities[entity_name].join_keys[0] for entity_name in entity_names}
 
-        conn = psy_conn(self.offline_store)
+        conn = self.offline_store.psy_conn(self.offline_store)
 
         max_timestamp, max_timestamp_label = self.offline_store.materialize_dbt(
             service=service,
