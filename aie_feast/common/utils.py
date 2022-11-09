@@ -6,8 +6,7 @@ from pandas._libs.tslibs.timestamps import Timestamp
 import oss2
 import os
 
-FSKEY = "__FS__"
-TIME_COL = "event_timestamp"
+
 ENTITY_EVENT_TIMESTAMP_FIELD = "_entity_event_timestamp_"
 SOURCE_EVENT_TIMESTAMP_FIELD = "_source_event_timestamp_"
 

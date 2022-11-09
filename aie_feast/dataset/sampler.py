@@ -2,7 +2,7 @@ from typing import List
 
 
 class AbstractSampler:
-    def __init__(self, time_bucket: str = "1day", random_seed: int = 666, stride: int = 1):
+    def __init__(self, time_bucket: str = "1 day", random_seed: int = 666, stride: int = 1):
         self.time_bucket = time_bucket
         self.random_seed = random_seed
         self.stride = stride
