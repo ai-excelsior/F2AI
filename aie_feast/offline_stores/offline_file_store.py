@@ -1,5 +1,5 @@
 import pandas as pd
-from typing import List, Optional, Set
+from typing import List, Optional, Set, Dict
 from aie_feast.common.utils import get_stats_result
 from aie_feast.definitions import (
     Feature,
@@ -36,22 +36,22 @@ class OfflineFileStore(OfflineStore):
     def materialize(
         self,
         service: Service,
-        feature_views: List[FeatureView],
-        label_views: List[LabelView],
-        sources: List[FileSource],
-        entities: List[Entity],
+        feature_views: Dict[str, FeatureView],
+        label_views: Dict[str, LabelView],
+        sources: Dict[str, FileSource],
+        entities: Dict[str, Entity],
         start: str = None,
         end: str = None,
         fromnow: str = None,
     ):
 
         all_cols_name = service.get_feature_names(feature_views) | service.get_label_names(label_views)
-        label_view = service.get_label_view(label_views)
-        labels = label_view.get_label_objects()
+        label_view = service.get_label_views(label_views)[0]
+        labels = service.get_label_objects(label_views)
         join_keys = list(
             {
                 join_key
-                for entity_name in service.get_label_entities(label_view)
+                for entity_name in service.get_label_entities(label_views)
                 for join_key in entities[entity_name].join_keys
             }
         )

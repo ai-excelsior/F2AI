@@ -107,20 +107,20 @@ class Service(BaseModel):
             for entity in feature_view.entities
         }
 
-    def get_label_entities(self, label_views: Dict[str, LabelView]) -> Set[Entity]:
+    def get_label_entities(self, label_views: Dict[str, LabelView]) -> Set[str]:
         """Get all entities which appeared in related label views to this service and without duplicate entity.
 
         Args:
             label_views (Dict[str, LabelView])
 
         Returns:
-            Set[Entity]
+            Set[str]
         """
         return {entity for label_view in self.get_label_views(label_views) for entity in label_view.entities}
 
     def get_entities(
         self, feature_views: Dict[str, FeatureView], label_views: Dict[str, LabelView]
-    ) -> Set[Entity]:
+    ) -> Set[str]:
         """Get all entities which appeared in this service and without duplicate entity.
 
         Args:
@@ -128,7 +128,7 @@ class Service(BaseModel):
             label_views (Dict[str, LabelView])
 
         Returns:
-            Set[Entity]
+            Set[str]
         """
         return self.get_feature_entities(feature_views).union(self.get_label_entities(label_views))
 
