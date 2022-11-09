@@ -4,7 +4,7 @@ import json
 import docker
 from datetime import datetime
 from aie_feast.common.jinja import jinja_env
-from typing import Dict, List, Union, Optional
+from typing import Dict, List, Union
 from aie_feast.common.source import FileSource
 from aie_feast.dataset.dataset import Dataset
 from aie_feast.common.get_config import (
