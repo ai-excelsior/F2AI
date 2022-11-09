@@ -115,7 +115,7 @@ class OfflineFileStore(OfflineStore):
         ttl: Optional[Period] = None,
         include: bool = True,
         **kwargs,
-    ):
+    ) -> pd.DataFrame:
         source_df = self._read_file(
             source=source, features=features, join_keys=join_keys + kwargs.pop("entity_cols", [])
         )
@@ -141,7 +141,7 @@ class OfflineFileStore(OfflineStore):
         ttl: Optional[Period] = None,
         include: bool = True,
         **kwargs,
-    ):
+    ) -> pd.DataFrame:
         source_df = self._read_file(
             source=source, features=features, join_keys=join_keys + kwargs.pop("entity_cols", [])
         )
@@ -169,7 +169,7 @@ class OfflineFileStore(OfflineStore):
         include: str = "both",
         keys_only: bool = False,
         join_keys: bool = False,
-    ):
+    ) -> pd.DataFrame:
         source_df = self._read_file(source=source, features=features, join_keys=group_keys)
 
         feature_columns = [feature.name for feature in features]
@@ -203,7 +203,9 @@ class OfflineFileStore(OfflineStore):
             )
         return result
 
-    def get_latest_entities(self, source: FileSource, group_keys: list, entity_df: pd.DataFrame = None):
+    def get_latest_entities(
+        self, source: FileSource, group_keys: list, entity_df: pd.DataFrame = None
+    ) -> pd.DataFrame:
         source_df = self._read_file(source=source, features=[], join_keys=group_keys)
         if entity_df is not None:
             source_df = source_df.merge(entity_df, on=group_keys, how="inner")
@@ -234,7 +236,7 @@ class OfflineFileStore(OfflineStore):
         join_keys: List[str] = [],
         include: bool = True,
         how: str = "inner",
-    ):
+    ) -> pd.DataFrame:
         # renames to keep things simple
         if timestamp_field:
             entity_df = entity_df.rename(
@@ -278,7 +280,7 @@ class OfflineFileStore(OfflineStore):
         join_keys: List[str] = [],
         include: bool = True,
         how: str = "inner",
-    ):
+    ) -> pd.DataFrame:
         # renames to keep things simple
         entity_df = entity_df.rename(columns={DEFAULT_EVENT_TIMESTAMP_FIELD: ENTITY_EVENT_TIMESTAMP_FIELD})
         source_df = source_df.rename(columns={timestamp_field: SOURCE_EVENT_TIMESTAMP_FIELD})
@@ -320,7 +322,7 @@ class OfflineFileStore(OfflineStore):
         ttl: Optional[Period] = None,
         entity_timestamp_field: str = ENTITY_EVENT_TIMESTAMP_FIELD,
         source_timestamp_field: str = SOURCE_EVENT_TIMESTAMP_FIELD,
-    ):
+    ) -> pd.DataFrame:
         """filter the joined results within [entity_timestamp - ttl, entity_timestamp]"""
 
         earliest_timestamp = None
@@ -346,7 +348,7 @@ class OfflineFileStore(OfflineStore):
         ttl: Optional[Period] = None,
         entity_timestamp_field: str = ENTITY_EVENT_TIMESTAMP_FIELD,
         source_timestamp_field: str = SOURCE_EVENT_TIMESTAMP_FIELD,
-    ):
+    ) -> pd.DataFrame:
         """filter the joined results within [entity_timestamp - ttl, entity_timestamp]"""
 
         earliest_timestamp = None
@@ -395,7 +397,7 @@ class OfflineFileStore(OfflineStore):
         created_timestamp_field: Optional[str] = None,
         entity_timestamp_field: str = ENTITY_EVENT_TIMESTAMP_FIELD,
         source_timestamp_field: str = SOURCE_EVENT_TIMESTAMP_FIELD,
-    ):
+    ) -> pd.DataFrame:
         sort_by = [source_timestamp_field]
         if created_timestamp_field:
             sort_by.append(created_timestamp_field)
@@ -416,7 +418,7 @@ class OfflineFileStore(OfflineStore):
         created_timestamp_field: Optional[str] = None,
         entity_timestamp_field: str = ENTITY_EVENT_TIMESTAMP_FIELD,
         source_timestamp_field: str = SOURCE_EVENT_TIMESTAMP_FIELD,
-    ):
+    ) -> pd.DataFrame:
         if created_timestamp_field:
             df.sort_values(
                 by=[created_timestamp_field],

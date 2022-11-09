@@ -175,7 +175,7 @@ class FeatureStore:
         features: list = None,
         include: bool = True,
         **kwargs,
-    ):
+    ) -> pd.DataFrame:
         """non-series prediction use: get `features` of `entity_df` from `feature_views`
 
         Args:
@@ -216,7 +216,7 @@ class FeatureStore:
         features: List[str] = None,
         include: bool = True,
         **kwargs,
-    ):
+    ) -> pd.DataFrame:
         """time_series prediction use: get past `period` length `features` of `entity_df` from `feature_views`
 
         Args:
@@ -256,7 +256,7 @@ class FeatureStore:
         entity_df: pd.DataFrame,
         include: bool = True,
         **kwargs,
-    ):
+    ) -> pd.DataFrame:
         """non-time series prediction use: get labels of `entity_df` from `label_views`
 
         Args:
@@ -267,8 +267,10 @@ class FeatureStore:
         self.__check_format(entity_df)
         label_view = self._get_views(label_view)
         assert isinstance(label_view, (LabelView, Service)), "only allowed LabelView and Service"
+
         feature_objects = self._get_feature_to_use(label_view, choose="labels")
         join_keys = self._get_keys_to_join(label_view, list(entity_df.columns))
+
         if isinstance(label_view, (FeatureView, LabelView)):
             source = self.sources[label_view.batch_source]
         else:
@@ -291,7 +293,7 @@ class FeatureStore:
         period: str,
         include: bool = False,
         **kwargs,
-    ):
+    ) -> pd.DataFrame:
         """time series prediction use: get from `start` to `end` length labels of `entity_df` from `label_views`
 
         Args:
@@ -541,7 +543,7 @@ class FeatureStore:
         end: str = None,
         include: str = "both",
         keys_only: bool = False,
-    ):
+    ) -> pd.DataFrame:
         """get from `start` to `end` statistical `fn` results of `entity_df` from `views`, only work for numeric features varied with time
 
         Args:
@@ -599,7 +601,7 @@ class FeatureStore:
 
     def get_latest_entities(
         self, view: Union[str, LabelView, Service, FeatureView], entity: pd.DataFrame = None
-    ):
+    ) -> pd.DataFrame:
         """get latest entity and its timestamp from a single FeatureViews/LabelViews or a materialzed Service
         entity can either be None(all joined-entities in view), entity names or entity value(specific entities)
 
@@ -632,7 +634,7 @@ class FeatureStore:
         """
         return Dataset(fs=self, service=self.services[service_name], sampler=sampler)
 
-    def query(self, *args, **kwargs):
+    def query(self, *args, **kwargs) -> pd.DataFrame:
         """Run a query though different types of offline store.
         The usecase of this method is highly depending on different types of offline store.
         """
