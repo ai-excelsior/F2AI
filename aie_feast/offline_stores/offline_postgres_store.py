@@ -60,7 +60,7 @@ class OfflinePostgresStore(OfflineStore):
         return SqlSource(
             name=service.name,
             query=service.materialize_path,
-            timestamp_field="event_timestamp",
+            timestamp_field=DEFAULT_EVENT_TIMESTAMP_FIELD,
             created_timestamp_field="materialize_time",
         )
 
