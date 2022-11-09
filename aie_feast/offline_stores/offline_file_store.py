@@ -287,7 +287,7 @@ class OfflineFileStore(OfflineStore):
             }
         )
         return df.sort_values(
-            by=[QUERY_COL, DEFAULT_EVENT_TIMESTAMP_FIELD], ascending=False, ignore_index=True
+            by=[QUERY_COL, DEFAULT_EVENT_TIMESTAMP_FIELD], ascending=True, ignore_index=True
         )
 
     @classmethod
