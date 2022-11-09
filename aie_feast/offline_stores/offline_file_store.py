@@ -5,13 +5,12 @@ from aie_feast.common.utils import get_stats_result
 from aie_feast.service import Service
 from aie_feast.definitions import Feature, Entity, Period, FeatureView, LabelView
 from .offline_store import OfflineStore, OfflineStoreType
-from copy import deepcopy
 
 
-TIME_COL = "event_timestamp"
+DEFAULT_EVENT_TIMESTAMP_FIELD = "event_timestamp"
+DEFAULT_CREATED_TIMESTAMP_FIELD = "created_timestamp"
 ENTITY_EVENT_TIMESTAMP_FIELD = "_entity_event_timestamp_"
 SOURCE_EVENT_TIMESTAMP_FIELD = "_source_event_timestamp_"
-SOURCE_CREATED_TIMESTAMP_FIELD = "_created_timestamp_"
 QUERY_COL = "query_timestamp"
 
 
@@ -50,10 +49,12 @@ class OfflineFileStore(OfflineStore):
         # create timestamp makes no sense to labels
         joined_frame.drop(columns=source.created_timestamp_field, inplace=True, errors="ignore")
         if isinstance(incremental_begin, Period):
-            incremental_begin = joined_frame[TIME_COL].max() - incremental_begin.to_pandas_dateoffset()
-            joined_frame = joined_frame[joined_frame[TIME_COL] >= incremental_begin]
+            incremental_begin = (
+                joined_frame[DEFAULT_EVENT_TIMESTAMP_FIELD].max() - incremental_begin.to_pandas_dateoffset()
+            )
+            joined_frame = joined_frame[joined_frame[DEFAULT_EVENT_TIMESTAMP_FIELD] >= incremental_begin]
         else:
-            joined_frame = joined_frame[joined_frame[TIME_COL] >= incremental_begin]
+            joined_frame = joined_frame[joined_frame[DEFAULT_EVENT_TIMESTAMP_FIELD] >= incremental_begin]
 
         # join features dataframe
         for feature_view in service.get_feature_views(feature_views):
@@ -151,7 +152,7 @@ class OfflineFileStore(OfflineStore):
 
         feature_columns = [feature.name for feature in features]
 
-        entity_df = entity_df.rename(columns={TIME_COL: ENTITY_EVENT_TIMESTAMP_FIELD})
+        entity_df = entity_df.rename(columns={DEFAULT_EVENT_TIMESTAMP_FIELD: ENTITY_EVENT_TIMESTAMP_FIELD})
         source_df = source_df.rename(columns={source.timestamp_field: SOURCE_EVENT_TIMESTAMP_FIELD})
 
         if join_keys:
@@ -214,7 +215,9 @@ class OfflineFileStore(OfflineStore):
     ):
         # renames to keep things simple
         if timestamp_field:
-            entity_df = entity_df.rename(columns={TIME_COL: ENTITY_EVENT_TIMESTAMP_FIELD})
+            entity_df = entity_df.rename(
+                columns={DEFAULT_EVENT_TIMESTAMP_FIELD: ENTITY_EVENT_TIMESTAMP_FIELD}
+            )
             source_df = source_df.rename(columns={timestamp_field: SOURCE_EVENT_TIMESTAMP_FIELD})
 
         if created_timestamp_field:
@@ -239,7 +242,7 @@ class OfflineFileStore(OfflineStore):
 
         return df.drop(
             columns=[SOURCE_EVENT_TIMESTAMP_FIELD, created_timestamp_field], errors="ignore"
-        ).rename(columns={ENTITY_EVENT_TIMESTAMP_FIELD: TIME_COL})
+        ).rename(columns={ENTITY_EVENT_TIMESTAMP_FIELD: DEFAULT_EVENT_TIMESTAMP_FIELD})
 
     @classmethod
     def _point_on_time_join(
@@ -255,7 +258,7 @@ class OfflineFileStore(OfflineStore):
         how: str = "inner",
     ):
         # renames to keep things simple
-        entity_df = entity_df.rename(columns={TIME_COL: ENTITY_EVENT_TIMESTAMP_FIELD})
+        entity_df = entity_df.rename(columns={DEFAULT_EVENT_TIMESTAMP_FIELD: ENTITY_EVENT_TIMESTAMP_FIELD})
         source_df = source_df.rename(columns={timestamp_field: SOURCE_EVENT_TIMESTAMP_FIELD})
 
         if created_timestamp_field:
@@ -278,9 +281,14 @@ class OfflineFileStore(OfflineStore):
         df = cls._point_on_time_latest(df, join_keys, created_timestamp_field)
 
         df = df.drop(columns=[created_timestamp_field], errors="ignore").rename(
-            columns={ENTITY_EVENT_TIMESTAMP_FIELD: QUERY_COL, SOURCE_EVENT_TIMESTAMP_FIELD: TIME_COL}
+            columns={
+                ENTITY_EVENT_TIMESTAMP_FIELD: QUERY_COL,
+                SOURCE_EVENT_TIMESTAMP_FIELD: DEFAULT_EVENT_TIMESTAMP_FIELD,
+            }
         )
-        return df.sort_values(by=[QUERY_COL, TIME_COL], ascending=False, ignore_index=True)
+        return df.sort_values(
+            by=[QUERY_COL, DEFAULT_EVENT_TIMESTAMP_FIELD], ascending=False, ignore_index=True
+        )
 
     @classmethod
     def _point_in_time_filter(
