@@ -16,7 +16,6 @@ from aie_feast.common.get_config import (
     get_source_cfg,
 )
 from aie_feast.common.utils import to_file, remove_prefix
-from aie_feast.common.psl_utils import psy_conn, sql_df
 from aie_feast.common.jinja import jinja_env
 from aie_feast.definitions import Feature, Period, FeatureView, LabelView, Service
 
