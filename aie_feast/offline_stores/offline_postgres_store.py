@@ -266,6 +266,21 @@ class OfflinePostgresStore(OfflineStore):
             sql_result=result_sql,
         )
         df["materialize_time"] = pd.to_datetime(datetime.datetime.now(), utc=True)
+        df.rename(columns={ENTITY_EVENT_TIMESTAMP_FIELD: DEFAULT_EVENT_TIMESTAMP_FIELD}, inplace=True)
+
+        # engine = self.get_sqlalchemy_engine()
+        # table = self._create_sqlalchemy_table(
+        #     df, table_name=service.name, index_columns=[DEFAULT_EVENT_TIMESTAMP_FIELD] + all_entity_cols
+        # )
+        # table.create(engine, checkfirst=True)
+
+        # with self.psy_conn.cursor() as cursor:
+        #     buffer = StringIO()
+        #     df.to_csv(buffer, index=False, header=False)
+        #     buffer.seek(0)
+
+        #     cursor.copy_from(buffer, table=service.name, sep=",", columns=df.columns)
+        #     self.psy_conn.commit()
 
         return df
 
