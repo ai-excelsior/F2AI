@@ -24,6 +24,7 @@ from aie_feast.definitions import Feature, Period, FeatureView, LabelView, Servi
 TIME_COL = "event_timestamp"  # timestamp of action taken in original tables or period-query result, or query time in single-query result table
 MATERIALIZE_TIME = "materialize_time"  # timestamp to done materialize, only used in materialized result
 
+
 class FeatureStore:
     def __init__(self, project_folder=None, url=None, token=None, projectID=None):
         if project_folder:
@@ -54,7 +55,9 @@ class FeatureStore:
     def __check_format(self, entity_df):
         if isinstance(entity_df, pd.DataFrame):
             # TODO: Remove this constraint in future
-            assert TIME_COL in entity_df.columns, "Check entity_df make sure it has at least 1 columns and event_timestamp in it"
+            assert (
+                TIME_COL in entity_df.columns
+            ), "Check entity_df make sure it has at least 1 columns and event_timestamp in it"
 
     def __check_fns(self, fn):
         assert fn in [
@@ -68,7 +71,9 @@ class FeatureStore:
             "unique",
         ], f"{fn}is not a available function, you can use fs.query() to customize your function"
 
-    def _get_feature_to_use(self, views, features: list = [], is_numeric: bool = False,choose:str='both') -> List[Feature]:
+    def _get_feature_to_use(
+        self, views, features: list = [], is_numeric: bool = False, choose: str = "both"
+    ) -> List[Feature]:
         """_summary_
 
         Args:
@@ -84,15 +89,14 @@ class FeatureStore:
         elif isinstance(views, LabelView):
             buildin_features = views.get_label_objects(is_numeric)
         else:  # Service
-            if choose=='labels':
+            if choose == "labels":
                 buildin_features = views.get_label_objects(self.label_views, is_numeric)
-            elif choose=='features':
-                 buildin_features = views.get_feature_objects(self.feature_views, is_numeric)
+            elif choose == "features":
+                buildin_features = views.get_feature_objects(self.feature_views, is_numeric)
             else:
                 buildin_features = views.get_feature_objects(
                     self.feature_views, is_numeric
                 ) | views.get_label_objects(self.label_views, is_numeric)
-            
 
         if features:
             features = set(features)
@@ -141,7 +145,9 @@ class FeatureStore:
 
         return entity_names
 
-    def _get_views(self, view_name:Union[str,LabelView,Service,FeatureView]) -> Union[FeatureView, LabelView, Service]:
+    def _get_views(
+        self, view_name: Union[str, LabelView, Service, FeatureView]
+    ) -> Union[FeatureView, LabelView, Service]:
         """_summary_
 
         Args:
@@ -150,7 +156,7 @@ class FeatureStore:
         Returns:
             _type_: FeatureView, LabelView or Service
         """
-        if isinstance(view_name,(FeatureView,LabelView,Service)):
+        if isinstance(view_name, (FeatureView, LabelView, Service)):
             return view_name
 
         if view_name in self.feature_views.keys():
@@ -164,7 +170,7 @@ class FeatureStore:
 
     def get_features(
         self,
-        feature_view: Union[str,FeatureView,Service],
+        feature_view: Union[str, FeatureView, Service],
         entity_df: Union[pd.DataFrame, str],
         features: list = None,
         include: bool = True,
@@ -184,10 +190,9 @@ class FeatureStore:
         assert isinstance(
             feature_view, (FeatureView, LabelView, Service)
         ), "only allowed FeatureView, LabelView and Service"
-        feature_objects = self._get_feature_to_use(feature_view, features,choose='features')
+        feature_objects = self._get_feature_to_use(feature_view, features, choose="features")
         join_keys = self._get_keys_to_join(feature_view, list(entity_df.columns))
 
-        
         if isinstance(feature_view, (FeatureView, LabelView)):
             source = self.sources[feature_view.batch_source]
         else:
@@ -200,13 +205,12 @@ class FeatureStore:
             join_keys=join_keys,
             ttl=feature_view.ttl,
             include=include,
-
             **kwargs,
         )
 
     def get_period_features(
         self,
-        feature_view:Union[str,FeatureView,Service],
+        feature_view: Union[str, FeatureView, Service],
         entity_df: pd.DataFrame,
         period: str,
         features: List[str] = None,
@@ -226,9 +230,8 @@ class FeatureStore:
         feature_view = self._get_views(feature_view)
         assert isinstance(feature_view, (FeatureView, Service)), "only allowed FeatureView and Service"
         period = -Period.from_str(period)
-        feature_objects = self._get_feature_to_use(feature_view, features,choose='features')
+        feature_objects = self._get_feature_to_use(feature_view, features, choose="features")
         join_keys = self._get_keys_to_join(feature_view, list(entity_df.columns))
- 
 
         if isinstance(feature_view, (FeatureView, LabelView)):
             source = self.sources[feature_view.batch_source]
@@ -244,11 +247,16 @@ class FeatureStore:
             join_keys=join_keys,
             ttl=feature_view.ttl,
             include=include,
-    
             **kwargs,
         )
 
-    def get_labels(self, label_view:Union[str,LabelView,Service], entity_df: pd.DataFrame, include: bool = True, **kwargs):
+    def get_labels(
+        self,
+        label_view: Union[str, LabelView, Service],
+        entity_df: pd.DataFrame,
+        include: bool = True,
+        **kwargs,
+    ):
         """non-time series prediction use: get labels of `entity_df` from `label_views`
 
         Args:
@@ -259,7 +267,7 @@ class FeatureStore:
         self.__check_format(entity_df)
         label_view = self._get_views(label_view)
         assert isinstance(label_view, (LabelView, Service)), "only allowed LabelView and Service"
-        feature_objects = self._get_feature_to_use(label_view,choose='labels')
+        feature_objects = self._get_feature_to_use(label_view, choose="labels")
         join_keys = self._get_keys_to_join(label_view, list(entity_df.columns))
         if isinstance(label_view, (FeatureView, LabelView)):
             source = self.sources[label_view.batch_source]
@@ -277,7 +285,12 @@ class FeatureStore:
         )
 
     def get_period_labels(
-        self, label_view:Union[str,LabelView,Service], entity_df: pd.DataFrame, period: str, include: bool = False, **kwargs
+        self,
+        label_view: Union[str, LabelView, Service],
+        entity_df: pd.DataFrame,
+        period: str,
+        include: bool = False,
+        **kwargs,
     ):
         """time series prediction use: get from `start` to `end` length labels of `entity_df` from `label_views`
 
@@ -290,9 +303,9 @@ class FeatureStore:
         self.__check_format(entity_df)
         label_view = self._get_views(label_view)
         period = Period.from_str(period)
-        label_objects = self._get_feature_to_use(label_view,choose='labels')
+        label_objects = self._get_feature_to_use(label_view, choose="labels")
         join_keys = self._get_keys_to_join(label_view, list(entity_df.columns))
-       
+
         if isinstance(label_view, (FeatureView, LabelView)):
             source = self.sources[label_view.batch_source]
         else:
@@ -499,7 +512,7 @@ class FeatureStore:
 
     def stats(
         self,
-        view: Union[str,LabelView,Service,FeatureView],
+        view: Union[str, LabelView, Service, FeatureView],
         entity_df: pd.DataFrame = None,
         features: List[str] = None,
         group_key: List[str] = None,
@@ -564,7 +577,9 @@ class FeatureStore:
             join_keys=len(entity_df.columns[:-1]),
         )
 
-    def get_latest_entities(self, view: Union[str,LabelView,Service,FeatureView], entity: pd.DataFrame = None):
+    def get_latest_entities(
+        self, view: Union[str, LabelView, Service, FeatureView], entity: pd.DataFrame = None
+    ):
         """get latest entity and its timestamp from a single FeatureViews/LabelViews or a materialzed Service
         entity can either be None(all joined-entities in view), entity names or entity value(specific entities)
 
@@ -595,32 +610,10 @@ class FeatureStore:
             service_name(str): name of `SERVICE` to use
             sampler (callable, optional): sampler
         """
-        return Dataset(
-            fs=self,
-            service=self.services[service_name],
-            sampler=sampler,
-            #     feature_views=self.feature_views,
-            #    label_views=self.label_views,
-        )
+        return Dataset(fs=self, service=self.services[service_name], sampler=sampler)
 
     def query(self, *args, **kwargs):
         """Run a query though different types of offline store.
         The usecase of this method is highly depending on different types of offline store.
         """
         return self.offline_store.query(*args, **kwargs)
-
-    def get_context(
-        self,
-        service: Service,
-        entity: pd.DataFrame,
-        all_features: dict = None,
-        all_labels: dict = None,
-        feature_list: list = [],
-        label_list: list = [],
-        ttl: Optional[Period] = None,
-        # join_keys: list = None,
-        #  entity_cols: list = [],
-    ):
-
-        source = self.offline_store.get_offline_source(service)
-        
