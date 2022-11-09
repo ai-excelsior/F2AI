@@ -11,6 +11,8 @@ from aie_feast.common.source import SqlSource
 from aie_feast.common.utils import build_agg_query, build_filter_time_query
 from aie_feast.common.utils import convert_dtype_to_sqlalchemy_type
 from .offline_store import OfflineStore, OfflineStoreType
+from aie_feast.definitions import Entity
+from datetime import datetime
 
 
 DEFAULT_EVENT_TIMESTAMP_FIELD = "event_timestamp"
@@ -135,14 +137,14 @@ class OfflinePostgresStore(OfflineStore):
         join_keys: List[str] = [],
         alias: str = SOURCE_EVENT_TIMESTAMP_FIELD,
     ):
-        time_columns = [f"{source.timestamp_field} as {alias}"]
-        if source.created_timestamp_field:
-            time_columns.append(source.created_timestamp_field)
-        # time_columns = []
-        # if source.timestamp_field:
-        #     time_columns.append(f"{source.timestamp_field} as {alias}")
+        # time_columns = [f"{source.timestamp_field} as {alias}"]
         # if source.created_timestamp_field:
         #     time_columns.append(source.created_timestamp_field)
+        time_columns = []
+        if source.timestamp_field:
+            time_columns.append(f"{source.timestamp_field} as {alias}")
+        if source.created_timestamp_field:
+            time_columns.append(source.created_timestamp_field)
 
         feature_columns = [feature.name for feature in features]
         all_columns = list(set(time_columns + join_keys + feature_columns))
@@ -152,11 +154,8 @@ class OfflinePostgresStore(OfflineStore):
     def materialize_dbt(
         self,
         service: Service,
-        feature_views: List[FeatureView],
         label_views: List[LabelView],
         sources: List[SqlSource],
-        entities: List[Entity],
-        incremental_begin,
     ):
 
         label_view = service.get_label_view(label_views)
@@ -184,37 +183,74 @@ class OfflinePostgresStore(OfflineStore):
 
         label_view = service.get_label_view(label_views)
         feature_views = service.get_feature_views(feature_views)
+        labels = label_view.get_label_objects()
+        all_entity_cols = [entities[entity].join_keys[0] for entity in label_view.entities]
+        all_feature_names = service.get_feature_names() + service.get_label_names()
         entity_dataframe = self.read(
             source=sources[label_view.batch_source],
-            features=label_view.get_label_objects(),
-            join_keys=[entities[entity].join_keys[0] for entity in label_view.entities],
-            alias=DEFAULT_EVENT_TIMESTAMP_FIELD,
+            features=labels,
+            join_keys=all_entity_cols,
+            alias=ENTITY_EVENT_TIMESTAMP_FIELD,
         )
 
-        time_columns = []
-        if sources[label_view.batch_source].timestamp_field:
-            time_columns.append(sources[label_view.batch_source].timestamp_field)
-        if sources[label_view.batch_source].created_timestamp_field:
-            time_columns.append(sources[label_view.batch_source].created_timestamp_field)
+        if fromnow:
+            entity_dataframe = entity_dataframe.where(Parameter(DEFAULT_EVENT_TIMESTAMP_FIELD) >= fromnow)
+        elif start and end:
+            entity_dataframe = entity_dataframe.where(
+                Parameter(DEFAULT_EVENT_TIMESTAMP_FIELD) > start
+                and Parameter(DEFAULT_EVENT_TIMESTAMP_FIELD) < end
+            )
+        else:
+            raise ValueError("either (start,end) or fromnow should be given")
+
+        time_columns = [Parameter(ENTITY_EVENT_TIMESTAMP_FIELD)]
         result_sql = entity_dataframe
 
-        for featureview in feature_views.values():
+        for featureview in feature_views:
             entity_cols = [entities[entity].join_keys[0] for entity in featureview.entities]
             features = featureview.get_feature_objects()
-            query = sources[label_view.batch_source]
             source = sources[featureview.batch_source]
             all_join_cols = time_columns + entity_cols
 
-            fearure_df = self.get_features(
-                query=query,
-                features=features,
-                source=source,
-                join_keys=entity_cols,
+            source_df = self.read(source=source, features=features, join_keys=entity_cols)
+
+            sql_query = self._point_in_time_join(
+                entity_df=entity_dataframe,
+                source_df=source_df,
+                timestamp_field=source.timestamp_field,
+                created_timestamp_field=source.created_timestamp_field,
                 ttl=featureview.ttl,
+                join_keys=entity_cols,
+                include=True,
             )
-            result_sql = Query.from_(result_sql).left_join(fearure_df).using(*all_join_cols)
-            result_sql = result_sql.select("*")
+            feature_names = [
+                feature.name
+                for feature in features
+                if feature.name not in [feature.name for feature in labels]
+            ]
+            result_sql = (
+                Query.from_(result_sql)
+                .left_join(
+                    sql_query.select(
+                        Parameter(
+                            f"{','.join(entity_cols + [ENTITY_EVENT_TIMESTAMP_FIELD ] + feature_names)}"
+                        )
+                    ).as_(featureview.name)
+                )
+                .using(*all_join_cols)
+                .select("*")
+                .as_(f"{featureview.name}_join")
+            )
+        # df = self._get_dataframe(
+        #     join_keys=all_entity_cols,
+        #     timecol=time_columns,
+        #     feature_names=all_feature_names,
+        #     sql_result=result_sql,
+        # )
+        # df["materialize_time"] = pd.to_datetime(datetime.now(), utc=True)
+
         return result_sql
+        # return df
 
     def stats(
         self,
@@ -460,7 +496,8 @@ class OfflinePostgresStore(OfflineStore):
         if timestamp_field:
             sql_query = cls._point_in_time_filter(sql_join, include=include, ttl=ttl)
             sql_query = cls._point_in_time_latest(sql_query, join_keys, created_timestamp_field)
-        return sql_query
+            return sql_query
+        return sql_join
 
     @classmethod
     def _point_on_time_join(

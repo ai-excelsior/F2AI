@@ -306,7 +306,8 @@ class FeatureStore:
             **kwargs,
         )
 
-    def materialize(self, service_name: str, incremental_begin: str = None):
+    # def materialize(self, service_name: str, incremental_begin: str = None):
+    def materialize(self, service_name: str, fromnow: str = None):
         """incrementally join `views` to generate tables
 
         Args:
@@ -319,9 +320,12 @@ class FeatureStore:
         """
 
         if self.offline_store.type == "file":
-            self._offline_record_materialize(self.services[service_name], incremental_begin)
+            # self._offline_record_materialize(self.services[service_name], incremental_begin)
+            self._offline_record_materialize(self.services[service_name], incremental_begin=fromnow)
+
         elif self.offline_store.type == "pgsql":
-            self._offline_pgsql_materialize_dbt(self.services[service_name], incremental_begin)
+            self._offline_pgsql_materialize(self.services[service_name], fromnow=fromnow)
+            # self._offline_pgsql_materialize_dbt(self.services[service_name], incremental_begin)
 
     def _offline_pgsql_materialize_dbt(self, service: Service, incremental_begin):
         try:
@@ -367,11 +371,8 @@ class FeatureStore:
 
         max_timestamp, max_timestamp_label = self.offline_store.materialize_dbt(
             service=service,
-            feature_views=self.feature_views,
             label_views=self.label_views,
             sources=self.sources,
-            entities=self.entities,
-            incremental_begin=incremental_begin,
         )
 
         label_result = pd.to_datetime(sql_df(max_timestamp_label.get_sql(), conn)[0][0])
@@ -415,7 +416,11 @@ class FeatureStore:
             raise TypeError("please check your `start` ,`end` type")
 
         try:
-            fromnow = Period.from_str(fromnow) if fromnow else None
+            fromnow = (
+                pd.to_datetime(datetime.now()) - Period.from_str(fromnow).to_py_timedelta()
+                if fromnow
+                else None
+            )
         except:
             raise TypeError("please check your `fromnow` type")
 
