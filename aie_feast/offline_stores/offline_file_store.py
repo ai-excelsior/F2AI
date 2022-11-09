@@ -58,14 +58,14 @@ class OfflineFileStore(OfflineStore):
         source = sources[label_view.batch_source]
         joined_frame = self._read_file(source=source, features=labels, join_keys=list(join_keys))
         # create timestamp makes no sense to labels
-        joined_frame.drop(columns=source.created_timestamp_field, inplace=True, errors="ignore")
-        if isinstance(incremental_begin, Period):
-            incremental_begin = (
-                joined_frame[DEFAULT_EVENT_TIMESTAMP_FIELD].max() - incremental_begin.to_pandas_dateoffset()
-            )
-            joined_frame = joined_frame[joined_frame[DEFAULT_EVENT_TIMESTAMP_FIELD] >= incremental_begin]
-        else:
-            joined_frame = joined_frame[joined_frame[DEFAULT_EVENT_TIMESTAMP_FIELD] >= incremental_begin]
+        # joined_frame.drop(columns=source.created_timestamp_field, inplace=True, errors="ignore")
+        # if isinstance(incremental_begin, Period):
+        #     incremental_begin = (
+        #         joined_frame[DEFAULT_EVENT_TIMESTAMP_FIELD].max() - incremental_begin.to_pandas_dateoffset()
+        #     )
+        #     joined_frame = joined_frame[joined_frame[DEFAULT_EVENT_TIMESTAMP_FIELD] >= incremental_begin]
+        # else:
+        #     joined_frame = joined_frame[joined_frame[DEFAULT_EVENT_TIMESTAMP_FIELD] >= incremental_begin]
         # if isinstance(incremental_begin, Period):
         #     incremental_begin = joined_frame[TIME_COL].max() - incremental_begin.to_pandas_dateoffset()
         #     joined_frame = joined_frame[joined_frame[TIME_COL] >= incremental_begin]
