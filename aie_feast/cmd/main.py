@@ -138,10 +138,10 @@ if __name__ == "__main__":
     def do_materailize():
         # fs.materialize("traval_time_prediction_embedding_v1", incremental_begin="2016-06-30 07:50:00")
         # fs.materialize("traval_time_prediction_embedding_v1")
-        # fs.materialize("traval_time_prediction_embedding_v1", fromnow="5 minutes")
-        fs.materialize(
-            "traval_time_prediction_embedding_v1", start="2016-06-30 07:55:00", end="2016-06-30 08:00:00"
-        )
+        fs.materialize("traval_time_prediction_embedding_v1", fromnow="5 minutes")
+        # fs.materialize(
+        #     "traval_time_prediction_embedding_v1", start="2016-06-30 07:55:00", end="2016-06-30 08:00:00"
+        # )
 
     do_materailize()
 

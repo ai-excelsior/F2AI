@@ -3,7 +3,7 @@ import uuid
 import pandas as pd
 import datetime
 from io import StringIO
-from typing import List, Optional, Set, TYPE_CHECKING, Union, Tuple
+from typing import List, Optional, Set, TYPE_CHECKING, Union, Tuple, Dict
 from pydantic import Field, PrivateAttr
 from pypika import Query, Parameter, functions as fn, JoinType
 from aie_feast.definitions import (
@@ -16,6 +16,7 @@ from aie_feast.definitions import (
     SqlSource,
     OfflineStoreType,
     OfflineStore,
+    FileSource,
 )
 from aie_feast.common.utils import build_agg_query, build_filter_time_query
 from aie_feast.common.utils import convert_dtype_to_sqlalchemy_type
@@ -189,10 +190,10 @@ class OfflinePostgresStore(OfflineStore):
     def materialize(
         self,
         service: Service,
-        feature_views: List[FeatureView],
-        label_views: List[LabelView],
-        sources: List[SqlSource],
-        entities: List[Entity],
+        feature_views: Dict[str, FeatureView],
+        label_views: Dict[str, LabelView],
+        sources: Dict[str, FileSource],
+        entities: Dict[str, Entity],
         start: str,
         end: str,
         fromnow: str,
