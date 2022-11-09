@@ -1,4 +1,4 @@
-from .offline_store import OfflineStore, OfflineStoreType
+from ..definitions import OfflineStore, OfflineStoreType
 
 
 class OfflineSparkStore(OfflineStore):

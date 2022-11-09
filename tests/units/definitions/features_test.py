@@ -1,9 +1,4 @@
-from aie_feast.definitions import Entity, SchemaAnchor
-
-
-def test_entity_auto_join_keys():
-    entity = Entity(name="foo")
-    assert entity.join_keys == ["foo"]
+from aie_feast.definitions import SchemaAnchor
 
 
 def test_parse_cfg_to_feature_anchor():

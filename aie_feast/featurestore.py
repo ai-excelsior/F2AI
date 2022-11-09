@@ -3,12 +3,9 @@ import os
 import json
 import docker
 from datetime import datetime
-from aie_feast.common.jinja import jinja_env
 from typing import Dict, List, Union
-from aie_feast.common.source import FileSource
 from aie_feast.dataset.dataset import Dataset
 from aie_feast.common.get_config import (
-    get_offline_store_from_cfg,
     get_service_cfg,
     get_entity_cfg,
     get_label_views,
@@ -17,7 +14,16 @@ from aie_feast.common.get_config import (
 )
 from aie_feast.common.utils import to_file, remove_prefix
 from aie_feast.common.jinja import jinja_env
-from aie_feast.definitions import Feature, Period, FeatureView, LabelView, Service
+from aie_feast.common.read_file import read_yml
+from aie_feast.definitions import (
+    Feature,
+    Period,
+    FeatureView,
+    LabelView,
+    Service,
+    FileSource,
+    init_offline_store_from_cfg,
+)
 
 
 TIME_COL = "event_timestamp"  # timestamp of action taken in original tables or period-query result, or query time in single-query result table
@@ -27,7 +33,8 @@ MATERIALIZE_TIME = "materialize_time"  # timestamp to done materialize, only use
 class FeatureStore:
     def __init__(self, project_folder=None, url=None, token=None, projectID=None):
         if project_folder:
-            self.offline_store = get_offline_store_from_cfg(os.path.join(project_folder, "feature_store.yml"))
+            cfg = read_yml(os.path.join(project_folder, "feature_store.yml"))
+            self.offline_store = init_offline_store_from_cfg(cfg["offline_store"])
         elif url and token and projectID:
             pass  # TODO: realize in future
         else:
@@ -117,11 +124,11 @@ class FeatureStore:
         """
 
         if isinstance(view, FeatureView):
-            avaliable_entity_names = list(view.entities)
+            available_entity_names = list(view.entities)
         elif isinstance(view, LabelView):
-            avaliable_entity_names = list(view.entities)
+            available_entity_names = list(view.entities)
         elif isinstance(view, Service):
-            avaliable_entity_names = list(view.get_entities(self.feature_views, self.label_views))
+            available_entity_names = list(view.get_entities(self.feature_views, self.label_views))
         else:
             raise TypeError("must be FeatureViews, LabelViews or Service")
 
@@ -129,7 +136,7 @@ class FeatureStore:
             entity_names = list(
                 {
                     join_key
-                    for entity_name in avaliable_entity_names
+                    for entity_name in available_entity_names
                     for join_key in self.entities[entity_name].join_keys
                     if join_key in entity_columns
                 }
@@ -138,7 +145,7 @@ class FeatureStore:
             entity_names = list(
                 {
                     join_key
-                    for entity_name in avaliable_entity_names
+                    for entity_name in available_entity_names
                     for join_key in self.entities[entity_name].join_keys
                 }
             )
