@@ -1,6 +1,6 @@
 from typing import List, Optional, Dict, Set, Any
 
-from aie_feast.definitions import FeatureSchema, Feature, SchemaType
+from aie_feast.definitions import FeatureSchema, Feature
 from aie_feast.period import Period
 from pydantic import BaseModel, Field
 
@@ -26,12 +26,7 @@ class FeatureView(BaseView):
 
     def get_feature_objects(self, is_numeric=False) -> Set[Feature]:
         return {
-            Feature(
-                name=schema.name,
-                dtype=schema.dtype,
-                schema_type=SchemaType.FEATURE,
-                view_name=self.name,
-            )
+            Feature.create_feature_from_schema(schema, self.name)
             for schema in self.schemas
             if (schema.is_numeric() if is_numeric else True)
         }
@@ -45,12 +40,7 @@ class LabelView(BaseView):
 
     def get_label_objects(self, is_numeric=False) -> Set[Feature]:
         return {
-            Feature(
-                name=schema.name,
-                dtype=schema.dtype,
-                schema_type=SchemaType.LABEL,
-                view_name=self.name,
-            )
+            Feature.create_label_from_schema(schema, self.name)
             for schema in self.schemas
             if (schema.is_numeric() if is_numeric else True)
         }

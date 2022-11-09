@@ -24,5 +24,10 @@ Architecture
 .. image:: ./docs/static/f2ai_architecture.png
     :alt: f2ai function architecture
 
-.. note::
-   This is a  working flow when using F2AI instead of technical architecture.
+The architecture above is a working flow demonstration when using F2AI but not technical architecture.
+
+Getting Started
+---------------
+
+1. Install F2AI
+
