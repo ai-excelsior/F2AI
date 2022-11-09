@@ -131,7 +131,7 @@ if __name__ == "__main__":
         # fs.get_labels("loan_label_view", entity_loan, "365 days")
         fs.get_period_features("loan_features", entity_loan, period="24 hours")
         # fs.get_features(fs.features["zipcode_features"], entity_loan)
-        # fs.get_labels(fs.service["credit_scoring_v1"], entity_dobssn_period)
+        # fs.get_labels(fs.services["credit_scoring_v1"], entity_dobssn_period)
 
     # get_features()
 
