@@ -1,8 +1,7 @@
 from typing import List, Optional, Dict, Set
 from pydantic import BaseModel, Field
 
-from aie_feast.definitions import Entity, SchemaAnchor, Feature
-from aie_feast.views import FeatureView, LabelView
+from .definitions import Entity, SchemaAnchor, Feature, FeatureView, LabelView
 
 
 class Service(BaseModel):

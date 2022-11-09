@@ -36,14 +36,6 @@ aie\_feast.service module
    :undoc-members:
    :show-inheritance:
 
-aie\_feast.views module
------------------------
-
-.. automodule:: aie_feast.views
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 Module contents
 ---------------
 

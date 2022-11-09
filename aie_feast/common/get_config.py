@@ -5,8 +5,7 @@ from aie_feast.offline_stores.offline_file_store import OfflineFileStore
 from aie_feast.offline_stores.offline_postgres_store import OfflinePostgresStore
 from aie_feast.offline_stores.offline_spark_store import OfflineSparkStore
 from aie_feast.service import Service
-from aie_feast.views import FeatureView, LabelView
-from aie_feast.definitions import OfflineStoreType, Entity
+from aie_feast.definitions import OfflineStoreType, Entity, FeatureView, LabelView
 
 from .source import Source, parse_source_yaml
 from .read_file import read_yml
