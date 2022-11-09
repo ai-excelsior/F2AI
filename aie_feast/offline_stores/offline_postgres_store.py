@@ -185,7 +185,7 @@ class OfflinePostgresStore(OfflineStore):
         feature_views = service.get_feature_views(feature_views)
         labels = label_view.get_label_objects()
         all_entity_cols = [entities[entity].join_keys[0] for entity in label_view.entities]
-        all_feature_names = service.get_feature_names() + service.get_label_names()
+        # all_feature_names = service.get_feature_names() + service.get_label_names()
         entity_dataframe = self.read(
             source=sources[label_view.batch_source],
             features=labels,
