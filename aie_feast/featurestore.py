@@ -424,9 +424,7 @@ class FeatureStore:
         except:
             raise TypeError("please check your `fromnow` type")
 
-        conn = psy_conn(self.offline_store)
-
-        result_sql = self.offline_store.materialize(
+        result = self.offline_store.materialize(
             service=service,
             feature_views=self.feature_views,
             label_views=self.label_views,
@@ -437,9 +435,6 @@ class FeatureStore:
             fromnow=fromnow,
         )
 
-        result = sql_df(result_sql.get_sql(), conn)
-
-        conn.close()
         return result
 
     def schedule_local_dbt_container(self, profile_name: str, vars: Dict, dbt_path: str):

@@ -185,7 +185,7 @@ class OfflinePostgresStore(OfflineStore):
         feature_views = service.get_feature_views(feature_views)
         labels = label_view.get_label_objects()
         all_entity_cols = [entities[entity].join_keys[0] for entity in label_view.entities]
-        # all_feature_names = service.get_feature_names() + service.get_label_names()
+        all_feature_names = set([label.name for label in labels])
         entity_dataframe = self.read(
             source=sources[label_view.batch_source],
             features=labels,
@@ -228,6 +228,7 @@ class OfflinePostgresStore(OfflineStore):
                 for feature in features
                 if feature.name not in [feature.name for feature in labels]
             ]
+            all_feature_names = all_feature_names | set(feature_names)
             result_sql = (
                 Query.from_(result_sql)
                 .left_join(
@@ -241,15 +242,15 @@ class OfflinePostgresStore(OfflineStore):
                 .select("*")
                 .as_(f"{featureview.name}_join")
             )
-        # df = self._get_dataframe(
-        #     join_keys=all_entity_cols,
-        #     timecol=time_columns,
-        #     feature_names=all_feature_names,
-        #     sql_result=result_sql,
-        # )
-        # df["materialize_time"] = pd.to_datetime(datetime.now(), utc=True)
+        df = self._get_dataframe(
+            join_keys=all_entity_cols,
+            timecol=[ENTITY_EVENT_TIMESTAMP_FIELD],
+            feature_names=list(all_feature_names),
+            sql_result=result_sql,
+        )
+        df["materialize_time"] = pd.to_datetime(datetime.now(), utc=True)
 
-        return result_sql
+        return df
         # return df
 
     def stats(
