@@ -356,7 +356,7 @@ class OfflinePostgresStore(OfflineStore):
             pd.DataFrame:
         """
         with self.psy_conn.cursor() as cursor:
-            cursor.execute(sql_result.get_sql())
+            cursor.execute(sql_result if isinstance(sql_result, str) else sql_result.get_sql())
             data = cursor.fetchall()
             self.psy_conn.commit()
 

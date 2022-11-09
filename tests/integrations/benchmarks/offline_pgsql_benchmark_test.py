@@ -1,15 +1,17 @@
+from pyexpat import features
 import pandas as pd
 import timeit
 from aie_feast import FeatureStore
 from aie_feast.common.sampler import GroupFixednbrSampler
-from aie_feast.common.psl_utils import sql_df, psy_conn
 
 
 def get_guizhou_traffic_entities(store):
     query_entities = pd.DataFrame(
-        sql_df(
-            sql=f"select link_id,event_timestamp from {store.services['traval_time_prediction_embedding_v1'].materialize_path} limit 100",
-            conn=psy_conn(store.offline_store),
+        store.offline_store._get_dataframe(
+            sql_result=f"select link_id,event_timestamp from {store.services['traval_time_prediction_embedding_v1'].materialize_path} limit 100",
+            join_keys=["link_id"],
+            timecol=["event_timestamp"],
+            feature_names=[],
         ),
         columns=["link_id", "event_timestamp"],
     )
