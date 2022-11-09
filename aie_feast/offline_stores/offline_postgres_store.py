@@ -215,8 +215,8 @@ class OfflinePostgresStore(OfflineStore):
             source_df = self.read(source=source, features=features, join_keys=entity_cols)
 
             sql_query = self._point_in_time_join(
-                entity_df=entity_dataframe,
-                source_df=source_df,
+                entity_df=entity_dataframe.as_(f"{featureview.name}_entity_df"),
+                source_df=source_df.as_(f"{featureview.name}_source_df"),
                 timestamp_field=source.timestamp_field,
                 created_timestamp_field=source.created_timestamp_field,
                 ttl=featureview.ttl,

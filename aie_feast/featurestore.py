@@ -306,8 +306,8 @@ class FeatureStore:
             **kwargs,
         )
 
-    def materialize(self, service_name: str, incremental_begin: str = None):
-        # def materialize(self, service_name: str, fromnow: str = None):
+    # def materialize(self, service_name: str, incremental_begin: str = None):
+    def materialize(self, service_name: str, fromnow: str = None):
         """incrementally join `views` to generate tables
 
         Args:
@@ -320,12 +320,12 @@ class FeatureStore:
         """
 
         if self.offline_store.type == "file":
-            self._offline_record_materialize(self.services[service_name], incremental_begin)
-            # self._offline_record_materialize(self.services[service_name], incremental_begin=fromnow)
+            # self._offline_record_materialize(self.services[service_name], incremental_begin)
+            self._offline_record_materialize(self.services[service_name], incremental_begin=fromnow)
 
         elif self.offline_store.type == "pgsql":
-            # self._offline_pgsql_materialize(self.services[service_name], fromnow=fromnow)
-            self._offline_pgsql_materialize_dbt(self.services[service_name], incremental_begin)
+            self._offline_pgsql_materialize(self.services[service_name], fromnow=fromnow)
+            # self._offline_pgsql_materialize_dbt(self.services[service_name], incremental_begin)
 
     def _offline_pgsql_materialize_dbt(self, service: Service, incremental_begin):
         try:
