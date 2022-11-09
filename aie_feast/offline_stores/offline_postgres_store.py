@@ -272,7 +272,7 @@ class OfflinePostgresStore(OfflineStore):
         sql_filter = build_filter_time_query(sql_join, start, include)
         sql_agg = build_agg_query(sql_filter, features, group_keys, fn, keys_only)
 
-        df = self._get_dataframe(group_keys, [], [f"{c.name}_{fn}" for c in features], sql_agg)
+        df = self._get_dataframe(sql_agg, group_keys, [], [f"{c.name}_{fn}" for c in features])
         self._drop_table(table_name)
 
         return df
@@ -286,7 +286,7 @@ class OfflinePostgresStore(OfflineStore):
             q = q.inner_join(entity_df).using(*group_keys)
 
         sql_result = q.select(*group_keys, fn.Max(Parameter(SOURCE_EVENT_TIMESTAMP_FIELD)))
-        df = self._get_dataframe(group_keys, [DEFAULT_EVENT_TIMESTAMP_FIELD], [], sql_result)
+        df = self._get_dataframe(sql_result, group_keys, [DEFAULT_EVENT_TIMESTAMP_FIELD], [])
         if entity_df is not None:
             self._drop_table(table_name)
         return df
@@ -326,10 +326,10 @@ class OfflinePostgresStore(OfflineStore):
             )
         )
         df = self._get_dataframe(
+            sql_result,
             list(set(join_keys + entity_cols)),
             [DEFAULT_EVENT_TIMESTAMP_FIELD],
             list(set(residue + feature_names)),
-            sql_result,
         )
         self._drop_table(table_name)
         return df.sort_values(
@@ -343,7 +343,9 @@ class OfflinePostgresStore(OfflineStore):
             cursor.execute(f'drop table if exists "{table_name}"')
             self.psy_conn.commit()
 
-    def _get_dataframe(self, join_keys: list, timecol: list, feature_names: list, sql_result):
+    def _get_dataframe(
+        self, sql_result: Query, join_keys: list = [], timecol: list = [], feature_names: list = []
+    ):
         """_summary_
 
         Args:
@@ -397,10 +399,10 @@ class OfflinePostgresStore(OfflineStore):
             )
         )
         df = self._get_dataframe(
+            sql_result,
             list(set(join_keys + entity_cols)),
             [QUERY_COL, DEFAULT_EVENT_TIMESTAMP_FIELD],
             list(set(feature_names + residue)),
-            sql_result,
         )
         self._drop_table(table_name)
         return df.sort_values(
