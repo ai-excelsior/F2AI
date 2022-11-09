@@ -25,7 +25,7 @@ class IterableDataset(IterableDataset):
         self.fs = fs
         self.service = service
         self.entity_index = entity_index
-        self.batch = batch if batch else len(self.entity_index) // 10
+        self.batch = batch if batch else max(len(self.entity_index) // 10, 1)
 
         self.all_features = self.get_feature_period(self.service)
         self.all_labels = self.get_feature_period(self.service, True)
