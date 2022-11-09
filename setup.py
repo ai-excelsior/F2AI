@@ -6,7 +6,7 @@ install_reqs = parse_requirements('requirements.txt', session=PipSession())
 
 setup(
     name='f2ai',
-    version='0.0.3',
+    version='0.0.4',
     description='',
     long_description='...',
     url='https://github.com/ai-excelsior/F2AI',
