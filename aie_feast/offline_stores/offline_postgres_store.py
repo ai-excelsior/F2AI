@@ -18,6 +18,7 @@ ENTITY_EVENT_TIMESTAMP_FIELD = "_entity_event_timestamp_"
 SOURCE_EVENT_TIMESTAMP_FIELD = "_source_event_timestamp_"
 QUERY_COL = "query_timestamp"
 
+
 if TYPE_CHECKING:
     from psycopg2 import connection
 
@@ -244,7 +245,7 @@ class OfflinePostgresStore(OfflineStore):
             feature_names=list(all_feature_names),
             sql_result=result_sql,
         )
-        df["materialize_time"] = pd.to_datetime(datetime.now(), utc=True)
+        df["materialize_time"] = pd.to_datetime(datetime.datetime.now(), utc=True)
 
         return df
         # return df
