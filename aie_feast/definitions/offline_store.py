@@ -55,7 +55,8 @@ def init_offline_store_from_cfg(cfg: Dict[Any]) -> OfflineStore:
     if offline_store_type == OfflineStoreType.PGSQL:
         from ..offline_stores.offline_postgres_store import OfflinePostgresStore
 
-        return OfflinePostgresStore(**cfg)
+        pgsql_conf = cfg.pop("pgsql_conf", {})
+        return OfflinePostgresStore(**cfg, **pgsql_conf)
 
     if offline_store_type == OfflineStoreType.SPARK:
         from ..offline_stores.offline_spark_store import OfflineSparkStore
