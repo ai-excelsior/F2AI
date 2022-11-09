@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 from pip._internal.req import parse_requirements
 from pip._internal.network.session import PipSession
 
-# install_reqs = parse_requirements('requirements.txt', session=PipSession())
+install_reqs = parse_requirements('requirements.txt', session=PipSession())
 
 setup(
     name='f2ai',
@@ -14,5 +14,7 @@ setup(
     author='',
     license='MIT',
     zip_safe=False,
-    packages=['aie_feast'],
+    packages=find_packages(),
+    install_requires=[str(ir.requirement) for ir in install_reqs],
+    # packages=['f2ai'],
 )
