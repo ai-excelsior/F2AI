@@ -20,20 +20,12 @@ class IterableDataset(IterableDataset):
         fs: "OfflineStore",
         service: "Service",
         entity_index: pd.DataFrame,
-        #   entity_cols: list = [],
         batch: int = None,
-        #   feature_views=None,
-        #   label_views=None,
-        #   join_keys=None,
     ):
         self.fs = fs
         self.service = service
         self.entity_index = entity_index
-        #    self.entity_cols = entity_cols
-        #    self.feature_views = feature_views
-        #    self.label_views = label_views
         self.batch = batch if batch else len(self.entity_index) // 10
-        #    self.join_keys = join_keys
 
         self.all_features = self.get_feature_period(self.service)
         self.all_labels = self.get_feature_period(self.service, True)
@@ -60,7 +52,6 @@ class IterableDataset(IterableDataset):
                 yield to_return
 
     def get_context(self, i: int) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        # source = self.fs.get_offline_source(self.service)
         feature_views_pd = deepcopy(self.entity_index.iloc[i * self.batch : (i + 1) * self.batch])
         label_views_pd = deepcopy(self.entity_index.iloc[i * self.batch : (i + 1) * self.batch])
         entity_cols = self.fs._get_keys_to_join(self.service)
@@ -151,28 +142,18 @@ class Dataset:
         fs: "FeatureStore",
         service: "Service",
         sampler: callable,
-        #  feature_views,
-        # label_views,
     ):
         self.fs = fs
         self.service = service
         self.sampler = sampler
 
-    #  self.feature_views = feature_views
-    #   self.label_views = label_views
-
     def to_pytorch(self, batch: int = None) -> IterableDataset:
         """convert to iterablt pytorch dataset really hold data"""
         entity_index = self.sampler()
-        #  join_keys = list(entity_index.columns[:-1])
 
         return IterableDataset(
             fs=self.fs,
             service=self.service,
             entity_index=entity_index,
-            # entity_cols=entity_cols,
             batch=batch,
-            # feature_views=self.feature_views,
-            #   label_views=self.label_views,
-            #   join_keys=join_keys,
         )
