@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any
 import abc
 
 if TYPE_CHECKING:
-    from aie_feast.service import Service
+    from aie_feast.definitions import Service
     from aie_feast.common.source import Source
 
 

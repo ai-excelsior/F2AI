@@ -1,17 +1,16 @@
 from __future__ import annotations
 import uuid
 import pandas as pd
+import datetime
 from io import StringIO
 from typing import List, Optional, Set, TYPE_CHECKING, Union
 from pydantic import Field, PrivateAttr
 from pypika import Query, Parameter, functions as fn, JoinType
-from aie_feast.definitions import Feature, Entity, Period, LabelView, FeatureView
+from aie_feast.definitions import Feature, Entity, Period, LabelView, FeatureView, Service
 from aie_feast.common.source import SqlSource
 from aie_feast.common.utils import build_agg_query, build_filter_time_query
 from aie_feast.common.utils import convert_dtype_to_sqlalchemy_type
 from .offline_store import OfflineStore, OfflineStoreType
-from aie_feast.definitions import Entity
-from datetime import datetime
 
 
 DEFAULT_EVENT_TIMESTAMP_FIELD = "event_timestamp"
@@ -21,7 +20,6 @@ QUERY_COL = "query_timestamp"
 
 if TYPE_CHECKING:
     from psycopg2 import connection
-    from aie_feast.service import Service
 
 
 class OfflinePostgresStore(OfflineStore):

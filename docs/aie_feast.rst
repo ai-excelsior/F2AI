@@ -20,21 +20,6 @@ aie\_feast.featurestore module
    :undoc-members:
    :show-inheritance:
 
-aie\_feast.period module
-------------------------
-
-.. automodule:: aie_feast.period
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-aie\_feast.service module
--------------------------
-
-.. automodule:: aie_feast.service
-   :members:
-   :undoc-members:
-   :show-inheritance:
 
 Module contents
 ---------------

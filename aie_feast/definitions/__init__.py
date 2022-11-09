@@ -5,6 +5,7 @@ from .period import Period
 from .base_view import BaseView
 from .feature_view import FeatureView
 from .label_view import LabelView
+from .services import Service
 
 __all__ = [
     "OfflineStoreType",
@@ -16,4 +17,5 @@ __all__ = [
     "BaseView",
     "FeatureView",
     "LabelView",
+    "Service",
 ]
