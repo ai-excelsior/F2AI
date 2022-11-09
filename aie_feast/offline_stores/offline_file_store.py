@@ -1,11 +1,10 @@
 import pandas as pd
 from typing import List, Optional, Set
-from aie_feast.definitions import Feature
 from aie_feast.common.source import FileSource
 from aie_feast.common.utils import get_stats_result
 from aie_feast.service import Service
 from aie_feast.views import LabelView, FeatureView
-from aie_feast.definitions import Entity
+from aie_feast.definitions import Feature, Entity
 from aie_feast.period import Period
 from .offline_store import OfflineStore, OfflineStoreType
 from copy import deepcopy

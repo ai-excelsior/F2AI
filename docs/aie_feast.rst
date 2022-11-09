@@ -1,4 +1,4 @@
-aie\_feast package
+F2AI API
 ==================
 
 Submodules

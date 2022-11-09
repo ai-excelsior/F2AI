@@ -19,8 +19,8 @@ class Service(BaseModel):
 
     @classmethod
     def from_yaml(cls, cfg: Dict) -> "Service":
-        cfg["features"] = SchemaAnchor.from_yamls(cfg.pop("features", []))
-        cfg["labels"] = SchemaAnchor.from_yamls(cfg.pop("labels", []))
+        cfg["features"] = SchemaAnchor.from_strs(cfg.pop("features", []))
+        cfg["labels"] = SchemaAnchor.from_strs(cfg.pop("labels", []))
         return cls(**cfg)
 
     def get_feature_names(self, feature_views: Dict[str, FeatureView], is_numeric=False) -> Set[Feature]:
