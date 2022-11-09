@@ -2,7 +2,6 @@ from __future__ import annotations
 import uuid
 import pandas as pd
 from io import StringIO
-from copy import deepcopy
 from typing import List, Optional, Set, TYPE_CHECKING, Union
 from pydantic import Field, PrivateAttr
 from pypika import Query, Parameter, functions as fn, JoinType
@@ -400,9 +399,7 @@ class OfflinePostgresStore(OfflineStore):
         )
         self._drop_table(table_name)
         return df.sort_values(
-            by=list(set(join_keys + entity_cols)) + [QUERY_COL, DEFAULT_EVENT_TIMESTAMP_FIELD],
-            ascending=True,
-            ignore_index=True,
+            by=[QUERY_COL, DEFAULT_EVENT_TIMESTAMP_FIELD], ascending=True, ignore_index=True
         )
 
     def query(self, query: str, return_df: bool = True, *args, **kwargs):
