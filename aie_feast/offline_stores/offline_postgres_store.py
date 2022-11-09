@@ -15,7 +15,6 @@ from datetime import datetime
 
 
 DEFAULT_EVENT_TIMESTAMP_FIELD = "event_timestamp"
-DEFAULT_CREATED_TIMESTAMP_FIELD = "created_timestamp"
 ENTITY_EVENT_TIMESTAMP_FIELD = "_entity_event_timestamp_"
 SOURCE_EVENT_TIMESTAMP_FIELD = "_source_event_timestamp_"
 QUERY_COL = "query_timestamp"
@@ -139,9 +138,6 @@ class OfflinePostgresStore(OfflineStore):
         join_keys: List[str] = [],
         alias: str = SOURCE_EVENT_TIMESTAMP_FIELD,
     ):
-        # time_columns = [f"{source.timestamp_field} as {alias}"]
-        # if source.created_timestamp_field:
-        #     time_columns.append(source.created_timestamp_field)
         time_columns = []
         if source.timestamp_field:
             time_columns.append(f"{source.timestamp_field} as {alias}")
@@ -349,7 +345,18 @@ class OfflinePostgresStore(OfflineStore):
             cursor.execute(f'drop table if exists "{table_name}"')
             self.psy_conn.commit()
 
-    def _get_dataframe(self, join_keys, timecol, feature_names, sql_result):
+    def _get_dataframe(self, join_keys: list, timecol: list, feature_names: list, sql_result):
+        """_summary_
+
+        Args:
+            join_keys (list): entities
+            timecol (list): time cols
+            feature_names (list): feature cols
+            sql_result (_type_): sql query
+
+        Returns:
+            pd.DataFrame:
+        """
         with self.psy_conn.cursor() as cursor:
             cursor.execute(sql_result.get_sql())
             data = cursor.fetchall()

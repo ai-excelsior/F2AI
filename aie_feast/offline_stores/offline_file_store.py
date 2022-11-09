@@ -8,7 +8,6 @@ from .offline_store import OfflineStore, OfflineStoreType
 
 
 DEFAULT_EVENT_TIMESTAMP_FIELD = "event_timestamp"
-DEFAULT_CREATED_TIMESTAMP_FIELD = "created_timestamp"
 ENTITY_EVENT_TIMESTAMP_FIELD = "_entity_event_timestamp_"
 SOURCE_EVENT_TIMESTAMP_FIELD = "_source_event_timestamp_"
 QUERY_COL = "query_timestamp"
