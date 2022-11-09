@@ -7,7 +7,7 @@ from copy import deepcopy
 
 if TYPE_CHECKING:
     from aie_feast.offline_stores.offline_store import OfflineStore
-    from aie_feast.service import Service
+    from aie_feast.definitions.services import Service
     from aie_feast.featurestore import FeatureStore
 
 TIME_COL = "event_timestamp"
