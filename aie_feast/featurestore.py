@@ -390,9 +390,9 @@ class FeatureStore:
             sources=self.sources,
         )
 
-        label_result = pd.to_datetime(sql_df(max_timestamp_label.get_sql(), conn)[0][0])
+        label_result = pd.to_datetime(self.offline_store._get_dataframe(sql_result=max_timestamp_label)[0][0])
         try:
-            result = pd.to_datetime(sql_df(max_timestamp.get_sql(), conn)[0][0])
+            result = pd.to_datetime(self.offline_store._get_dataframe(sql_result=max_timestamp)[0][0])
         except:
             result = pd.to_datetime("1970-01-01 00:00:00", utc=True)
 
