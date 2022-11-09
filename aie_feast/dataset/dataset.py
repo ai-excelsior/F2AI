@@ -6,7 +6,6 @@ from copy import deepcopy
 
 
 if TYPE_CHECKING:
-    from aie_feast.offline_stores.offline_store import OfflineStore
     from aie_feast.definitions.services import Service
     from aie_feast.featurestore import FeatureStore
 
@@ -17,7 +16,7 @@ QUERY_COL = "query_timestamp"
 class IterableDataset(IterableDataset):
     def __init__(
         self,
-        fs: "OfflineStore",
+        fs: "FeatureStore",
         service: "Service",
         entity_index: pd.DataFrame,
         batch: int = None,
