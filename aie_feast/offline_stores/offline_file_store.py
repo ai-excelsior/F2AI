@@ -88,7 +88,7 @@ class OfflineFileStore(OfflineStore):
                 join_keys = list(
                     {
                         join_key
-                        for entity_name in service.get_feature_entities(feature_view)
+                        for entity_name in feature_view.entities
                         for join_key in entities[entity_name].join_keys
                     }
                 )
