@@ -1,5 +1,4 @@
-from aie_feast.service import Service
-from aie_feast.definitions import SchemaAnchor, FeatureSchema, FeatureView
+from aie_feast.definitions import SchemaAnchor, FeatureSchema, FeatureView, Service
 
 
 def test_get_features_from_service():

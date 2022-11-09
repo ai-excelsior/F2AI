@@ -2,8 +2,7 @@ import pandas as pd
 from typing import List, Optional, Set
 from aie_feast.common.source import FileSource
 from aie_feast.common.utils import get_stats_result
-from aie_feast.service import Service
-from aie_feast.definitions import Feature, Entity, Period, FeatureView, LabelView
+from aie_feast.definitions import Feature, Entity, Period, FeatureView, LabelView, Service
 from .offline_store import OfflineStore, OfflineStoreType
 
 
