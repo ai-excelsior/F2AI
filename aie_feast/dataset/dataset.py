@@ -2,13 +2,16 @@ from collections import defaultdict
 import pandas as pd
 from typing import TYPE_CHECKING, Tuple
 from torch.utils.data import IterableDataset
+from copy import deepcopy
 
 
 if TYPE_CHECKING:
     from aie_feast.offline_stores.offline_store import OfflineStore
     from aie_feast.service import Service
+    from aie_feast.featurestore import FeatureStore
 
 TIME_COL = "event_timestamp"
+QUERY_COL = "query_timestamp"
 
 
 class IterableDataset(IterableDataset):
@@ -17,20 +20,20 @@ class IterableDataset(IterableDataset):
         fs: "OfflineStore",
         service: "Service",
         entity_index: pd.DataFrame,
-        entity_cols: list = [],
+        #   entity_cols: list = [],
         batch: int = None,
-        feature_views=None,
-        label_views=None,
-        join_keys=None,
+        #   feature_views=None,
+        #   label_views=None,
+        #   join_keys=None,
     ):
         self.fs = fs
         self.service = service
         self.entity_index = entity_index
-        self.entity_cols = entity_cols
-        self.feature_views = feature_views
-        self.label_views = label_views
+        #    self.entity_cols = entity_cols
+        #    self.feature_views = feature_views
+        #    self.label_views = label_views
         self.batch = batch if batch else len(self.entity_index) // 10
-        self.join_keys = join_keys
+        #    self.join_keys = join_keys
 
         self.all_features = self.get_feature_period(self.service)
         self.all_labels = self.get_feature_period(self.service, True)
@@ -42,14 +45,14 @@ class IterableDataset(IterableDataset):
             to_return = (
                 self.data_sample[0][
                     (
-                        self.data_sample[0][[TIME_COL, *self.join_keys]]
-                        == self.entity_index.iloc[i % self.batch][[TIME_COL, *self.join_keys]]
+                        self.data_sample[0][[*self.entity_index.columns]]
+                        == self.entity_index.iloc[i % self.batch][[*self.entity_index.columns]]
                     ).all(axis=1)
                 ].drop(columns=[TIME_COL]),
                 self.data_sample[1][
                     (
-                        self.data_sample[1][[TIME_COL, *self.join_keys]]
-                        == self.entity_index.iloc[i % self.batch][[TIME_COL, *self.join_keys]]
+                        self.data_sample[1][[*self.entity_index.columns]]
+                        == self.entity_index.iloc[i % self.batch][[*self.entity_index.columns]]
                     ).all(axis=1)
                 ].drop(columns=[TIME_COL]),
             )
@@ -57,17 +60,64 @@ class IterableDataset(IterableDataset):
                 yield to_return
 
     def get_context(self, i: int) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        source = self.fs.get_offline_source(self.service)
-        self.data_sample = self.fs.get_context(
-            source=source,
-            entity=self.entity_index.iloc[i * self.batch : (i + 1) * self.batch],
-            all_features=self.all_features,
-            all_labels=self.all_labels,
-            feature_list=list(self.service.get_feature_names(self.feature_views)),
-            label_list=list(self.service.get_label_names(self.label_views)),
-            ttl=self.service.ttl,
-            join_keys=self.join_keys,
-            entity_cols=self.entity_cols,
+        # source = self.fs.get_offline_source(self.service)
+        feature_views_pd = deepcopy(self.entity_index.iloc[i * self.batch : (i + 1) * self.batch])
+        label_views_pd = deepcopy(self.entity_index.iloc[i * self.batch : (i + 1) * self.batch])
+        entity_cols = self.fs._get_keys_to_join(self.service)
+
+        for period, features in self.all_features.items():
+            if period:
+                feature_views_pd = self.fs.get_period_features(
+                    feature_view=self.service,
+                    entity_df=feature_views_pd,
+                    period=period,
+                    features=features,
+                    include=True,
+                    how="right",
+                    entity_cols=entity_cols,
+                )
+                feature_views_pd.drop(columns=[TIME_COL], inplace=True)
+                # always merge on TIME_COL
+                feature_views_pd.rename(columns={QUERY_COL: TIME_COL}, inplace=True)
+            else:
+                feature_views_pd = self.fs.get_features(
+                    feature_view=self.service,
+                    entity_df=feature_views_pd,
+                    features=features,
+                    include=True,
+                    how="right",
+                    entity_cols=entity_cols,
+                )
+            feature_views_pd[TIME_COL] = pd.to_datetime(feature_views_pd[TIME_COL], utc=True)
+
+        for period, features in self.all_labels.items():
+            if period:
+                label_views_pd = self.fs.get_period_labels(
+                    label_view=self.service,
+                    entity_df=label_views_pd,
+                    period=period,
+                    include=False,
+                    how="right",
+                    entity_cols=entity_cols,
+                )
+                label_views_pd.drop(columns=[TIME_COL], inplace=True)
+                label_views_pd.rename(columns={QUERY_COL: TIME_COL}, inplace=True)  # always merge on TIME_COL
+            else:
+                label_views_pd = self.fs.get_labels(
+                    label_view=self.service,
+                    entity_df=label_views_pd,
+                    include=True,
+                    how="right",
+                    entity_cols=entity_cols,
+                )
+            label_views_pd[TIME_COL] = pd.to_datetime(label_views_pd[TIME_COL], utc=True)
+        self.data_sample = (
+            feature_views_pd[
+                entity_cols + [TIME_COL] + list(self.service.get_feature_names(self.fs.feature_views))
+            ],
+            label_views_pd[
+                entity_cols + [TIME_COL] + list(self.service.get_label_names(self.fs.label_views))
+            ],
         )
 
     def get_feature_period(self, service: "Service", with_labels=False) -> dict:
@@ -83,14 +133,14 @@ class IterableDataset(IterableDataset):
         period_dict = defaultdict(list)
 
         if with_labels:
-            for label in service.get_label_objects(self.label_views):
+            for label in service.get_label_objects(self.fs.label_views):
                 period = label.period.strip('"') if label.period else 0
-                period_dict[period].append(label)  # TODO:period
+                period_dict[period].append(label.name)  # TODO:period
 
         else:
-            for feature in service.get_feature_objects(self.feature_views):
+            for feature in service.get_feature_objects(self.fs.feature_views):
                 period = feature.period.strip('"') if feature.period else 0
-                period_dict[period].append(feature)
+                period_dict[period].append(feature.name)
 
         return period_dict
 
@@ -98,30 +148,31 @@ class IterableDataset(IterableDataset):
 class Dataset:
     def __init__(
         self,
-        fs: "OfflineStore",
+        fs: "FeatureStore",
         service: "Service",
         sampler: callable,
-        feature_views,
-        label_views,
+        #  feature_views,
+        # label_views,
     ):
         self.fs = fs
         self.service = service
         self.sampler = sampler
-        self.feature_views = feature_views
-        self.label_views = label_views
 
-    def to_pytorch(self, batch: int = None, entity_cols: list = []) -> IterableDataset:
+    #  self.feature_views = feature_views
+    #   self.label_views = label_views
+
+    def to_pytorch(self, batch: int = None) -> IterableDataset:
         """convert to iterablt pytorch dataset really hold data"""
         entity_index = self.sampler()
-        join_keys = list(entity_index.columns[:-1])
+        #  join_keys = list(entity_index.columns[:-1])
 
         return IterableDataset(
             fs=self.fs,
             service=self.service,
             entity_index=entity_index,
-            entity_cols=entity_cols,
+            # entity_cols=entity_cols,
             batch=batch,
-            feature_views=self.feature_views,
-            label_views=self.label_views,
-            join_keys=join_keys,
+            # feature_views=self.feature_views,
+            #   label_views=self.label_views,
+            #   join_keys=join_keys,
         )
