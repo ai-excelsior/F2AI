@@ -40,13 +40,13 @@ class IterableDataset(IterableDataset):
                         self.data_sample[0][[*self.entity_index.columns]]
                         == self.entity_index.iloc[i % self.batch][[*self.entity_index.columns]]
                     ).all(axis=1)
-                ].drop(columns=[TIME_COL]),
+                ].drop(columns=self.entity_index.columns),
                 self.data_sample[1][
                     (
                         self.data_sample[1][[*self.entity_index.columns]]
                         == self.entity_index.iloc[i % self.batch][[*self.entity_index.columns]]
                     ).all(axis=1)
-                ].drop(columns=[TIME_COL]),
+                ].drop(columns=self.entity_index.columns),
             )
             if not to_return[0].isnull().all().all() and not to_return[1].isnull().all().all():
                 yield to_return
