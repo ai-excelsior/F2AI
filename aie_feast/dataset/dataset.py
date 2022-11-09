@@ -52,6 +52,14 @@ class IterableDataset(IterableDataset):
                 yield to_return
 
     def get_context(self, i: int) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """_summary_
+
+        Args:
+            i (int): the ith batch to get
+
+        Returns:
+            Tuple[pd.DataFrame, pd.DataFrame]: _description_
+        """
         feature_views_pd = deepcopy(self.entity_index.iloc[i * self.batch : (i + 1) * self.batch])
         label_views_pd = deepcopy(self.entity_index.iloc[i * self.batch : (i + 1) * self.batch])
         entity_cols = self.fs._get_keys_to_join(self.service)
@@ -127,7 +135,7 @@ class IterableDataset(IterableDataset):
         if with_labels:
             for label in service.get_label_objects(self.fs.label_views):
                 period = label.period.strip('"') if label.period else 0
-                period_dict[period].append(label.name)  # TODO:period
+                period_dict[period].append(label.name)
 
         else:
             for feature in service.get_feature_objects(self.fs.feature_views):
