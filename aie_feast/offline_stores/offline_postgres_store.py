@@ -3,7 +3,7 @@ import uuid
 import pandas as pd
 import datetime
 from io import StringIO
-from typing import List, Optional, Set, TYPE_CHECKING, Union
+from typing import List, Optional, Set, TYPE_CHECKING, Union, Tuple
 from pydantic import Field, PrivateAttr
 from pypika import Query, Parameter, functions as fn, JoinType
 from aie_feast.definitions import Feature, Entity, Period, LabelView, FeatureView, Service
@@ -70,13 +70,13 @@ class OfflinePostgresStore(OfflineStore):
 
     def _get_entity(
         self,
-        entity_df,
-        source,
-        join_keys,
+        entity_df: pd.DataFrame,
+        source: SqlSource,
+        join_keys: list,
         timestamp_field: str = DEFAULT_EVENT_TIMESTAMP_FIELD,
         alias: str = ENTITY_EVENT_TIMESTAMP_FIELD,
         **kwargs,
-    ):
+    ) -> Tuple(Query, str):
         table_name = None
         #  features = []
         if isinstance(entity_df, pd.DataFrame):
@@ -136,7 +136,18 @@ class OfflinePostgresStore(OfflineStore):
         features: Set[Feature] = {},
         join_keys: List[str] = [],
         alias: str = SOURCE_EVENT_TIMESTAMP_FIELD,
-    ):
+    ) -> Query:
+        """_summary_
+
+        Args:
+            source (SqlSource): data source to build query from
+            features (Set[Feature], optional): features cols to select. Defaults to {}.
+            join_keys (List[str], optional): entity cols to select. Defaults to [].
+            alias (str, optional): alias of time col to avoid duplcates of merge. Defaults to SOURCE_EVENT_TIMESTAMP_FIELD.
+
+        Returns:
+            Query: _description_
+        """
         time_columns = []
         if source.timestamp_field:
             time_columns.append(f"{source.timestamp_field} as {alias}")
@@ -260,7 +271,23 @@ class OfflinePostgresStore(OfflineStore):
         include: str = "both",
         keys_only: bool = False,
         join_keys: bool = False,
-    ):
+    ) -> pd.DataFrame:
+        """_summary_
+
+        Args:
+            entity_df (Union[SqlSource, Query]): query condition specified by users
+            features (Set[Feature]): features to be statsed
+            source (SqlSource): data source of featureview
+            start (_type_): stats begin time
+            fn (str, optional): stats func name. Defaults to "mean".
+            group_keys (list, optional): dimension of stats. Defaults to [].
+            include (str, optional): whether take user specified time in consideration. Defaults to True.. Defaults to "both".
+            keys_only (bool, optional): whether to return stats results of group_keys. Defaults to False.
+            join_keys (bool, optional): intersection of entities defined in yaml and entity_df.columns. Defaults to [].. Defaults to False.
+
+        Returns:
+            pd.DataFrame: _description_
+        """
         source_df = self.read(source=source, features=features, join_keys=group_keys)
         entity_df, table_name = self._get_entity(entity_df, source, group_keys if join_keys else [])
 
@@ -277,7 +304,19 @@ class OfflinePostgresStore(OfflineStore):
 
         return df
 
-    def get_latest_entities(self, source: SqlSource, group_keys: list = [], entity_df: pd.DataFrame = None):
+    def get_latest_entities(
+        self, source: SqlSource, group_keys: list = [], entity_df: pd.DataFrame = None
+    ) -> pd.DataFrame:
+        """_summary_
+
+        Args:
+            source (SqlSource): data source of featureview
+            group_keys (list, optional): dimension of stats. Defaults to [].
+            entity_df (pd.DataFrame, optional): query condition specified by users. Defaults to None.
+
+        Returns:
+            pd.DataFrame: _description_
+        """
         source_df = self.read(source=source, features=[], join_keys=group_keys)
         q = Query.from_(source_df).groupby(*group_keys)
 
@@ -300,7 +339,19 @@ class OfflinePostgresStore(OfflineStore):
         ttl: Optional[Period] = None,
         include: bool = True,
         **kwargs,
-    ):
+    ) -> pd.DataFrame:
+        """_summary_
+
+        Args:
+            entity_df (pd.DataFrame): query condition specified by users
+            features:(Set(Feature)): features to be queried
+            source (Sqlsource): data source of featureview
+            join_keys (List[str], optional): intersection of entities defined in yaml and entity_df.columns. Defaults to [].
+            ttl (Optional[Period], optional): requirement of timeliness of featureview . Defaults to None means no requirement
+            include (bool, optional): whether take user specified time in consideration. Defaults to True.
+        Returns:
+            Query: _description_
+        """
 
         entity_cols = kwargs.pop("entity_cols", [])
         source_df = self.read(source=source, features=features, join_keys=join_keys + entity_cols)
@@ -345,7 +396,7 @@ class OfflinePostgresStore(OfflineStore):
 
     def _get_dataframe(
         self, sql_result: Query, join_keys: list = [], timecol: list = [], feature_names: list = []
-    ):
+    ) -> pd.DataFrame:
         """_summary_
 
         Args:
@@ -374,7 +425,20 @@ class OfflinePostgresStore(OfflineStore):
         ttl: Optional[Period] = None,
         include: bool = True,
         **kwargs,
-    ):
+    ) -> pd.DataFrame:
+        """_summary_
+
+        Args:
+            entity_df (pd.DataFrame): query condition specified by users
+            features:(Set(Feature)): features to be queried
+            source (Sqlsource): data source of featureview
+            period (Period): period to take, negative means look back from entity_timestamp_field, positive means look_forward from entity_timestamp_field
+            join_keys (List[str], optional): intersection of entities defined in yaml and entity_df.columns. Defaults to [].
+             ttl (Optional[Period], optional): requirement of timeliness of featureview . Defaults to None means no requirement
+            include (bool, optional): whether take user specified time in consideration. Defaults to True.
+        Returns:
+            Query: _description_
+        """
         entity_cols = kwargs.pop("entity_cols", [])
         source_df = self.read(source=source, features=features, join_keys=join_keys + entity_cols)
 
@@ -409,7 +473,16 @@ class OfflinePostgresStore(OfflineStore):
             by=[QUERY_COL, DEFAULT_EVENT_TIMESTAMP_FIELD], ascending=True, ignore_index=True
         )
 
-    def query(self, query: str, return_df: bool = True, *args, **kwargs):
+    def query(self, query: str, return_df: bool = True, *args, **kwargs) -> pd.DataFrame:
+        """_summary_
+
+        Args:
+            query (str): user specified query to execute
+            return_df (bool, optional): _description_. Defaults to True.
+
+        Returns:
+            pd.DataFrame: _description_
+        """
         with self.psy_conn.cursor() as cursor:
             cursor.execute(query)
             if return_df:
@@ -428,7 +501,21 @@ class OfflinePostgresStore(OfflineStore):
         join_keys: List[str] = [],
         include: bool = True,
         how: str = "inner",
-    ):
+    ) -> Query:
+        """_summary_
+
+        Args:
+            entity_df (pd.DataFrame): query condition specified by users
+            source_df (pd.DataFrame): query taken from data
+            created_timestamp_field (Optional[str], optional): timestamp of upload of datas. Defaults to None.
+            ttl (Optional[Period], optional): requirement of timeliness of featureview . Defaults to None means no requirement
+            join_keys (List[str], optional): intersection of entities defined in yaml and entity_df.columns. Defaults to [].
+            include (bool, optional): whether take user specified time in consideration. Defaults to True.
+            how (str, optional): join method. Defaults to "inner".
+
+        Returns:
+            Query: _description_
+        """
 
         if ttl:
             min_entity_timestamp = Query.from_(entity_df).select(
@@ -456,13 +543,28 @@ class OfflinePostgresStore(OfflineStore):
         cls,
         entity_df: pd.DataFrame,
         source_df: pd.DataFrame,
-        period: str,
+        period: Period,
         created_timestamp_field: Optional[str] = None,
         ttl: Optional[Period] = None,
         join_keys: List[str] = [],
         include: bool = True,
         how="inner",
-    ):
+    ) -> Query:
+        """_summary_
+
+        Args:
+            entity_df (pd.DataFrame): query condition specified by users
+            source_df (pd.DataFrame): query taken from data
+            period (Period): period to take, negative means look back from entity_timestamp_field, positive means look_forward from entity_timestamp_field
+            created_timestamp_field (Optional[str], optional): timestamp of upload of datas. Defaults to None.
+            ttl (Optional[Period], optional): requirement of timeliness of featureview . Defaults to None means no requirement
+            join_keys (List[str], optional): intersection of entities defined in yaml and entity_df.columns. Defaults to [].
+            include (bool, optional): whether take user specified time in consideration. Defaults to True.
+            how (str, optional): join method. Defaults to "inner".
+
+        Returns:
+            Query: _description_
+        """
         if ttl:
             min_entity_timestamp = Query.from_(entity_df).select(
                 fn.Min(Parameter(ENTITY_EVENT_TIMESTAMP_FIELD)) + ttl.to_pgsql_interval()
@@ -492,8 +594,19 @@ class OfflinePostgresStore(OfflineStore):
         ttl: Optional[Period] = None,
         entity_timestamp_field: str = ENTITY_EVENT_TIMESTAMP_FIELD,
         source_timestamp_field: str = SOURCE_EVENT_TIMESTAMP_FIELD,
-    ):
-        """filter the joined results within [entity_timestamp - ttl, entity_timestamp]"""
+    ) -> Query:
+        """_summary_
+
+        Args:
+            df (Query): Query to filter
+            include (bool, optional): whether take < entity_timestamp_field or <= entity_timestamp_field. Defaults to True
+            ttl (Optional[Period], optional): requirement of timeliness of featureview . Defaults to None means no requirement
+            entity_timestamp_field (str, optional): timestamp speicified by users. Defaults to ENTITY_EVENT_TIMESTAMP_FIELD.
+            source_timestamp_field (str, optional): timestamp recorded in data. Defaults to SOURCE_EVENT_TIMESTAMP_FIELD.
+
+        Returns:
+            Query: _description_
+        """
 
         if include:
             candidates = Parameter(entity_timestamp_field) >= Parameter(source_timestamp_field)
@@ -515,13 +628,25 @@ class OfflinePostgresStore(OfflineStore):
     def _point_on_time_filter(
         cls,
         df: Query,
-        period: str,
+        period: Period,
         include: bool = True,
         ttl: Optional[Period] = None,
         entity_timestamp_field: str = ENTITY_EVENT_TIMESTAMP_FIELD,
         source_timestamp_field: str = SOURCE_EVENT_TIMESTAMP_FIELD,
-    ):
-        """filter the joined results within [entity_timestamp - ttl, entity_timestamp]"""
+    ) -> Query:
+        """_summary_
+
+        Args:
+            df (Query): Query to filter
+            period (Period): period to take, negative means look back from entity_timestamp_field, positive means look_forward from entity_timestamp_field
+            include (bool, optional): whether take < entity_timestamp_field or <= entity_timestamp_field. Defaults to True
+            ttl (Optional[Period], optional): requirement of timeliness of featureview . Defaults to None means no requirement
+            entity_timestamp_field (str, optional): timestamp speicified by users. Defaults to ENTITY_EVENT_TIMESTAMP_FIELD.
+            source_timestamp_field (str, optional): timestamp recorded in data. Defaults to SOURCE_EVENT_TIMESTAMP_FIELD.
+
+        Returns:
+            Query: _description_
+        """
 
         earliest_timestamp = None
         if ttl:
@@ -579,7 +704,19 @@ class OfflinePostgresStore(OfflineStore):
         created_timestamp_field: Optional[str] = None,
         entity_timestamp_field: str = ENTITY_EVENT_TIMESTAMP_FIELD,
         source_timestamp_field: str = SOURCE_EVENT_TIMESTAMP_FIELD,
-    ):
+    ) -> Query:
+        """_summary_
+
+        Args:
+            df (Query): Query to be filter
+            group_keys (List[str], optional): entities cols. Defaults to []
+            created_timestamp_field (Optional[str], optional): data upload time col. Defaults to None
+            entity_timestamp_field (str, optional):  query time col, Defaults to `ENTITY_EVENT_TIMESTAMP_FIELD`
+            source_timestamp_field (str, optional): event taken time col, Defaults to `SOURCE_EVENT_TIMESTAMP_FIELD`
+
+        Returns:
+            Query: _description_
+        """
         sort_by = [source_timestamp_field]
         if created_timestamp_field:
             sort_by.append(created_timestamp_field)
@@ -599,7 +736,19 @@ class OfflinePostgresStore(OfflineStore):
         created_timestamp_field: Optional[str] = None,
         entity_timestamp_field: str = ENTITY_EVENT_TIMESTAMP_FIELD,
         source_timestamp_field: str = SOURCE_EVENT_TIMESTAMP_FIELD,
-    ):
+    ) -> Query:
+        """_summary_
+
+        Args:
+            df (Query): Query to be filter
+            group_keys (List[str], optional): entities cols. Defaults to []
+            created_timestamp_field (Optional[str], optional): data upload time col. Defaults to None
+            entity_timestamp_field (str, optional):  query time col, Defaults to `ENTITY_EVENT_TIMESTAMP_FIELD`
+            source_timestamp_field (str, optional): event taken time col, Defaults to `SOURCE_EVENT_TIMESTAMP_FIELD`
+
+        Returns:
+            Query: _description_
+        """
         if created_timestamp_field:
             latest_time = df.groupby(
                 Parameter(",".join(group_keys + [entity_timestamp_field, source_timestamp_field]))
