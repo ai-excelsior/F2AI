@@ -1,8 +1,7 @@
 from typing import List, Optional, Dict, Set, Any
-
-from aie_feast.definitions import FeatureSchema, Feature
-from aie_feast.period import Period
 from pydantic import BaseModel, Field
+
+from .definitions import FeatureSchema, Feature, Period
 
 
 class BaseView(BaseModel):

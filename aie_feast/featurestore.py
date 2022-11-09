@@ -4,7 +4,6 @@ import json
 import docker
 from datetime import datetime
 
-from sqlalchemy import TIME
 from aie_feast.common.jinja import jinja_env
 from typing import Dict, List, Union
 from aie_feast.common.source import FileSource
@@ -21,8 +20,7 @@ from aie_feast.common.get_config import (
 )
 from aie_feast.common.utils import to_file, remove_prefix
 from aie_feast.common.psl_utils import psy_conn, sql_df
-from aie_feast.period import Period
-from aie_feast.definitions import Feature
+from aie_feast.definitions import Feature, Period
 
 
 TIME_COL = "event_timestamp"  # timestamp of action taken in original tables or period-query result, or query time in single-query result table
