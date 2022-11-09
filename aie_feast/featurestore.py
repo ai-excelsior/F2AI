@@ -377,8 +377,9 @@ class FeatureStore:
         except:
             raise TypeError("please check your `fromnow` type")
 
+        service = self.services[service_name]
         result = self.offline_store.materialize(
-            service=self.services[service_name],
+            service=service,
             feature_views=self.feature_views,
             label_views=self.label_views,
             sources=self.sources,
@@ -392,11 +393,11 @@ class FeatureStore:
             result[MATERIALIZE_TIME] = pd.to_datetime(datetime.now(), utc=True)
             to_file(
                 result,
-                os.path.join(self.project_folder, f"{service_name.materialize_path}"),
-                f"{service_name.materialize_path}".split(".")[-1],
+                os.path.join(self.project_folder, f"{service.materialize_path}"),
+                f"{service.materialize_path}".split(".")[-1],
             )
             print(
-                f"materialize done, file saved at {os.path.join(self.project_folder, service_name.materialize_path)}"
+                f"materialize done, file saved at {os.path.join(self.project_folder, service.materialize_path)}"
             )
 
         elif self.offline_store.type == "pgsql":
