@@ -202,7 +202,7 @@ class OfflinePostgresStore(OfflineStore):
     ):
 
         source = sources[label_view.batch_source]
-        entity_dataframe = self.read(
+        joined_frame = self.read(
             source=source,
             features=labels,
             join_keys=join_keys,
@@ -210,62 +210,34 @@ class OfflinePostgresStore(OfflineStore):
         )
 
         if fromnow:
-            entity_dataframe = entity_dataframe.where(Parameter(DEFAULT_EVENT_TIMESTAMP_FIELD) >= fromnow)
-        elif start and end:
-            entity_dataframe = entity_dataframe.where(
-                Parameter(DEFAULT_EVENT_TIMESTAMP_FIELD) > start
-                and Parameter(DEFAULT_EVENT_TIMESTAMP_FIELD) < end
-            )
+            condition = Parameter(DEFAULT_EVENT_TIMESTAMP_FIELD) >= fromnow
         else:
-            raise ValueError("either (start,end) or fromnow should be given")
+            condition = (Parameter(DEFAULT_EVENT_TIMESTAMP_FIELD) <= end) & (
+                Parameter(DEFAULT_EVENT_TIMESTAMP_FIELD) >= start
+            )
 
-        time_columns = [Parameter(ENTITY_EVENT_TIMESTAMP_FIELD)]  # TODO created_timestamp
-        result_sql = entity_dataframe
+        joined_frame = joined_frame.where(condition)
 
         for featureview in feature_views:
             entity_cols = [entities[entity].join_keys[0] for entity in featureview.entities]
             features = featureview.get_feature_objects()
-            source = sources[featureview.batch_source]
-            all_join_cols = time_columns + entity_cols
-
-            source_df = self.read(source=source, features=features, join_keys=entity_cols)
-
-            sql_query = self._point_in_time_join(
-                entity_df=entity_dataframe.as_(f"{featureview.name}_entity_df"),
-                source_df=source_df.as_(f"{featureview.name}_source_df"),
-                timestamp_field=source.timestamp_field,
-                created_timestamp_field=source.created_timestamp_field,
-                ttl=featureview.ttl,
-                join_keys=entity_cols,
-                include=True,
-            )
-            feature_names = [
-                feature.name
-                for feature in features
-                if feature.name not in [feature.name for feature in labels]
-            ]
-            # all_feature_names = all_feature_names | set(feature_names)
-            result_sql = (
-                Query.from_(result_sql)
-                .left_join(
-                    sql_query.select(
-                        Parameter(
-                            f"{','.join(entity_cols + [ENTITY_EVENT_TIMESTAMP_FIELD ] + feature_names)}"
-                        )
-                    ).as_(featureview.name)
+            feature_names = [f.name for f in features if f.name not in [l.name for l in labels]]
+            if feature_names:
+                source = sources[featureview.batch_source]
+                source_df = self.read(source=source, features=features, join_keys=entity_cols)
+                sql_query = self._point_in_time_join(
+                    entity_df=joined_frame,
+                    source_df=source_df,
+                    timestamp_field=source.timestamp_field,
+                    created_timestamp_field=source.created_timestamp_field,
+                    ttl=featureview.ttl,
+                    join_keys=entity_cols,
+                    include=True,
+                    how="right",
                 )
-                .using(*all_join_cols)
-                .select("*")
-                .as_(f"{featureview.name}_join")
-            )
-        df = self._get_dataframe(
-            join_keys=join_keys,
-            timecol=[ENTITY_EVENT_TIMESTAMP_FIELD],
-            feature_names=list(all_cols_name),
-            sql_result=result_sql,
-        )
-        df["materialize_time"] = pd.to_datetime(datetime.datetime.now(), utc=True)
-        df.rename(columns={ENTITY_EVENT_TIMESTAMP_FIELD: DEFAULT_EVENT_TIMESTAMP_FIELD}, inplace=True)
+                joined_frame = sql_query.select(joined_frame.star, Parameter(f"{','.join(feature_names)}"))
+
+        joined_frame["materialize_time"] = pd.to_datetime(datetime.datetime.now(), utc=True)
 
         # engine = self.get_sqlalchemy_engine()
         # table = self._create_sqlalchemy_table(

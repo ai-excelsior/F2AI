@@ -106,7 +106,11 @@ def test_materialize(make_guizhou_traffic):
     project_folder = make_guizhou_traffic("pgsql")
     store = FeatureStore(project_folder)
     measured_time = timeit.timeit(
-        lambda: store.materialize("traval_time_prediction_embedding_v1", incremental_begin="4 minutes"),
-        number=2,
+        lambda: store.materialize(
+            "traval_time_prediction_embedding_v1",
+            start="2016-03-01 08:02:00+08",
+            end="2016-03-01 08:06:00+08",
+        ),
+        number=1,
     )
     print(f"materialize performance pgsql: {measured_time}s")
