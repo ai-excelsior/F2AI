@@ -35,49 +35,30 @@ class OfflineFileStore(OfflineStore):
 
     def materialize(
         self,
-        service: Service,
-        feature_views: Dict[str, FeatureView],
-        label_views: Dict[str, LabelView],
+        feature_views: List[FeatureView],
+        label_view: LabelView,
         sources: Dict[str, FileSource],
         entities: Dict[str, Entity],
+        labels: set[Feature],
+        join_keys: List[str],
+        all_cols_name: set[str],
         start: str = None,
         end: str = None,
         fromnow: str = None,
     ):
 
-        all_cols_name = service.get_feature_names(feature_views) | service.get_label_names(label_views)
-        label_view = service.get_label_views(label_views)[0]
-        labels = service.get_label_objects(label_views)
-        join_keys = list(
-            {
-                join_key
-                for entity_name in service.get_label_entities(label_views)
-                for join_key in entities[entity_name].join_keys
-            }
-        )
         source = sources[label_view.batch_source]
         joined_frame = self._read_file(source=source, features=labels, join_keys=list(join_keys))
-        # create timestamp makes no sense to labels
-        # joined_frame.drop(columns=source.created_timestamp_field, inplace=True, errors="ignore")
-        # if isinstance(incremental_begin, Period):
-        #     incremental_begin = (
-        #         joined_frame[DEFAULT_EVENT_TIMESTAMP_FIELD].max() - incremental_begin.to_pandas_dateoffset()
-        #     )
-        #     joined_frame = joined_frame[joined_frame[DEFAULT_EVENT_TIMESTAMP_FIELD] >= incremental_begin]
-        # else:
-        #     joined_frame = joined_frame[joined_frame[DEFAULT_EVENT_TIMESTAMP_FIELD] >= incremental_begin]
-        # if isinstance(incremental_begin, Period):
-        #     incremental_begin = joined_frame[TIME_COL].max() - incremental_begin.to_pandas_dateoffset()
-        #     joined_frame = joined_frame[joined_frame[TIME_COL] >= incremental_begin]
-        # else:
-        #     joined_frame = joined_frame[joined_frame[TIME_COL] >= incremental_begin]
+
         if start and end:
-            joined_frame = joined_frame[(joined_frame[TIME_COL] >= start) & (joined_frame[TIME_COL] <= end)]
+            joined_frame = joined_frame[
+                (joined_frame[TIME_COL] >= str(start)) & (joined_frame[TIME_COL] <= str(end))
+            ]
         elif fromnow:
-            joined_frame = joined_frame[joined_frame[TIME_COL] >= fromnow]
+            joined_frame = joined_frame[joined_frame[TIME_COL] >= str(fromnow)]
 
         # join features dataframe
-        for feature_view in service.get_feature_views(feature_views):
+        for feature_view in feature_views:
             feature_name = [
                 n
                 for n in feature_view.get_feature_names()

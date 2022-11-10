@@ -378,12 +378,30 @@ class FeatureStore:
             raise TypeError("please check your `fromnow` type")
 
         service = self.services[service_name]
+        label_view = service.get_label_views(self.label_views)[0]
+        feature_views = service.get_feature_views(self.feature_views)
+        labels = label_view.get_label_objects()
+
+        join_keys = list(
+            {
+                join_key
+                for entity_name in service.get_label_entities(self.label_views)
+                for join_key in self.entities[entity_name].join_keys
+            }
+        )
+
+        all_cols_name = service.get_feature_names(self.feature_views) | service.get_label_names(
+            self.label_views
+        )
+
         result = self.offline_store.materialize(
-            service=service,
-            feature_views=self.feature_views,
-            label_views=self.label_views,
+            feature_views=feature_views,
+            label_view=label_view,
             sources=self.sources,
             entities=self.entities,
+            labels=labels,
+            join_keys=join_keys,
+            all_cols_name=all_cols_name,
             start=start,
             end=end,
             fromnow=fromnow,

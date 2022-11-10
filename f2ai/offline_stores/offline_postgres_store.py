@@ -189,25 +189,23 @@ class OfflinePostgresStore(OfflineStore):
 
     def materialize(
         self,
-        service: Service,
-        feature_views: Dict[str, FeatureView],
-        label_views: Dict[str, LabelView],
+        feature_views: List[FeatureView],
+        label_view: LabelView,
         sources: Dict[str, FileSource],
         entities: Dict[str, Entity],
-        start: str,
-        end: str,
-        fromnow: str,
+        labels: set[Feature],
+        join_keys: List[str],
+        all_cols_name: set[str],
+        start: str = None,
+        end: str = None,
+        fromnow: str = None,
     ):
 
-        label_view = service.get_label_views(label_views)
-        feature_views = service.get_feature_views(feature_views)
-        labels = label_view[0].get_label_objects()
-        all_entity_cols = [entities[entity].join_keys[0] for entity in label_view[0].entities]
-        all_feature_names = set([label.name for label in labels])
+        source = sources[label_view.batch_source]
         entity_dataframe = self.read(
-            source=sources[label_view[0].batch_source],
+            source=source,
             features=labels,
-            join_keys=all_entity_cols,
+            join_keys=join_keys,
             alias=ENTITY_EVENT_TIMESTAMP_FIELD,
         )
 
@@ -221,7 +219,7 @@ class OfflinePostgresStore(OfflineStore):
         else:
             raise ValueError("either (start,end) or fromnow should be given")
 
-        time_columns = [Parameter(ENTITY_EVENT_TIMESTAMP_FIELD)]
+        time_columns = [Parameter(ENTITY_EVENT_TIMESTAMP_FIELD)]  # TODO created_timestamp
         result_sql = entity_dataframe
 
         for featureview in feature_views:
@@ -246,7 +244,7 @@ class OfflinePostgresStore(OfflineStore):
                 for feature in features
                 if feature.name not in [feature.name for feature in labels]
             ]
-            all_feature_names = all_feature_names | set(feature_names)
+            # all_feature_names = all_feature_names | set(feature_names)
             result_sql = (
                 Query.from_(result_sql)
                 .left_join(
@@ -261,9 +259,9 @@ class OfflinePostgresStore(OfflineStore):
                 .as_(f"{featureview.name}_join")
             )
         df = self._get_dataframe(
-            join_keys=all_entity_cols,
+            join_keys=join_keys,
             timecol=[ENTITY_EVENT_TIMESTAMP_FIELD],
-            feature_names=list(all_feature_names),
+            feature_names=list(all_cols_name),
             sql_result=result_sql,
         )
         df["materialize_time"] = pd.to_datetime(datetime.datetime.now(), utc=True)
