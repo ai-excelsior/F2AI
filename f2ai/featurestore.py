@@ -376,15 +376,15 @@ class FeatureStore:
             "join_keys": join_keys,
         }
 
-        all_feature_views = []
-        for feature_view in feature_views:
-            feature_view_dict = {
+        all_feature_views = [
+            {
                 "join_keys": [self.entities[entity].join_keys[0] for entity in feature_view.entities],
                 "features": feature_view.get_feature_objects(),
                 "source": self.sources[feature_view.batch_source],
                 "ttl": feature_view.ttl,
             }
-            all_feature_views.append(feature_view_dict)
+            for feature_view in feature_views
+        ]
 
         self.offline_store.materialize(
             save_path=service.materialize_path,
