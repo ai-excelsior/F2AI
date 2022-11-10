@@ -22,7 +22,7 @@ author = "eavae"
 extensions = ["sphinx.ext.napoleon", "sphinx.ext.autodoc"]
 templates_path = ["templates"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
-
+html_sidebars = {"**": ["globaltoc.html"]}
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
