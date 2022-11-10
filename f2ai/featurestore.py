@@ -343,7 +343,8 @@ class FeatureStore:
         """
         if fromnow:
             start = pd.to_datetime(datetime.now(), utc=True) - Period.from_str(fromnow).to_py_timedelta()
-            end = pd.to_datetime(end, utc=True)
+            # end = pd.to_datetime(end, utc=True)
+            end = pd.to_datetime(end, utc=True) if end else pd.to_datetime(datetime.now(), utc=True)
         else:
             start = pd.to_datetime(start, utc=True) if start else pd.to_datetime(0, utc=True)
             end = pd.to_datetime(end, utc=True) if end else pd.to_datetime(datetime.now(), utc=True)
