@@ -355,7 +355,7 @@ class OfflinePostgresStore(OfflineStore):
 
     def get_features(
         self,
-        entity_df: Union[SqlSource, Query],
+        entity_df: Union[SqlSource, Query, pd.DataFrame],
         features: Set[Feature],
         source: SqlSource,
         join_keys: List[str] = [],
@@ -378,8 +378,11 @@ class OfflinePostgresStore(OfflineStore):
 
         entity_cols = kwargs.pop("entity_cols", [])
         source_df = self.read(source=source, features=features, join_keys=join_keys + entity_cols)
+        if isinstance(entity_df, pd, pd.DataFrame):
+            residue = [c for c in entity_df.columns if c not in join_keys + [DEFAULT_EVENT_TIMESTAMP_FIELD]]
+        else:
+            residue = kwargs.get("residue", [])
 
-        residue = [c for c in entity_df.columns if c not in join_keys + [DEFAULT_EVENT_TIMESTAMP_FIELD]]
         entity_df, table_name = self._get_entity(entity_df, source, join_keys, residue=residue)
 
         sql_query = self._point_in_time_join(
@@ -465,7 +468,11 @@ class OfflinePostgresStore(OfflineStore):
         entity_cols = kwargs.pop("entity_cols", [])
         source_df = self.read(source=source, features=features, join_keys=join_keys + entity_cols)
 
-        residue = [c for c in entity_df.columns if c not in join_keys + [DEFAULT_EVENT_TIMESTAMP_FIELD]]
+        if isinstance(entity_df, pd, pd.DataFrame):
+            residue = [c for c in entity_df.columns if c not in join_keys + [DEFAULT_EVENT_TIMESTAMP_FIELD]]
+        else:
+            residue = kwargs.get("residue", [])
+
         entity_df, table_name = self._get_entity(entity_df, source, join_keys, residue=residue)
 
         sql_query = self._point_on_time_join(
