@@ -1,22 +1,18 @@
 from __future__ import annotations
 import uuid
 import pandas as pd
-import datetime
 from io import StringIO
 from typing import List, Optional, Set, TYPE_CHECKING, Union, Tuple, Dict
 from pydantic import Field, PrivateAttr
 from pypika import Query, Parameter, functions as fn, JoinType
 from f2ai.definitions import (
     Feature,
-    Entity,
     Period,
     LabelView,
-    FeatureView,
     Service,
     SqlSource,
     OfflineStoreType,
     OfflineStore,
-    FileSource,
 )
 from f2ai.common.utils import build_agg_query, build_filter_time_query
 from f2ai.common.utils import convert_dtype_to_sqlalchemy_type
@@ -189,55 +185,48 @@ class OfflinePostgresStore(OfflineStore):
 
     def materialize(
         self,
-        feature_views: List[FeatureView],
-        label_view: LabelView,
-        sources: Dict[str, FileSource],
-        entities: Dict[str, Entity],
-        labels: set[Feature],
-        join_keys: List[str],
-        all_cols_name: set[str],
+        save_path: str,
+        feature_views: List[Dict],
+        label_view: Dict,
         start: str = None,
         end: str = None,
-        fromnow: str = None,
     ):
 
-        source = sources[label_view.batch_source]
+        source = label_view["source"]
         joined_frame = self.read(
             source=source,
-            features=labels,
-            join_keys=join_keys,
+            features=label_view["labels"],
+            join_keys=label_view["join_keys"],
             alias=ENTITY_EVENT_TIMESTAMP_FIELD,
         )
 
-        if fromnow:
-            condition = Parameter(DEFAULT_EVENT_TIMESTAMP_FIELD) >= fromnow
-        else:
-            condition = (Parameter(DEFAULT_EVENT_TIMESTAMP_FIELD) <= end) & (
-                Parameter(DEFAULT_EVENT_TIMESTAMP_FIELD) >= start
-            )
+        condition = (Parameter(DEFAULT_EVENT_TIMESTAMP_FIELD) <= end) & (
+            Parameter(DEFAULT_EVENT_TIMESTAMP_FIELD) >= start
+        )
 
         joined_frame = joined_frame.where(condition)
 
         for featureview in feature_views:
-            entity_cols = [entities[entity].join_keys[0] for entity in featureview.entities]
-            features = featureview.get_feature_objects()
-            feature_names = [f.name for f in features if f.name not in [l.name for l in labels]]
+            entity_cols = featureview["join_keys"]
+            features = featureview["features"]
+            feature_names = [f.name for f in features if f.name not in [l.name for l in label_view["labels"]]]
             if feature_names:
-                source = sources[featureview.batch_source]
+                source = featureview["source"]
                 source_df = self.read(source=source, features=features, join_keys=entity_cols)
                 sql_query = self._point_in_time_join(
                     entity_df=joined_frame,
                     source_df=source_df,
                     timestamp_field=source.timestamp_field,
                     created_timestamp_field=source.created_timestamp_field,
-                    ttl=featureview.ttl,
+                    ttl=featureview["ttl"],
                     join_keys=entity_cols,
                     include=True,
                     how="right",
                 )
                 joined_frame = sql_query.select(joined_frame.star, Parameter(f"{','.join(feature_names)}"))
+        return joined_frame
 
-        joined_frame["materialize_time"] = pd.to_datetime(datetime.datetime.now(), utc=True)
+        # joined_frame["materialize_time"] = pd.to_datetime(datetime.datetime.now(), utc=True)
 
         # engine = self.get_sqlalchemy_engine()
         # table = self._create_sqlalchemy_table(
@@ -253,7 +242,7 @@ class OfflinePostgresStore(OfflineStore):
         #     cursor.copy_from(buffer, table=service.name, sep=",", columns=df.columns)
         #     self.psy_conn.commit()
 
-        return df
+        # return df
 
     def stats(
         self,

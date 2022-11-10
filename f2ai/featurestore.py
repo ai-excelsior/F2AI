@@ -342,13 +342,21 @@ class FeatureStore:
 
         """
 
-        start = pd.to_datetime(start, utc=True) if start else pd.to_datetime(0, utc=True)
-        end = pd.to_datetime(end, utc=True) if end else pd.to_datetime(datetime.now(), utc=True)
+        # start = pd.to_datetime(start, utc=True) if start else pd.to_datetime(0, utc=True)
+        # end = pd.to_datetime(end, utc=True) if end else pd.to_datetime(datetime.now(), utc=True)
         fromnow = (
             pd.to_datetime(datetime.now(), utc=True) - Period.from_str(fromnow).to_py_timedelta()
             if fromnow
             else None
         )
+        if fromnow:
+            start = fromnow
+        elif start:
+            start = pd.to_datetime(start, utc=True)
+        else:
+            start = pd.to_datetime(0, utc=True)
+
+        end = pd.to_datetime(end, utc=True) if end else pd.to_datetime(datetime.now(), utc=True)
 
         service = self.services[service_name]
         label_view = service.get_label_views(self.label_views)[0]
@@ -362,37 +370,29 @@ class FeatureStore:
                 for join_key in self.entities[entity_name].join_keys
             }
         )
+        label_view_dict = {
+            "source": self.sources[label_view.batch_source],
+            "labels": labels,
+            "join_keys": join_keys,
+        }
 
-        all_cols_name = service.get_feature_names(self.feature_views) | service.get_label_names(
-            self.label_views
-        )
+        all_feature_views = []
+        for feature_view in feature_views:
+            feature_view_dict = {
+                "join_keys": [self.entities[entity].join_keys[0] for entity in feature_view.entities],
+                "features": feature_view.get_feature_objects(),
+                "source": self.sources[feature_view.batch_source],
+                "ttl": feature_view.ttl,
+            }
+            all_feature_views.append(feature_view_dict)
 
-        result = self.offline_store.materialize(
-            feature_views=feature_views,
-            label_view=label_view,
-            sources=self.sources,
-            entities=self.entities,
-            labels=labels,
-            join_keys=join_keys,
-            all_cols_name=all_cols_name,
+        self.offline_store.materialize(
+            save_path=service.materialize_path,
+            feature_views=all_feature_views,
+            label_view=label_view_dict,
             start=start,
             end=end,
-            fromnow=fromnow,
         )
-
-        if self.offline_store.type == "file":
-            result[MATERIALIZE_TIME] = pd.to_datetime(datetime.now(), utc=True)
-            to_file(
-                result,
-                os.path.join(self.project_folder, f"{service.materialize_path}"),
-                f"{service.materialize_path}".split(".")[-1],
-            )
-            print(
-                f"materialize done, file saved at {os.path.join(self.project_folder, service.materialize_path)}"
-            )
-
-        elif self.offline_store.type == "pgsql":
-            pass
 
     def _offline_pgsql_materialize_dbt(self, service: Service, incremental_begin):
         try:

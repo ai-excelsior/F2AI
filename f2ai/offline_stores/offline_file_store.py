@@ -1,12 +1,10 @@
 import pandas as pd
+import datetime
 from typing import List, Optional, Set, Dict
-from f2ai.common.utils import get_stats_result
+from f2ai.common.utils import get_stats_result, to_file
 from f2ai.definitions import (
     Feature,
-    Entity,
     Period,
-    FeatureView,
-    LabelView,
     Service,
     OfflineStoreType,
     OfflineStore,
@@ -35,63 +33,46 @@ class OfflineFileStore(OfflineStore):
 
     def materialize(
         self,
-        feature_views: List[FeatureView],
-        label_view: LabelView,
-        sources: Dict[str, FileSource],
-        entities: Dict[str, Entity],
-        labels: Set[Feature],
-        join_keys: List[str],
-        all_cols_name: Set[str],
+        save_path: str,
+        feature_views: List[Dict],
+        label_view: Dict,
         start: pd.Timestamp = None,
         end: pd.Timestamp = None,
-        fromnow: pd.Timestamp = None,
     ):
 
-        source = sources[label_view.batch_source]
-        joined_frame = self._read_file(source=source, features=labels, join_keys=list(join_keys))
-        joined_frame.drop(columns=["createdtimestamp"])
+        source = label_view["source"]
+        joined_frame = self._read_file(
+            source=source, features=label_view["labels"], join_keys=label_view["join_keys"]
+        )
+        joined_frame.drop(columns=["created_timestamp"], errors="ignore")
 
-        if fromnow:
-            joined_frame = joined_frame[joined_frame[TIME_COL] >= fromnow]
-        else:
-            joined_frame = joined_frame[(joined_frame[TIME_COL] >= start) & (joined_frame[TIME_COL] <= end)]
+        joined_frame = joined_frame[(joined_frame[TIME_COL] >= start) & (joined_frame[TIME_COL] <= end)]
 
         # join features dataframe
         for feature_view in feature_views:
-            feature_name = [
-                n
-                for n in feature_view.get_feature_names()
-                if n in all_cols_name and n not in joined_frame.columns
-            ]
+            features = feature_view["features"]
+            feature_name = [f.name for f in features if f.name not in [l.name for l in label_view["labels"]]]
             if feature_name:  # this view has new features other than those in joined_frame
-                features = [n for n in feature_view.get_feature_objects() if n.name in feature_name]
-                join_keys = list(
-                    {
-                        join_key
-                        for entity_name in feature_view.entities
-                        for join_key in entities[entity_name].join_keys
-                    }
-                )
-                source = sources[feature_view.batch_source]
+                features = [n for n in features if n.name in feature_name]
+                join_keys = feature_view["join_keys"]
+                source = feature_view["source"]
                 joined_frame = self.get_features(
                     entity_df=joined_frame,
                     features=features,
                     source=source,
                     join_keys=join_keys,
-                    ttl=feature_view.ttl,
+                    ttl=feature_view["ttl"],
                     include=True,
                     how="right",
                 )
 
-        # joined_frame[MATERIALIZE_TIME] = pd.to_datetime(datetime.now(), utc=True)
-        # to_file(
-        #     joined_frame,
-        #     os.path.join(self.project_folder, f"{service.materialize_path}"),
-        #     f"{service.materialize_path}".split(".")[-1],
-        # )
-        # print(
-        #     f"materialize done, file saved at {os.path.join(self.project_folder, service.materialize_path)}"
-        # )
+        joined_frame[MATERIALIZE_TIME] = pd.to_datetime(datetime.datetime.now(), utc=True)
+        to_file(
+            joined_frame,
+            save_path,
+            save_path.split(".")[-1],
+        )
+        print(f"materialize done, file saved at {save_path}")
         return joined_frame
 
     def get_features(
