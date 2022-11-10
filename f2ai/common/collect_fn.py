@@ -1,7 +1,7 @@
 import torch
 import pandas as pd
-from aie_feast.models.encoder import LabelEncoder
-from aie_feast.models.normalizer import MinMaxNormalizer
+from f2ai.models.encoder import LabelEncoder
+from f2ai.models.normalizer import MinMaxNormalizer
 
 
 def classify_collet_fn(datas, cont_scalar={}, cat_coder={}, label=[]):

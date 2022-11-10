@@ -1,7 +1,7 @@
 import pandas as pd
 from typing import List, Optional, Set, Dict
-from aie_feast.common.utils import get_stats_result
-from aie_feast.definitions import (
+from f2ai.common.utils import get_stats_result
+from f2ai.definitions import (
     Feature,
     Entity,
     Period,

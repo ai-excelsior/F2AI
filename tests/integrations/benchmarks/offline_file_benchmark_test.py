@@ -1,8 +1,8 @@
 import pandas as pd
 import timeit
 from os import path
-from aie_feast import FeatureStore
-from aie_feast.common.sampler import GroupFixednbrSampler
+from f2ai import FeatureStore
+from f2ai.common.sampler import GroupFixednbrSampler
 
 LINE_LIMIT = 1000
 

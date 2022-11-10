@@ -7,7 +7,7 @@ Submodules
 aie\_feast.definitions module
 -----------------------------
 
-.. automodule:: aie_feast.definitions
+.. automodule:: f2ai.definitions
    :members:
    :undoc-members:
    :show-inheritance:
@@ -15,7 +15,7 @@ aie\_feast.definitions module
 aie\_feast.featurestore module
 ------------------------------
 
-.. automodule:: aie_feast.featurestore
+.. automodule:: f2ai.featurestore
    :members:
    :undoc-members:
    :show-inheritance:
@@ -24,7 +24,7 @@ aie\_feast.featurestore module
 Module contents
 ---------------
 
-.. automodule:: aie_feast
+.. automodule:: f2ai
    :members:
    :undoc-members:
    :show-inheritance:

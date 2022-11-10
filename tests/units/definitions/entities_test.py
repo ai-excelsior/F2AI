@@ -1,4 +1,4 @@
-from aie_feast.definitions import Entity
+from f2ai.definitions import Entity
 
 
 def test_entity_auto_join_keys():

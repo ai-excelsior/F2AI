@@ -1,7 +1,7 @@
 import os
 import glob
 from typing import List, Dict
-from aie_feast.definitions import (
+from f2ai.definitions import (
     OfflineStoreType,
     Entity,
     FeatureView,

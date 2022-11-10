@@ -1,4 +1,4 @@
-from aie_feast.definitions import SchemaAnchor
+from f2ai.definitions import SchemaAnchor
 
 
 def test_parse_cfg_to_feature_anchor():

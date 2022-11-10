@@ -4,9 +4,9 @@ from torch import nn
 from torchmetrics import MeanAbsoluteError
 from typing import List, Dict, Tuple
 from torch.utils.data import DataLoader
-from aie_feast.featurestore import FeatureStore
-from aie_feast.common.sampler import GroupFixednbrSampler
-from aie_feast.common.collect_fn import nbeats_collet_fn
+from f2ai.featurestore import FeatureStore
+from f2ai.common.sampler import GroupFixednbrSampler
+from f2ai.common.collect_fn import nbeats_collet_fn
 
 from submodules import NBEATSGenericBlock, NBEATSSeasonalBlock, NBEATSTrendBlock, MultiEmbedding
 

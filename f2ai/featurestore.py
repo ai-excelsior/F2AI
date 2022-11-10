@@ -4,18 +4,18 @@ import json
 import docker
 from datetime import datetime
 from typing import Dict, List, Union
-from aie_feast.dataset.dataset import Dataset
-from aie_feast.common.get_config import (
+from f2ai.dataset.dataset import Dataset
+from f2ai.common.get_config import (
     get_service_cfg,
     get_entity_cfg,
     get_label_views,
     get_feature_views,
     get_source_cfg,
 )
-from aie_feast.common.utils import to_file, remove_prefix
-from aie_feast.common.jinja import jinja_env
-from aie_feast.common.read_file import read_yml
-from aie_feast.definitions import (
+from f2ai.common.utils import to_file, remove_prefix
+from f2ai.common.jinja import jinja_env
+from f2ai.common.read_file import read_yml
+from f2ai.definitions import (
     Feature,
     Period,
     FeatureView,
