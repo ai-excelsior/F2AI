@@ -1,6 +1,10 @@
 F2AI
 ====
 
+.. image:: https://readthedocs.org/projects/f2ai/badge/?version=latest
+    :target: https://f2ai.readthedocs.io/en/latest/?badge=latest
+    :alt: Documentation Status
+
 The architecture above is a working flow demonstration when using F2AI but not technical architecture.
 
 Getting Started
@@ -8,11 +12,6 @@ Getting Started
 
 1. Install F2AI
 
-=======
-
-.. image:: https://readthedocs.org/projects/f2ai/badge/?version=latest
-    :target: https://f2ai.readthedocs.io/en/latest/?badge=latest
-    :alt: Documentation Status
 
 Overview
 -------------
