@@ -9,7 +9,7 @@ GUIZHOU_TRAFFIC_CFG = {
     "repo": "git@code.unianalysis.com:f2ai-examples/guizhou_traffic.git",
     "infra": {
         "file": {
-            "cwd": os.path.join(TEMP_DIR, "f2ai-credit-guizhou_traffic_file"),
+            "cwd": os.path.join(TEMP_DIR, "f2ai-guizhou_traffic_file"),
             "branch": "main",
         },
         "pgsql": {
