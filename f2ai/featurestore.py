@@ -341,28 +341,14 @@ class FeatureStore:
             fromnow(str) : time interval from now
 
         """
-
-        # start = pd.to_datetime(start, utc=True) if start else pd.to_datetime(0, utc=True)
-        # end = pd.to_datetime(end, utc=True) if end else pd.to_datetime(datetime.now(), utc=True)
-        fromnow = (
-            pd.to_datetime(datetime.now(), utc=True) - Period.from_str(fromnow).to_py_timedelta()
-            if fromnow
-            else None
-        )
         if fromnow:
-            start = fromnow
-        elif start:
-            start = pd.to_datetime(start, utc=True)
+            start = pd.to_datetime(datetime.now(), utc=True) - Period.from_str(fromnow).to_py_timedelta()
+            end = pd.to_datetime(end, utc=True)
         else:
-            start = pd.to_datetime(0, utc=True)
-
-        end = pd.to_datetime(end, utc=True) if end else pd.to_datetime(datetime.now(), utc=True)
+            start = pd.to_datetime(start, utc=True) if start else pd.to_datetime(0, utc=True)
+            end = pd.to_datetime(end, utc=True) if end else pd.to_datetime(datetime.now(), utc=True)
 
         service = self.services[service_name]
-        label_view = service.get_label_views(self.label_views)[0]
-        feature_views = service.get_feature_views(self.feature_views)
-        labels = label_view.get_label_objects()
-
         join_keys = list(
             {
                 join_key
@@ -370,9 +356,10 @@ class FeatureStore:
                 for join_key in self.entities[entity_name].join_keys
             }
         )
+        label_view = service.get_label_views(self.label_views)[0]
         label_view_dict = {
             "source": self.sources[label_view.batch_source],
-            "labels": labels,
+            "labels": label_view.get_label_objects(),
             "join_keys": join_keys,
         }
 
@@ -383,7 +370,7 @@ class FeatureStore:
                 "source": self.sources[feature_view.batch_source],
                 "ttl": feature_view.ttl,
             }
-            for feature_view in feature_views
+            for feature_view in service.get_feature_views(self.feature_views)
         ]
 
         self.offline_store.materialize(
