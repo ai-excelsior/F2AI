@@ -331,27 +331,7 @@ class FeatureStore:
             **kwargs,
         )
 
-    # def materialize(self, service_name: str, fromnow: str = None):
-    #     """incrementally join `views` to generate tables
-
-    #     Args:
-    #         service_name (str): name of service to materialize
-    #         incremental_begin (str): begin of materialization
-    #             `None`: all-data for type=file, otherwise last materialzation time
-    #             date-like str: corresponding date, e.g.: `2020-01-03 00:09:08`
-    #             int-like + fre str:  latest int freq, e.g.: `30 days`
-
-    #     """
-
-    #     if self.offline_store.type == "file":
-    #         # self._offline_record_materialize(self.services[service_name], incremental_begin)
-    #         self._offline_record_materialize(self.services[service_name], incremental_begin=fromnow)
-
-    #     elif self.offline_store.type == "pgsql":
-    #         self._offline_pgsql_materialize(self.services[service_name], fromnow=fromnow)
-    #         # self._offline_pgsql_materialize_dbt(self.services[service_name], incremental_begin)
-
-    def materialize(self, service_name: str, start: str = None, end: str = None, fromnow: str = None):
+    def materialize(self, service_name: str, fromnow: str = None, start: str = None, end: str = None):
         """incrementally join `views` to generate tables
 
         Args:
@@ -362,20 +342,11 @@ class FeatureStore:
 
         """
 
-        try:
-            start = pd.to_datetime(start, utc=True) if start else None
-            end = pd.to_datetime(end, utc=True) if end else None
-        except:
-            raise TypeError("please check your `start` ,`end` type")
-
-        try:
-            fromnow = (
-                pd.to_datetime(datetime.now()) - Period.from_str(fromnow).to_py_timedelta()
-                if fromnow
-                else None
-            )
-        except:
-            raise TypeError("please check your `fromnow` type")
+        start = pd.to_datetime(start, utc=True) if start else pd.to_datetime(0, utc=True)
+        end = pd.to_datetime(end, utc=True) if end else pd.to_datetime(datetime.now(), utc=True)
+        fromnow = (
+            pd.to_datetime(datetime.now()) - Period.from_str(fromnow).to_py_timedelta() if fromnow else None
+        )
 
         service = self.services[service_name]
         label_view = service.get_label_views(self.label_views)[0]

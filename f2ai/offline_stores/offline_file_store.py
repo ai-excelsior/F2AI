@@ -39,23 +39,22 @@ class OfflineFileStore(OfflineStore):
         label_view: LabelView,
         sources: Dict[str, FileSource],
         entities: Dict[str, Entity],
-        labels: set[Feature],
+        labels: Set[Feature],
         join_keys: List[str],
-        all_cols_name: set[str],
-        start: str = None,
-        end: str = None,
-        fromnow: str = None,
+        all_cols_name: Set[str],
+        start: pd.Timestamp = None,
+        end: pd.Timestamp = None,
+        fromnow: pd.Timestamp = None,
     ):
 
         source = sources[label_view.batch_source]
         joined_frame = self._read_file(source=source, features=labels, join_keys=list(join_keys))
+        joined_frame.drop(columns=["createdtimestamp"])
 
-        if start and end:
-            joined_frame = joined_frame[
-                (joined_frame[TIME_COL] >= str(start)) & (joined_frame[TIME_COL] <= str(end))
-            ]
-        elif fromnow:
-            joined_frame = joined_frame[joined_frame[TIME_COL] >= str(fromnow)]
+        if fromnow:
+            joined_frame = joined_frame[joined_frame[TIME_COL] >= fromnow]
+        else:
+            joined_frame = joined_frame[(joined_frame[TIME_COL] >= start) & (joined_frame[TIME_COL] <= end)]
 
         # join features dataframe
         for feature_view in feature_views:
