@@ -1,4 +1,4 @@
-from aie_feast.featurestore import FeatureStore
+from f2ai.featurestore import FeatureStore
 
 
 feature_store = FeatureStore(

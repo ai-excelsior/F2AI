@@ -1,10 +1,10 @@
 import pandas as pd
-from aie_feast.offline_stores.offline_file_store import (
+from f2ai.offline_stores.offline_file_store import (
     OfflineFileStore,
     ENTITY_EVENT_TIMESTAMP_FIELD,
     SOURCE_EVENT_TIMESTAMP_FIELD,
 )
-from aie_feast.definitions import Period
+from f2ai.definitions import Period
 
 mock_point_in_time_filter_df = pd.DataFrame(
     {

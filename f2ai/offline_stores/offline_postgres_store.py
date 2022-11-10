@@ -6,7 +6,7 @@ from io import StringIO
 from typing import List, Optional, Set, TYPE_CHECKING, Union, Tuple, Dict
 from pydantic import Field, PrivateAttr
 from pypika import Query, Parameter, functions as fn, JoinType
-from aie_feast.definitions import (
+from f2ai.definitions import (
     Feature,
     Entity,
     Period,
@@ -18,8 +18,8 @@ from aie_feast.definitions import (
     OfflineStore,
     FileSource,
 )
-from aie_feast.common.utils import build_agg_query, build_filter_time_query
-from aie_feast.common.utils import convert_dtype_to_sqlalchemy_type
+from f2ai.common.utils import build_agg_query, build_filter_time_query
+from f2ai.common.utils import convert_dtype_to_sqlalchemy_type
 
 
 DEFAULT_EVENT_TIMESTAMP_FIELD = "event_timestamp"

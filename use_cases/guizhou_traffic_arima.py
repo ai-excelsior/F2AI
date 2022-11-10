@@ -7,9 +7,9 @@ import pmdarima as pm
 import matplotlib.pyplot as plt
 from sklearn.metrics import mean_squared_error
 from pmdarima.model_selection import train_test_split
-from aie_feast.common.sampler import GroupFixednbrSampler
-from aie_feast.common.utils import get_bucket_from_oss_url
-from aie_feast.featurestore import FeatureStore
+from f2ai.common.sampler import GroupFixednbrSampler
+from f2ai.common.utils import get_bucket_from_oss_url
+from f2ai.featurestore import FeatureStore
 
 
 if __name__ == "__main__":

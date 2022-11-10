@@ -1,8 +1,8 @@
 from pyexpat import features
 import pandas as pd
 import timeit
-from aie_feast import FeatureStore
-from aie_feast.common.sampler import GroupFixednbrSampler
+from f2ai import FeatureStore
+from f2ai.common.sampler import GroupFixednbrSampler
 
 
 def get_guizhou_traffic_entities(store):

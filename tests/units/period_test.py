@@ -1,4 +1,4 @@
-from aie_feast.definitions import Period
+from f2ai.definitions import Period
 from pandas import DateOffset
 
 

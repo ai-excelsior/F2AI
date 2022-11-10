@@ -1,9 +1,9 @@
 :orphan:
 
-aie_feast
+f2ai
 =========
 
 .. toctree::
    :maxdepth: 4
 
-   aie_feast
+   f2ai
