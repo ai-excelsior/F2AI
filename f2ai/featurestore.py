@@ -373,8 +373,10 @@ class FeatureStore:
             for feature_view in service.get_feature_views(self.feature_views)
         ]
 
+        dest_path = self.offline_store.get_offline_source(service)
+
         self.offline_store.materialize(
-            save_path=service.materialize_path,
+            save_path=dest_path,
             feature_views=all_feature_views,
             label_view=label_view_dict,
             start=start,

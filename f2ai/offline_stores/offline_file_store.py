@@ -1,7 +1,7 @@
 import pandas as pd
 import datetime
 from typing import List, Optional, Set, Dict
-from f2ai.common.utils import get_stats_result, to_file
+from f2ai.common.utils import get_stats_result, to_file, remove_prefix
 from f2ai.definitions import (
     Feature,
     Period,
@@ -33,7 +33,7 @@ class OfflineFileStore(OfflineStore):
 
     def materialize(
         self,
-        save_path: str,
+        save_path: FileSource,
         feature_views: List[Dict],
         label_view: Dict,
         start: pd.Timestamp = None,
@@ -69,10 +69,11 @@ class OfflineFileStore(OfflineStore):
         joined_frame[MATERIALIZE_TIME] = pd.to_datetime(datetime.datetime.now(), utc=True)
         to_file(
             joined_frame,
-            save_path,
-            save_path.split(".")[-1],
+            save_path.path,
+            save_path.path.split(".")[-1],
         )
-        print(f"materialize done, file saved at {save_path}")
+        save_path = remove_prefix(save_path.path, "file://")
+        print(f"materialize done, file saved at '{save_path}'")
         return joined_frame
 
     def get_features(

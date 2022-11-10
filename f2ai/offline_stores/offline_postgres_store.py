@@ -185,7 +185,7 @@ class OfflinePostgresStore(OfflineStore):
 
     def materialize(
         self,
-        save_path: str,
+        save_path: SqlSource,
         feature_views: List[Dict],
         label_view: Dict,
         start: str = None,
@@ -224,6 +224,9 @@ class OfflinePostgresStore(OfflineStore):
                     how="right",
                 )
                 joined_frame = sql_query.select(joined_frame.star, Parameter(f"{','.join(feature_names)}"))
+
+        # result_sql = Query.into(save_path).from_(joined_frame).select("*").on_conflict(["aa"]).do_update()
+
         return joined_frame
 
         # joined_frame["materialize_time"] = pd.to_datetime(datetime.datetime.now(), utc=True)
