@@ -25,6 +25,9 @@ class OfflineStore(BaseModel):
 
     type: OfflineStoreType
 
+    class Config:
+        extra = "allow"
+
     @abc.abstractmethod
     def get_offline_source(self, service: Service) -> Source:
         """get offline materialized source with a specific service

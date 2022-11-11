@@ -52,7 +52,9 @@ class OfflineFileStore(OfflineStore):
         # join features dataframe
         for feature_view in feature_views:
             features = feature_view["features"]
-            feature_name = [f.name for f in features if f.name not in [l.name for l in label_view["labels"]]]
+            feature_name = [
+                f.name for f in features if f.name not in [label.name for label in label_view["labels"]]
+            ]
             if feature_name:  # this view has new features other than those in joined_frame
                 features = [n for n in features if n.name in feature_name]
                 join_keys = feature_view["join_keys"]
@@ -138,19 +140,25 @@ class OfflineFileStore(OfflineStore):
         join_keys: List[str] = [],
         start: datetime.datetime = None,
         end: datetime.datetime = None,
-    ):
+    ) -> pd.DataFrame:
         source_df = self._read_file(source=source, features=features, join_keys=join_keys)
 
         # filter source_df by start and end
         if end is not None:
-            source_df = source_df[source_df[source.timestamp_field] <= end]
+            source_df: pd.DataFrame = source_df[source_df[source.timestamp_field] <= end]
         if start is not None:
-            source_df = source_df[source_df[source.timestamp_field] >= start]
+            source_df: pd.DataFrame = source_df[source_df[source.timestamp_field] >= start]
 
         # only keep entity join keys and features
         source_df = source_df[join_keys + [feature.name for feature in features]]
 
-        return getattr(source_df.groupby(join_keys), fn)()
+        if fn == StatsFunctions.UNIQUE:
+            return {feature.name: source_df[feature.name].unique() for feature in features}
+
+        if fn == StatsFunctions.MODE:
+            return source_df.groupby(join_keys).agg(lambda x: x.value_counts().index[0])
+
+        return getattr(source_df.groupby(join_keys), fn.value if fn != StatsFunctions.AVG else "mean")()
 
     def stats(
         self,

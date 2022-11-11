@@ -11,3 +11,4 @@ class StatsFunctions(Enum):
     AVG = "avg"
     MODE = "mode"
     MEDIAN = "median"
+    UNIQUE = "unique"

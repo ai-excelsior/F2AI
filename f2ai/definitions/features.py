@@ -108,7 +108,7 @@ class Feature(BaseModel):
     name: str
     dtype: FeatureDTypes
     period: Optional[str]
-    schema_type: SchemaType
+    schema_type: SchemaType = SchemaType.FEATURE
     view_name: str
 
     @classmethod

@@ -8,6 +8,7 @@ from .services import Service
 from .sources import Source, FileSource, SqlSource, parse_source_yaml
 from .offline_store import OfflineStore, OfflineStoreType, init_offline_store_from_cfg
 from .constants import LOCAL_TIMEZONE, StatsFunctions
+from .dtypes import FeatureDTypes
 
 __all__ = [
     "Entity",
@@ -28,4 +29,5 @@ __all__ = [
     "init_offline_store_from_cfg",
     "LOCAL_TIMEZONE",
     "StatsFunctions",
+    "FeatureDTypes",
 ]

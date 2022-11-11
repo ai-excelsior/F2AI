@@ -4,7 +4,10 @@ from f2ai.offline_stores.offline_file_store import (
     ENTITY_EVENT_TIMESTAMP_FIELD,
     SOURCE_EVENT_TIMESTAMP_FIELD,
 )
-from f2ai.definitions import Period
+from f2ai.definitions import Period, FileSource, Feature, FeatureDTypes, StatsFunctions
+
+import pytest
+from unittest.mock import MagicMock
 
 mock_point_in_time_filter_df = pd.DataFrame(
     {
@@ -46,7 +49,6 @@ def test_point_in_time_filter_with_ttl():
     assert result_df["_source_event_timestamp_"].min() == pd.Timestamp("2021-08-25 20:16:19")
 
 
-###
 def test_point_on_time_filter_simple():
     result_df = OfflineFileStore._point_on_time_filter(
         mock_point_in_time_filter_df, -Period.from_str("2 seconds"), include=True
@@ -295,3 +297,38 @@ def test_point_on_time_join_with_created_timestamp():
     assert all(result_df["feature"] == [4, 5, 5])
     assert result_df[result_df["event_timestamp"] == pd.Timestamp("2021-08-25 20:16:18")].shape == (2, 5)
     assert pd.Timestamp("2021-08-25 20:16:20") not in result_df["event_timestamp"]
+
+
+mocked_stats_input_df = pd.DataFrame(
+    {
+        "join_key": ["A", "B", "A", "B"],
+        "event_timestamp": [
+            pd.Timestamp("2021-08-25 20:16:16"),
+            pd.Timestamp("2021-08-25 20:16:17"),
+            pd.Timestamp("2021-08-25 20:16:18"),
+            pd.Timestamp("2021-08-25 20:16:18"),
+        ],
+        "F1": [1, 2, 3, 4],
+    }
+)
+
+
+@pytest.mark.parametrize("fn", [(fn) for fn in StatsFunctions])
+def test_stats(fn):
+    store = OfflineFileStore()
+    file_source = FileSource(name="mock", path="mock")
+    features = [Feature(name="F1", dtype=FeatureDTypes.FLOAT, view_name="hello")]
+
+    store._read_file = MagicMock(return_value=mocked_stats_input_df)
+
+    result_df = store.new_stats(
+        file_source,
+        features,
+        fn,
+        join_keys=["join_key"],
+    )
+    if fn == StatsFunctions.UNIQUE:
+        assert isinstance(result_df, dict)
+    else:
+        assert ",".join(result_df.index.names) == "join_key"
+        assert isinstance(result_df, pd.DataFrame)
