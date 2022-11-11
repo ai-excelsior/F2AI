@@ -591,7 +591,7 @@ class FeatureStore:
     def get_latest_entities(
         self, view: Union[str, LabelView, Service, FeatureView], entity: pd.DataFrame = None
     ) -> pd.DataFrame:
-        """get latest entity and its timestamp from a single FeatureViews/LabelViews or a materialzed Service
+        """get latest entity and its timestamp from a single FeatureViews/LabelViews or a materialized Service
         entity can either be None(all joined-entities in view), entity names or entity value(specific entities)
 
         Args:

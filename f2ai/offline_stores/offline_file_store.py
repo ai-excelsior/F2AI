@@ -9,6 +9,7 @@ from f2ai.definitions import (
     OfflineStoreType,
     OfflineStore,
     FileSource,
+    StatsFunctions,
 )
 
 
@@ -127,6 +128,29 @@ class OfflineFileStore(OfflineStore):
             include=include,
             **kwargs,
         )
+
+    # TODO: remove this later
+    def new_stats(
+        self,
+        source: FileSource,
+        features: Set[Feature],
+        fn: StatsFunctions,
+        join_keys: List[str] = [],
+        start: datetime.datetime = None,
+        end: datetime.datetime = None,
+    ):
+        source_df = self._read_file(source=source, features=features, join_keys=join_keys)
+
+        # filter source_df by start and end
+        if end is not None:
+            source_df = source_df[source_df[source.timestamp_field] <= end]
+        if start is not None:
+            source_df = source_df[source_df[source.timestamp_field] >= start]
+
+        # only keep entity join keys and features
+        source_df = source_df[join_keys + [feature.name for feature in features]]
+
+        return getattr(source_df.groupby(join_keys), fn)()
 
     def stats(
         self,
