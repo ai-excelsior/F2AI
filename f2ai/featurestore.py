@@ -1,3 +1,4 @@
+from numpy import NaN
 import pandas as pd
 import os
 import json
@@ -557,22 +558,37 @@ class FeatureStore:
         )
 
     def get_latest_entities(
-        self, view: Union[str, LabelView, Service, FeatureView], entity: pd.DataFrame = None
+        self,
+        view: Union[str, LabelView, Service, FeatureView],
+        entity: Union[pd.DataFrame, List[str]] = None,
+        start: Union[str, datetime] = 0,
+        end: Union[str, datetime] = datetime.now(),
     ) -> pd.DataFrame:
-        """get latest entity and its timestamp from a single FeatureViews/LabelViews or a materialized Service
-        entity can either be None(all joined-entities in view), entity names or entity value(specific entities)
+        """_summary_
 
         Args:
-            views (List): view to look up
+            view (Union[str, LabelView, Service, FeatureView]): FeatureViews/LabelViews/Service to look up
+            entity (Union[pd.DataFrame, List[str]], optional): entity to look up in views, either pd.DataFrame specify the entity or List specify the entity join-keys.
+                e.g. entity = pd.DataFrame('link_id'=['1234567','AAVVDDD']) or entity = ['link_id'].Defaults to None.
+            start (Union[str, pd.Timestamp], optional): start time to look up. Defaults to 0.
+            end (Union[str, pd.Timestamp], optional): end time to look up. Defaults to None.
+
+        Returns:
+            pd.DataFrame: _description_
+
         """
         view = self._get_views(view)
+        start = pd.to_datetime(start, utc=True)
+        end = pd.to_datetime(end, utc=True)
+
         if isinstance(entity, pd.DataFrame):
-            entities = list(entity.columns)
-            entity[TIME_COL] = 0
+            join_keys = list(entity.columns)
+            entity[TIME_COL] = end
+            group_keys = self._get_keys_to_join(view, join_keys)
         else:
-            entities = entity
-            entity = None
-        join_keys = self._get_keys_to_join(view, entities)
+            join_keys = None
+            group_keys = self._get_keys_to_join(view, entity)
+            entity = pd.DataFrame({TIME_COL: [end]})
 
         if isinstance(view, (FeatureView, LabelView)):
             source = self.sources[view.batch_source]
@@ -580,7 +596,9 @@ class FeatureStore:
         else:
             source = self.offline_store.get_offline_source(view)
 
-        return self.offline_store.get_latest_entities(source=source, group_keys=join_keys, entity_df=entity)
+        return self.offline_store.get_latest_entities(
+            source=source, join_keys=join_keys, group_keys=group_keys, entity_df=entity, start=start
+        )
 
     def get_dataset(self, service_name: str, sampler: callable = None) -> Dataset:
         """get from `start` to `end` length data for training from `views`

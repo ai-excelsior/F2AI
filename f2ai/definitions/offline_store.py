@@ -98,13 +98,19 @@ class OfflineStore(BaseModel):
 
     @abc.abstractmethod
     def get_latest_entities(
-        self, source: Source, join_keys: List[str] = [], entity_df: pd.DataFrame = None
+        self,
+        source: Source,
+        join_keys: List[str] = None,
+        group_keys: List[str] = None,
+        entity_df: pd.DataFrame = None,
+        start = None,
     ) -> pd.DataFrame:
         """get latest unique entities from a source. Which is useful when you want to know how many entities you have, or what is the latest features appear in your data source.
 
         Args:
             source (Source): A specific implementation of Source. For example, OfflinePostgresStore will receive a SqlSource which point to table with time semantic.
-            join_keys (List[str], optional): Which columns to join the entity_df with source. Defaults to [].
+            join_keys (List[str], optional): Which columns to join the entity_df with source. Defaults to None.
+            group_keys (List[str], optional): Which columns to aggregate
             entity_df (pd.DataFrame, optional): A query DataFrame which include entities and event_timestamp column. Defaults to None.
 
         Returns:

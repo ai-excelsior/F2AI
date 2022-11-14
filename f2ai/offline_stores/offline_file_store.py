@@ -162,7 +162,12 @@ class OfflineFileStore(OfflineStore):
         return getattr(source_df.groupby(group_keys), fn.value if fn != StatsFunctions.AVG else "mean")()
 
     def get_latest_entities(
-        self, source: FileSource, group_keys: list, entity_df: pd.DataFrame = None
+        self,
+        source: FileSource,
+        join_keys: List[str] = None,
+        group_keys: list = None,
+        entity_df: pd.DataFrame = None,
+        start: datetime = None,
     ) -> pd.DataFrame:
         """_summary_
 
@@ -175,10 +180,22 @@ class OfflineFileStore(OfflineStore):
             pd.DataFrame: _description_
         """
         source_df = self._read_file(source=source, features=[], join_keys=group_keys)
-        if entity_df is not None:
-            source_df = source_df.merge(entity_df, on=group_keys, how="inner")
+        source_df = source_df.rename(columns={source.timestamp_field: SOURCE_EVENT_TIMESTAMP_FIELD})
+        source_df = source_df[source_df[SOURCE_EVENT_TIMESTAMP_FIELD] >= start]
+        entity_df = entity_df.rename(columns={DEFAULT_EVENT_TIMESTAMP_FIELD: ENTITY_EVENT_TIMESTAMP_FIELD})
 
-        source_df = source_df[group_keys + [source.timestamp_field]]
+        if join_keys is not None:
+            source_df = source_df.merge(entity_df, on=group_keys, how="inner")
+        else:
+            source_df = source_df.merge(entity_df, how="cross")
+
+        source_df = source_df[group_keys + [ENTITY_EVENT_TIMESTAMP_FIELD, SOURCE_EVENT_TIMESTAMP_FIELD]]
+        source_df = (
+            self._point_in_time_filter(source_df)
+            .drop(columns=[ENTITY_EVENT_TIMESTAMP_FIELD])
+            .rename(columns={SOURCE_EVENT_TIMESTAMP_FIELD: source.timestamp_field})
+        )
+
         df = source_df.sort_values(by=source.timestamp_field, ascending=False, ignore_index=True)
         return df.drop_duplicates(subset=group_keys, keep="first")
 
