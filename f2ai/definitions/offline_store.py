@@ -1,8 +1,9 @@
 from __future__ import annotations
 import abc
 import pandas as pd
+import datetime
 from enum import Enum
-from typing import Dict, Any, TYPE_CHECKING, Set, List, Optional
+from typing import Dict, Any, TYPE_CHECKING, Set, List, Optional, Union
 from pydantic import BaseModel
 
 if TYPE_CHECKING:
@@ -10,6 +11,7 @@ if TYPE_CHECKING:
     from .sources import Source
     from .features import Feature
     from .period import Period
+    from .constants import StatsFunctions
 
 
 class OfflineStoreType(str, Enum):
@@ -111,7 +113,28 @@ class OfflineStore(BaseModel):
         pass
 
     @abc.abstractmethod
-    def stats():
+    def stats(
+        self,
+        source: Source,
+        features: Set[Feature],
+        fn: StatsFunctions,
+        group_keys: List[str] = [],
+        start: datetime.datetime = None,
+        end: datetime.datetime = None,
+    ) -> Union[pd.DataFrame, Dict[str, list]]:
+        """Get statistical information with given StatsFunctions.
+
+        Args:
+            source (Source): A specific implementation of Source. For example, OfflinePostgresStore
+            features (Set[Feature]): A set of Features you want stats on.
+            fn (StatsFunctions): A stats function, which contains min, max, std, avg, mode, median, unique.
+            group_keys (List[str], optional): How to group by. Defaults to [].
+            start (datetime.datetime, optional): Defaults to None.
+            end (datetime.datetime, optional): Defaults to None.
+
+        Returns:
+            Union[pd.DataFrame, Dict[str, list]]: Return Dict when unique, otherwise pd.DataFrame
+        """
         pass
 
     @abc.abstractmethod

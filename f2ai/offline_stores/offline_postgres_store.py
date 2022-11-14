@@ -17,7 +17,6 @@ from f2ai.definitions import (
     OfflineStore,
     StatsFunctions,
 )
-from f2ai.common.utils import build_agg_query, build_filter_time_query
 from f2ai.common.utils import convert_dtype_to_sqlalchemy_type
 
 
@@ -252,72 +251,26 @@ class OfflinePostgresStore(OfflineStore):
 
         # return df
 
-    def new_stats(
+    def stats(
         self,
         source: SqlSource,
-        features: Set[Feature],
         fn: StatsFunctions,
-        join_keys: List[str] = [],
+        features: Set[Feature] = {},
+        group_keys: List[str] = [],
         start: datetime.datetime = None,
         end: datetime.datetime = None,
     ) -> pd.DataFrame:
         source_sql = Query.from_(source.query)
+        if fn == StatsFunctions.UNIQUE:
+            features = []
 
         if start is not None:
             source_sql = source_sql.where(PikaField(source.timestamp_field) >= start)
         if end is not None:
             source_sql = source_sql.where(PikaField(source.timestamp_field) <= end)
-        stats_sql = build_stats_query(source_sql, features=features, stats_fn=fn, group_keys=join_keys)
+        stats_sql = build_stats_query(source_sql, features=features, stats_fn=fn, group_keys=group_keys)
 
-        if fn == StatsFunctions.UNIQUE:
-            result_df = self._get_dataframe(stats_sql, [feature.name for feature in features])
-            return result_df.iloc[0].to_dict()
-
-        return self._get_dataframe(stats_sql, join_keys + [feature.name for feature in features])
-
-    def stats(
-        self,
-        entity_df: Union[SqlSource, Query],
-        features: Set[Feature],
-        source: SqlSource,
-        start,
-        fn: str = "mean",
-        group_keys: list = [],
-        include: str = "both",
-        keys_only: bool = False,
-        join_keys: bool = False,
-    ) -> pd.DataFrame:
-        """_summary_
-
-        Args:
-            entity_df (Union[SqlSource, Query]): query condition specified by users
-            features (Set[Feature]): features to be statsed
-            source (SqlSource): data source of featureview
-            start (_type_): stats begin time
-            fn (str, optional): stats func name. Defaults to "mean".
-            group_keys (list, optional): dimension of stats. Defaults to [].
-            include (str, optional): whether take user specified time in consideration. Defaults to True.. Defaults to "both".
-            keys_only (bool, optional): whether to return stats results of group_keys. Defaults to False.
-            join_keys (bool, optional): intersection of entities defined in yaml and entity_df.columns. Defaults to [].. Defaults to False.
-
-        Returns:
-            pd.DataFrame: _description_
-        """
-        source_df = self.read(source=source, features=features, join_keys=group_keys)
-        entity_df, table_name = self._get_entity(entity_df, source, group_keys if join_keys else [])
-
-        if join_keys:
-            sql_join = Query.from_(source_df).inner_join(entity_df).using(*group_keys)
-        else:
-            sql_join = Query.from_(source_df).cross_join(entity_df).cross()
-
-        sql_filter = build_filter_time_query(sql_join, start, include)
-        sql_agg = build_agg_query(sql_filter, features, group_keys, fn, keys_only)
-
-        df = self._get_dataframe(sql_agg, group_keys + [f"{c.name}_{fn}" for c in features])
-        self._drop_table(table_name)
-
-        return df
+        return self._get_dataframe(stats_sql, group_keys + [feature.name for feature in features])
 
     def get_latest_entities(
         self, source: SqlSource, group_keys: list = [], entity_df: pd.DataFrame = None
@@ -800,21 +753,13 @@ SQL_GROUP_AGG_FUNCTIONS = {
 
 def build_stats_query(
     q: QueryBuilder,
-    features: List[Feature],
     stats_fn: StatsFunctions,
+    features: List[Feature] = [],
     group_keys: List[str] = [],
 ) -> QueryBuilder:
     if stats_fn == StatsFunctions.UNIQUE:
-        selects = [Parameter(feature.name) for feature in features]
-        subquery = q.select(*selects)
-        return Query.with_(subquery, "subquery").select(
-            *[
-                Parameter(
-                    f"array({Query.from_('subquery').distinct().select(feature.name).orderby(feature.name).get_sql()}) as {feature.name}"
-                )
-                for feature in features
-            ]
-        )
+        selects = [Parameter(name) for name in group_keys]
+        return q.select(*selects).distinct()
 
     if stats_fn in SQL_AGG_FUNCTIONS:
         selects = group_keys + [
@@ -826,10 +771,6 @@ def build_stats_query(
                 f"{SQL_GROUP_AGG_FUNCTIONS[stats_fn]} WITHIN GROUP (ORDER BY {feature.name}) as {feature.name}"
             )
             for feature in features
-        ]
-    elif stats_fn == StatsFunctions.UNIQUE:
-        selects = group_keys + [
-            Parameter(f"distinct({feature.name} as {feature.name})") for feature in features
         ]
 
     if len(group_keys) > 0:

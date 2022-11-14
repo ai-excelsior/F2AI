@@ -12,7 +12,7 @@ from f2ai.common.get_config import (
     get_feature_views,
     get_source_cfg,
 )
-from f2ai.common.utils import to_file, remove_prefix
+from f2ai.common.utils import remove_prefix
 from f2ai.common.jinja import jinja_env
 from f2ai.common.read_file import read_yml
 from f2ai.definitions import (
@@ -23,6 +23,7 @@ from f2ai.definitions import (
     Service,
     FileSource,
     init_offline_store_from_cfg,
+    StatsFunctions,
 )
 
 
@@ -65,19 +66,7 @@ class FeatureStore:
                 TIME_COL in entity_df.columns
             ), "Check entity_df make sure it has at least 1 columns and event_timestamp in it"
 
-    def __check_fns(self, fn):
-        assert fn in [
-            "mean",
-            "sum",
-            "std",
-            "mode",
-            "median",
-            "min",
-            "max",
-            "unique",
-        ], f"{fn}is not a available function, you can use fs.query() to customize your function"
-
-    def _get_feature_to_use(
+    def _get_features_to_use(
         self, views, features: list = [], is_numeric: bool = False, choose: str = "both"
     ) -> List[Feature]:
         """_summary_
@@ -112,7 +101,7 @@ class FeatureStore:
             features = list(set(buildin_features))
         return features
 
-    def _get_keys_to_join(self, view, entity_columns=[]) -> list:
+    def _get_keys_to_join(self, view, in_columns: List[str] = None) -> List[str]:
         """_summary_
 
         Args:
@@ -132,25 +121,24 @@ class FeatureStore:
         else:
             raise TypeError("must be FeatureViews, LabelViews or Service")
 
-        if entity_columns:  # need filter
-            entity_names = list(
+        # need filter
+        if in_columns is not None:
+            return list(
                 {
                     join_key
                     for entity_name in available_entity_names
                     for join_key in self.entities[entity_name].join_keys
-                    if join_key in entity_columns
-                }
-            )
-        else:
-            entity_names = list(
-                {
-                    join_key
-                    for entity_name in available_entity_names
-                    for join_key in self.entities[entity_name].join_keys
+                    if join_key in in_columns
                 }
             )
 
-        return entity_names
+        return list(
+            {
+                join_key
+                for entity_name in available_entity_names
+                for join_key in self.entities[entity_name].join_keys
+            }
+        )
 
     def _get_views(
         self, view_name: Union[str, LabelView, Service, FeatureView]
@@ -197,7 +185,7 @@ class FeatureStore:
         assert isinstance(
             feature_view, (FeatureView, LabelView, Service)
         ), "only allowed FeatureView, LabelView and Service"
-        feature_objects = self._get_feature_to_use(feature_view, features, choose="features")
+        feature_objects = self._get_features_to_use(feature_view, features, choose="features")
         join_keys = self._get_keys_to_join(feature_view, list(entity_df.columns))
 
         if isinstance(feature_view, (FeatureView, LabelView)):
@@ -237,7 +225,7 @@ class FeatureStore:
         feature_view = self._get_views(feature_view)
         assert isinstance(feature_view, (FeatureView, Service)), "only allowed FeatureView and Service"
         period = -Period.from_str(period)
-        feature_objects = self._get_feature_to_use(feature_view, features, choose="features")
+        feature_objects = self._get_features_to_use(feature_view, features, choose="features")
         join_keys = self._get_keys_to_join(feature_view, list(entity_df.columns))
 
         if isinstance(feature_view, (FeatureView, LabelView)):
@@ -275,7 +263,7 @@ class FeatureStore:
         label_view = self._get_views(label_view)
         assert isinstance(label_view, (LabelView, Service)), "only allowed LabelView and Service"
 
-        feature_objects = self._get_feature_to_use(label_view, choose="labels")
+        feature_objects = self._get_features_to_use(label_view, choose="labels")
         join_keys = self._get_keys_to_join(label_view, list(entity_df.columns))
 
         if isinstance(label_view, (FeatureView, LabelView)):
@@ -312,7 +300,7 @@ class FeatureStore:
         self.__check_format(entity_df)
         label_view = self._get_views(label_view)
         period = Period.from_str(period)
-        label_objects = self._get_feature_to_use(label_view, choose="labels")
+        label_objects = self._get_features_to_use(label_view, choose="labels")
         join_keys = self._get_keys_to_join(label_view, list(entity_df.columns))
 
         if isinstance(label_view, (FeatureView, LabelView)):
@@ -524,68 +512,48 @@ class FeatureStore:
     def stats(
         self,
         view: Union[str, LabelView, Service, FeatureView],
-        entity_df: pd.DataFrame = None,
+        fn: Union[str, StatsFunctions] = StatsFunctions.AVG,
         features: List[str] = None,
-        group_key: List[str] = None,
-        fn: str = "mean",
+        group_keys: List[str] = None,
         start: str = None,
         end: str = None,
-        include: str = "both",
-        keys_only: bool = False,
     ) -> pd.DataFrame:
-        """get from `start` to `end` statistical `fn` results of `entity_df` from `views`, only work for numeric features varied with time
+        """Get statistical information from a FeatureView | LabelView | Service. You can get min, max, std, avg, mode and median from numeric features. Or, you can retrieve all combinations of categorical values with unique operation. Note, hen the fn is unique, group_keys is required and features is ignored.
 
         Args:
-            views (List): name of view to look up
-            entity_df (pd.DataFrame,optional), if given, ignore `start` and `end`. Defaults to None, has the supreme priority.
-            group_key (list): joined-columns to do stats,  only works when `entity_df` is None. if None, means do stats on joined-entities, also accept `[]` means no grouping.
-            fn (str, optional): statistical method, min, max, std, avg, mode, median. Defaults to "mean".
-            start (str, optional): start_time. Defaults to None, works and only works when `entity_df` is None.
-            end (str, optional): end_time. Defaults to None, works and only works when `entity_df` is None.
-            include (str, optional): whether to include `start` or `end` timestamp
-            keys_only (bool, optional): whether to take action on keys, only available when fn=unique, return a list
+            views (List): name of view to look up.
+            fn (str, optional): statistical method, min, max, std, avg, mode, median. Defaults to "avg".
+            features (List[str]): A subset of features of this view. Default to None.
+            group_keys (list): joined-columns to do stats. if None, means do stats on joined-entities, also accept `[]` means no grouping.
+            start (str, optional): start_time. Defaults to None.
+            end (str, optional): end_time. Defaults to None.
         """
-        self.__check_fns(fn)
+        if isinstance(fn, str):
+            fn = StatsFunctions(fn)
         view = self._get_views(view)
 
-        if entity_df is not None:
-            self.__check_format(entity_df)
-            entities = list(entity_df.columns)
-            entity_df[TIME_COL] = pd.to_datetime(entity_df[TIME_COL], utc=True)
-            start = pd.to_datetime(0, utc=True)
-        else:
-            # group_key can be empty list, which is different as None
-            entities = group_key
-            entity_df = pd.DataFrame(columns=[TIME_COL])
-            entity_df[TIME_COL] = [
-                pd.to_datetime(end, utc=True) if end else pd.to_datetime(datetime.now(), utc=True)
-            ]
-            start = pd.to_datetime(start, utc=True) if start else pd.to_datetime(0, utc=True)
+        if group_keys is None:
+            group_keys = self._get_keys_to_join(view)
 
-        join_keys = self._get_keys_to_join(view, entities)
-        features = self._get_feature_to_use(view, features, fn != "unique")
-
-        if keys_only:
-            assert fn == "unique", "keys_only=True can only be applied when fn=unique"
-            assert join_keys, "no key available for keys_only=True"
+        is_numeric = fn != StatsFunctions.UNIQUE
+        if fn == StatsFunctions.UNIQUE:
             features = []
+            assert len(group_keys) > 0, "for unique fn, group_keys is required"
+        else:
+            features = self._get_features_to_use(view, features, is_numeric=is_numeric)
 
         if isinstance(view, (FeatureView, LabelView)):
             source = self.sources[view.batch_source]
-            assert source.timestamp_field, "stats can only apply on time relative data"
         else:
             source = self.offline_store.get_offline_source(view)
 
         return self.offline_store.stats(
-            entity_df=entity_df,
-            features=features,
             source=source,
+            features=features,
             fn=fn,
+            group_keys=group_keys,
             start=start,
-            group_keys=join_keys,
-            include=include,
-            keys_only=keys_only,
-            join_keys=len(entity_df.columns[:-1]),
+            end=end,
         )
 
     def get_latest_entities(

@@ -321,14 +321,14 @@ def test_stats(fn):
 
     store._read_file = MagicMock(return_value=mocked_stats_input_df)
 
-    result_df = store.new_stats(
+    result_df = store.stats(
         file_source,
         features,
         fn,
-        join_keys=["join_key"],
+        group_keys=["join_key"],
     )
     if fn == StatsFunctions.UNIQUE:
-        assert isinstance(result_df, dict)
+        assert ",".join(result_df.columns) == "join_key"
     else:
         assert ",".join(result_df.index.names) == "join_key"
         assert isinstance(result_df, pd.DataFrame)

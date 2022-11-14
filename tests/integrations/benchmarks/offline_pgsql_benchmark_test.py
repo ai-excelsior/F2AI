@@ -1,7 +1,7 @@
-from pyexpat import features
 import pandas as pd
 import timeit
 from f2ai import FeatureStore
+from f2ai.definitions import StatsFunctions
 from f2ai.common.sampler import GroupFixednbrSampler
 
 
@@ -34,10 +34,9 @@ def test_get_features_from_feature_view(make_guizhou_traffic):
 def test_stats_from_feature_view(make_guizhou_traffic):
     project_folder = make_guizhou_traffic("pgsql")
     store = FeatureStore(project_folder)
-    entity_df = get_guizhou_traffic_entities(store)
 
     measured_time = timeit.timeit(
-        lambda: store.stats("gy_link_travel_time_features", fn="mean", entity_df=entity_df), number=10
+        lambda: store.stats("gy_link_travel_time_features", fn=StatsFunctions.AVG), number=10
     )
     print(f"stats performance pgsql: {measured_time}s")
 
@@ -45,13 +44,14 @@ def test_stats_from_feature_view(make_guizhou_traffic):
 def test_unique_from_feature_view(make_guizhou_traffic):
     project_folder = make_guizhou_traffic("pgsql")
     store = FeatureStore(project_folder)
+
     measured_time = timeit.timeit(
-        lambda: store.stats("gy_link_travel_time_features", group_key=["link_id"]), number=10
+        lambda: store.stats("gy_link_travel_time_features", group_keys=["link_id"]), number=10
     )
     print(f"stats performance pgsql: {measured_time}s")
 
 
-def test_get_latest_entities_from_feature_view(make_guizhou_traffic):
+def test_get_latest_entities_from_feature_view_with_entity_df(make_guizhou_traffic):
     project_folder = make_guizhou_traffic("pgsql")
     store = FeatureStore(project_folder)
     measured_time = timeit.timeit(
@@ -61,7 +61,7 @@ def test_get_latest_entities_from_feature_view(make_guizhou_traffic):
         ),
         number=10,
     )
-    print(f"stats performance pgsql: {measured_time}s")
+    print(f"get_latest_entities with entity_df performance pgsql: {measured_time}s")
 
 
 def test_get_latest_entity_from_feature_view(make_guizhou_traffic):
@@ -70,7 +70,7 @@ def test_get_latest_entity_from_feature_view(make_guizhou_traffic):
     measured_time = timeit.timeit(
         lambda: store.get_latest_entities("gy_link_travel_time_features"), number=10
     )
-    print(f"stats performance pgsql: {measured_time}s")
+    print(f"get_latest_entities performance pgsql: {measured_time}s")
 
 
 def test_get_period_features_from_feature_view(make_guizhou_traffic):

@@ -1,7 +1,7 @@
 import pandas as pd
 import datetime
 from typing import List, Optional, Set, Dict
-from f2ai.common.utils import get_stats_result, to_file, remove_prefix
+from f2ai.common.utils import to_file, remove_prefix
 from f2ai.definitions import (
     Feature,
     Period,
@@ -131,17 +131,18 @@ class OfflineFileStore(OfflineStore):
             **kwargs,
         )
 
-    # TODO: remove this later
-    def new_stats(
+    def stats(
         self,
         source: FileSource,
         features: Set[Feature],
         fn: StatsFunctions,
-        join_keys: List[str] = [],
+        group_keys: List[str] = [],
         start: datetime.datetime = None,
         end: datetime.datetime = None,
     ) -> pd.DataFrame:
-        source_df = self._read_file(source=source, features=features, join_keys=join_keys)
+        source_df = self._read_file(source=source, features=features, join_keys=group_keys)
+        if fn == StatsFunctions.UNIQUE:
+            features = []
 
         # filter source_df by start and end
         if end is not None:
@@ -150,60 +151,15 @@ class OfflineFileStore(OfflineStore):
             source_df: pd.DataFrame = source_df[source_df[source.timestamp_field] >= start]
 
         # only keep entity join keys and features
-        source_df = source_df[join_keys + [feature.name for feature in features]]
+        source_df = source_df[group_keys + [feature.name for feature in features]]
 
         if fn == StatsFunctions.UNIQUE:
-            return {feature.name: source_df[feature.name].unique() for feature in features}
+            return source_df.drop_duplicates(subset=group_keys)
 
         if fn == StatsFunctions.MODE:
-            return source_df.groupby(join_keys).agg(lambda x: x.value_counts().index[0])
+            return source_df.groupby(group_keys).agg(lambda x: x.value_counts().index[0])
 
-        return getattr(source_df.groupby(join_keys), fn.value if fn != StatsFunctions.AVG else "mean")()
-
-    def stats(
-        self,
-        entity_df: pd.DataFrame,
-        features: Set[Feature],
-        source: FileSource,
-        start,
-        fn: str = "mean",
-        group_keys: list = [],
-        include: str = "both",
-        keys_only: bool = False,
-        join_keys: bool = False,
-    ) -> pd.DataFrame:
-        source_df = self._read_file(source=source, features=features, join_keys=group_keys)
-
-        feature_columns = [feature.name for feature in features]
-
-        entity_df = entity_df.rename(columns={DEFAULT_EVENT_TIMESTAMP_FIELD: ENTITY_EVENT_TIMESTAMP_FIELD})
-        source_df = source_df.rename(columns={source.timestamp_field: SOURCE_EVENT_TIMESTAMP_FIELD})
-
-        if join_keys:
-            df = source_df.merge(entity_df, on=group_keys, how="inner")
-        else:
-            df = source_df.merge(entity_df, how="cross")
-
-        if keys_only:
-            return df[group_keys].groupby(group_keys).size().reset_index().drop(columns=[0])
-
-        if group_keys:
-            result = df.groupby(group_keys).apply(
-                get_stats_result,
-                fn,
-                use_cols=feature_columns,
-                include=include,
-                start=start,
-            )
-        else:
-            result = get_stats_result(
-                df,
-                fn,
-                use_cols=feature_columns,
-                include=include,
-                start=start,
-            )
-        return result
+        return getattr(source_df.groupby(group_keys), fn.value if fn != StatsFunctions.AVG else "mean")()
 
     def get_latest_entities(
         self, source: FileSource, group_keys: list, entity_df: pd.DataFrame = None

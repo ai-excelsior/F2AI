@@ -68,9 +68,9 @@ def test_get_period_features_from_feature_view(make_guizhou_traffic):
 
 def test_stats_from_feature_view(make_credit_score):
     project_folder = make_credit_score("file")
-    entity_df = get_credit_score_entities(project_folder)
     store = FeatureStore(project_folder)
-    measured_time = timeit.timeit(lambda: store.stats("loan_features", entity_df, fn="mean"), number=10)
+
+    measured_time = timeit.timeit(lambda: store.stats("loan_features", fn="avg"), number=10)
     print(f"stats performance: {measured_time}s")
 
 
@@ -94,7 +94,7 @@ def test_get_latest_entity_from_feature_view(make_credit_score):
 def test_sampler_with_groups(make_credit_score):
     project_folder = make_credit_score("file")
     store = FeatureStore(project_folder)
-    groups = store.stats("loan_features", group_key=["zipcode", "dob_ssn"], keys_only=True, fn="unique")
+    groups = store.stats("loan_features", group_keys=["zipcode", "dob_ssn"], fn="unique")
     groups = list(zip(groups["zipcode"], groups["dob_ssn"]))
     measured_time = timeit.timeit(
         lambda: GroupFixednbrSampler(
@@ -105,7 +105,7 @@ def test_sampler_with_groups(make_credit_score):
             start="2020-08-20",
             end="2021-08-30",
         )(),
-        number=5,
+        number=1,
     )
     print(f"sampler with groups performance: {measured_time}s")
 
