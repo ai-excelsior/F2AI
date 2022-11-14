@@ -1,10 +1,12 @@
 from __future__ import annotations
 import uuid
 import pandas as pd
+import datetime
 from io import StringIO
 from typing import List, Optional, Set, TYPE_CHECKING, Union, Tuple, Dict
 from pydantic import Field, PrivateAttr
 from pypika import Query, Parameter, functions as fn, JoinType
+from pypika.queries import QueryBuilder
 from f2ai.definitions import (
     Feature,
     Period,
@@ -13,6 +15,7 @@ from f2ai.definitions import (
     SqlSource,
     OfflineStoreType,
     OfflineStore,
+    StatsFunctions,
 )
 from f2ai.common.utils import build_agg_query, build_filter_time_query
 from f2ai.common.utils import convert_dtype_to_sqlalchemy_type
@@ -209,7 +212,9 @@ class OfflinePostgresStore(OfflineStore):
         for featureview in feature_views:
             entity_cols = featureview["join_keys"]
             features = featureview["features"]
-            feature_names = [f.name for f in features if f.name not in [l.name for l in label_view["labels"]]]
+            feature_names = [
+                f.name for f in features if f.name not in [label.name for label in label_view["labels"]]
+            ]
             if feature_names:
                 source = featureview["source"]
                 source_df = self.read(source=source, features=features, join_keys=entity_cols)
@@ -246,6 +251,17 @@ class OfflinePostgresStore(OfflineStore):
         #     self.psy_conn.commit()
 
         # return df
+
+    def new_stats(
+        self,
+        source: SqlSource,
+        features: Set[Feature],
+        fn: StatsFunctions,
+        join_keys: List[str] = [],
+        start: datetime.datetime = None,
+        end: datetime.datetime = None,
+    ) -> pd.DataFrame:
+        pass
 
     def stats(
         self,
@@ -755,3 +771,56 @@ class OfflinePostgresStore(OfflineStore):
             )
 
         return df
+
+
+SQL_AGG_FUNCTIONS = {
+    StatsFunctions.AVG: fn.Avg,
+    StatsFunctions.MIN: fn.Min,
+    StatsFunctions.MAX: fn.Max,
+    StatsFunctions.STD: fn.Std,
+}
+
+SQL_GROUP_AGG_FUNCTIONS = {
+    StatsFunctions.MODE: "MODE()",
+    StatsFunctions.MEDIAN: "PERCENTILE_CONT(0.5)",
+}
+
+
+def build_stats_query(
+    q: QueryBuilder,
+    features: List[Feature],
+    stats_fn: StatsFunctions,
+    group_keys: List[str] = [],
+) -> QueryBuilder:
+    if stats_fn == StatsFunctions.UNIQUE:
+        selects = [Parameter(feature.name) for feature in features]
+        subquery = q.select(*selects)
+        return Query.with_(subquery, "subquery").select(
+            *[
+                Parameter(
+                    f"array({Query.from_('subquery').distinct().select(feature.name).orderby(feature.name).get_sql()}) as {feature.name}"
+                )
+                for feature in features
+            ]
+        )
+
+    if stats_fn in SQL_AGG_FUNCTIONS:
+        selects = group_keys + [
+            SQL_AGG_FUNCTIONS[stats_fn](Parameter(feature.name), feature.name) for feature in features
+        ]
+    elif stats_fn in SQL_GROUP_AGG_FUNCTIONS:
+        selects = group_keys + [
+            Parameter(
+                f"{SQL_GROUP_AGG_FUNCTIONS[stats_fn]} WITHIN GROUP (ORDER BY {feature.name}) as {feature.name}"
+            )
+            for feature in features
+        ]
+    elif stats_fn == StatsFunctions.UNIQUE:
+        selects = group_keys + [
+            Parameter(f"distinct({feature.name} as {feature.name})") for feature in features
+        ]
+
+    if len(group_keys) > 0:
+        return q.groupby(*group_keys).select(*selects)
+
+    return q.select(*selects)

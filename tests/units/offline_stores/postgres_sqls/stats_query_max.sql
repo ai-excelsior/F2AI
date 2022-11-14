@@ -1,0 +1,1 @@
+SELECT "zipcode",MAX(population) "population" FROM "zipcode_table" GROUP BY "zipcode"

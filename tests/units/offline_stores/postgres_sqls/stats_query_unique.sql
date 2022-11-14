@@ -1,0 +1,1 @@
+WITH subquery AS (SELECT population,city FROM "zipcode_table") SELECT array(SELECT DISTINCT "population" FROM "subquery" ORDER BY "population") as population,array(SELECT DISTINCT "city" FROM "subquery" ORDER BY "city") as city

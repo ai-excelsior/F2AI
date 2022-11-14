@@ -1,10 +1,11 @@
-from typing import List, Union, Tuple
-import pandas as pd
-from pypika import functions as fn, Parameter, Query
-from pypika.queries import QueryBuilder
-from pandas._libs.tslibs.timestamps import Timestamp
 import oss2
 import os
+import pandas as pd
+from typing import List, Union, Tuple
+from pypika import functions as fn, Parameter
+from pypika.queries import QueryBuilder
+from pandas._libs.tslibs.timestamps import Timestamp
+from f2ai.definitions import Feature
 
 
 ENTITY_EVENT_TIMESTAMP_FIELD = "_entity_event_timestamp_"
@@ -98,7 +99,7 @@ def build_filter_time_query(
 
 
 def build_agg_query(
-    q: QueryBuilder, features: List[str], entity_cols: List[str], agg_type: str, keys_only
+    q: QueryBuilder, features: List[Feature], entity_cols: List[str], agg_type: str, keys_only
 ) -> "QueryBuilder":
     if keys_only:
         return q.groupby(*entity_cols).select(*entity_cols)
