@@ -1,0 +1,1 @@
+SELECT "zipcode",AVG(population) "population" FROM "zipcode_table" WHERE "event_timestamp">='2017-01-01T00:00:00' AND "event_timestamp"<='2018-01-01T00:00:00' GROUP BY "zipcode"

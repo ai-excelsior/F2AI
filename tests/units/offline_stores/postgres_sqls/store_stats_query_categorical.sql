@@ -1,0 +1,1 @@
+WITH subquery AS (SELECT city FROM "zipcode_table" WHERE "event_timestamp">='2017-01-01T00:00:00' AND "event_timestamp"<='2018-01-01T00:00:00') SELECT array(SELECT DISTINCT "city" FROM "subquery" ORDER BY "city") as city

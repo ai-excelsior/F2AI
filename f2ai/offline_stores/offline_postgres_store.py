@@ -5,7 +5,7 @@ import datetime
 from io import StringIO
 from typing import List, Optional, Set, TYPE_CHECKING, Union, Tuple, Dict
 from pydantic import Field, PrivateAttr
-from pypika import Query, Parameter, functions as fn, JoinType
+from pypika import Query, Parameter, functions as fn, JoinType, Field as PikaField
 from pypika.queries import QueryBuilder
 from f2ai.definitions import (
     Feature,
@@ -145,7 +145,7 @@ class OfflinePostgresStore(OfflineStore):
         features: Set[Feature] = {},
         join_keys: List[str] = [],
         alias: str = SOURCE_EVENT_TIMESTAMP_FIELD,
-    ) -> Query:
+    ) -> QueryBuilder:
         """_summary_
 
         Args:
@@ -165,8 +165,8 @@ class OfflinePostgresStore(OfflineStore):
 
         feature_columns = [feature if isinstance(feature, str) else feature.name for feature in features]
         all_columns = list(set(time_columns + join_keys + feature_columns))
-        source_df = Query.from_(source.query).select(Parameter(",".join(all_columns)))
-        return source_df
+        source_sql = Query.from_(source.query).select(Parameter(",".join(all_columns)))
+        return source_sql
 
     def materialize_dbt(
         self,
@@ -261,7 +261,19 @@ class OfflinePostgresStore(OfflineStore):
         start: datetime.datetime = None,
         end: datetime.datetime = None,
     ) -> pd.DataFrame:
-        pass
+        source_sql = Query.from_(source.query)
+
+        if start is not None:
+            source_sql = source_sql.where(PikaField(source.timestamp_field) >= start)
+        if end is not None:
+            source_sql = source_sql.where(PikaField(source.timestamp_field) <= end)
+        stats_sql = build_stats_query(source_sql, features=features, stats_fn=fn, group_keys=join_keys)
+
+        if fn == StatsFunctions.UNIQUE:
+            result_df = self._get_dataframe(stats_sql, [feature.name for feature in features])
+            return result_df.iloc[0].to_dict()
+
+        return self._get_dataframe(stats_sql, join_keys + [feature.name for feature in features])
 
     def stats(
         self,
@@ -302,7 +314,7 @@ class OfflinePostgresStore(OfflineStore):
         sql_filter = build_filter_time_query(sql_join, start, include)
         sql_agg = build_agg_query(sql_filter, features, group_keys, fn, keys_only)
 
-        df = self._get_dataframe(sql_agg, group_keys, [], [f"{c.name}_{fn}" for c in features])
+        df = self._get_dataframe(sql_agg, group_keys + [f"{c.name}_{fn}" for c in features])
         self._drop_table(table_name)
 
         return df
@@ -328,7 +340,7 @@ class OfflinePostgresStore(OfflineStore):
             q = q.inner_join(entity_df).using(*group_keys)
 
         sql_result = q.select(*group_keys, fn.Max(Parameter(SOURCE_EVENT_TIMESTAMP_FIELD)))
-        df = self._get_dataframe(sql_result, group_keys, [DEFAULT_EVENT_TIMESTAMP_FIELD], [])
+        df = self._get_dataframe(sql_result, group_keys + [DEFAULT_EVENT_TIMESTAMP_FIELD])
         if entity_df is not None:
             self._drop_table(table_name)
         return df
@@ -384,9 +396,9 @@ class OfflinePostgresStore(OfflineStore):
         )
         df = self._get_dataframe(
             sql_result,
-            list(set(join_keys + entity_cols)),
-            [DEFAULT_EVENT_TIMESTAMP_FIELD],
-            list(set(residue + feature_names)),
+            list(set(join_keys + entity_cols))
+            + [DEFAULT_EVENT_TIMESTAMP_FIELD]
+            + list(set(residue + feature_names)),
         )
         self._drop_table(table_name)
         return df.sort_values(
@@ -401,15 +413,15 @@ class OfflinePostgresStore(OfflineStore):
             self.psy_conn.commit()
 
     def _get_dataframe(
-        self, sql_result: Query, join_keys: list = [], timecol: list = [], feature_names: list = []
+        self,
+        sql_result: Query,
+        columns: List[str],
     ) -> pd.DataFrame:
         """_summary_
 
         Args:
             join_keys (list): entities
-            timecol (list): time cols
-            feature_names (list): feature cols
-            sql_result (_type_): sql query
+            columns (List[str]): column names
 
         Returns:
             pd.DataFrame:
@@ -419,7 +431,7 @@ class OfflinePostgresStore(OfflineStore):
             data = cursor.fetchall()
             self.psy_conn.commit()
 
-            return pd.DataFrame(data, columns=join_keys + timecol + feature_names)
+            return pd.DataFrame(data, columns=columns)
 
     def get_period_features(
         self,
@@ -474,9 +486,9 @@ class OfflinePostgresStore(OfflineStore):
         )
         df = self._get_dataframe(
             sql_result,
-            list(set(join_keys + entity_cols)),
-            [QUERY_COL, DEFAULT_EVENT_TIMESTAMP_FIELD],
-            list(set(feature_names + residue)),
+            list(set(join_keys + entity_cols))
+            + [QUERY_COL, DEFAULT_EVENT_TIMESTAMP_FIELD]
+            + list(set(feature_names + residue)),
         )
         self._drop_table(table_name)
         return df.sort_values(
