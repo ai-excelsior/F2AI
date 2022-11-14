@@ -6,7 +6,7 @@
 
 .. toctree::
    :hidden:
-   :caption: API Documents
+   :caption: MISCELLANEOUS
 
    f2ai_api
    genindex

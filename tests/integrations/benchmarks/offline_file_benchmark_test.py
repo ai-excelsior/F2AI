@@ -113,7 +113,7 @@ def test_sampler_with_groups(make_credit_score):
 def test_dataset_to_pytorch(make_credit_score):
     project_folder = make_credit_score("file")
     store = FeatureStore(project_folder)
-    store.materialize(service_name="credit_scoring_v1")
+    store.materialize(service="credit_scoring_v1")
     ds = store.get_dataset(
         service_name="credit_scoring_v1",
         sampler=GroupFixednbrSampler(

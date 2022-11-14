@@ -4,7 +4,7 @@ import os
 import json
 import docker
 from datetime import datetime
-from typing import Dict, List, Union
+from typing import Dict, List, Union, Optional
 from f2ai.dataset.dataset import Dataset
 from f2ai.common.get_config import (
     get_service_cfg,
@@ -172,17 +172,21 @@ class FeatureStore:
         include: bool = True,
         **kwargs,
     ) -> pd.DataFrame:
-        """non-series prediction use: get `features` of `entity_df` from `feature_views`
+        """Get features in a certain view from offline store. If you want features from online store, try to call `get_online_features`.
 
         Args:
-            feature_view : Single FeatureViews or Service(after materialzed) name to lookup.
-            entity_df (pd.DataFrame): condition.
+            feature_view (Union[str, FeatureView, Service]): A name which we can retrieve certain view from F2AI. Or, an instance of FeatureView or Service. If you want retrieve features from a service, materialize is require before to retrieve features.
+            entity_df (pd.DataFrame): A query DataFrame which must contains entity columns and event_timestamp field.
             features (List, optional): features to return. Defaults to None means all features.
             include (bool, optional):  include timestamp defined in `entity_df` or not. Defaults to True.
+
+        Returns:
+            pd.DataFrame: a pandas' DataFrame, where you can found your features in this.
         """
 
         self.__check_format(entity_df)
         feature_view = self._get_views(feature_view)
+
         assert isinstance(
             feature_view, (FeatureView, LabelView, Service)
         ), "only allowed FeatureView, LabelView and Service"
@@ -210,30 +214,35 @@ class FeatureStore:
         entity_df: pd.DataFrame,
         period: str,
         features: List[str] = None,
-        include: bool = True,
+        include: Optional[bool] = None,
         **kwargs,
     ) -> pd.DataFrame:
-        """time_series prediction use: get past `period` length `features` of `entity_df` from `feature_views`
+        """Get a period of features with given standing time point in entity_df. If period is positive, return features between (event_timestamp - period, event_timestamp]. Otherwise, between (event_timestamp, event_timestamp - period]
 
         Args:
-            feature_views:Single FeatureViews or Service(after materialzed) to lookup. Defaults to None.
-            entity_df (pd.DataFrame): condition
-            period (str): length of look_back
+            feature_view (Union[str, FeatureView, Service]): A name which we can retrieve certain feature view or service from F2AI. Or, an instance of FeatureView or Service. If you want retrieve features from a service, materialize is required.
+            entity_df (pd.DataFrame): A pandas DataFrame which must contains entity keys and event_timestamp.
+            period (str): A period str. Egg, 2 hours.
             features (List, optional): features to return. Defaults to None means all features.
-            include (bool, optional): include timestamp defined in `entity_df` or not. Defaults to True.
+            include (bool, optional): include timestamp defined in `entity_df` or not. Defaults to None.
         """
         self.__check_format(entity_df)
         feature_view = self._get_views(feature_view)
         assert isinstance(feature_view, (FeatureView, Service)), "only allowed FeatureView and Service"
-        period = -Period.from_str(period)
+
+        period: Period = -Period.from_str(period)
         feature_objects = self._get_features_to_use(feature_view, features, choose="features")
         join_keys = self._get_keys_to_join(feature_view, list(entity_df.columns))
+
+        if include is None:
+            include = period.is_neg
 
         if isinstance(feature_view, (FeatureView, LabelView)):
             source = self.sources[feature_view.batch_source]
         else:
             source = self.offline_store.get_offline_source(feature_view)
-        assert source.timestamp_field, "no period can be applied on non-relavent data"
+
+        assert source.timestamp_field, "no period can be applied on non-relevant data"
 
         return self.offline_store.get_period_features(
             entity_df=entity_df,
@@ -253,11 +262,11 @@ class FeatureStore:
         include: bool = True,
         **kwargs,
     ) -> pd.DataFrame:
-        """non-time series prediction use: get labels of `entity_df` from `label_views`
+        """Get labels for a certain LabelView or Service. Label usually means observed, key indicator of the business goal in Machine Learning context.
 
         Args:
-            label_views:Single LabelViews or Service(after materialzed) name to lookup. Defaults to None.
-            entity_df (pd.DataFrame): condition
+            label_view (Union[str, LabelView, Service]): A name which we can retrieve certain label view or service from F2AI. Or, an instance of LabelView or Service. If you want retrieve labels from a service, materialize is required.
+            entity_df (pd.DataFrame): A DataFrame used to query labels which must contains entity and event_timestamp columns.
             include (bool, optional): include timestamp defined in `entity_df` or not. Defaults to False.
         """
         self.__check_format(entity_df)
@@ -287,20 +296,20 @@ class FeatureStore:
         label_view: Union[str, LabelView, Service],
         entity_df: pd.DataFrame,
         period: str,
-        include: bool = False,
+        include: Optional[bool] = None,
         **kwargs,
     ) -> pd.DataFrame:
-        """time series prediction use: get from `start` to `end` length labels of `entity_df` from `label_views`
+        """Using a point of time in `entity_df` to query a period of labels. If you are giving a positive period, you will get labels between (event_timestamp, event_timestamp + period]. If you are giving a negative period, you will get labels between (event_timestamp + period, event_timestamp].
 
         Args:
-            label_views:Single LabelViews or Service(after materialzed) name to lookup. Defaults to None.
-            entity_df (pd.DataFrame): condition
-            period (str): length of look_forward, can be negative, egg, -1 days
-            include (bool, optional): include timestamp defined in `entity_df` or not. Defaults to False.
+            label_view (Union[str, LabelView, Service]): A name which we can retrieve certain label view or service from F2AI. Or, an instance of LabelView or Service. If you want retrieve labels from a service, materialize is require before to retrieve labels.
+            entity_df (pd.DataFrame): A DataFrame used to query labels which must contains entity and event_timestamp columns.
+            period (str): When looking backward, using negative period, egg, -2 days. Otherwise, using positive period, egg, 1 day.
+            include (bool, optional): include timestamp defined in `entity_df` or not. Defaults to None, which means automatically decide include or not.
         """
         self.__check_format(entity_df)
         label_view = self._get_views(label_view)
-        period = Period.from_str(period)
+        period: Period = Period.from_str(period)
         label_objects = self._get_features_to_use(label_view, choose="labels")
         join_keys = self._get_keys_to_join(label_view, list(entity_df.columns))
 
@@ -308,6 +317,9 @@ class FeatureStore:
             source = self.sources[label_view.batch_source]
         else:
             source = self.offline_store.get_offline_source(label_view)
+
+        if include is None:
+            include = period.is_neg
 
         return self.offline_store.get_period_features(
             entity_df=entity_df,
@@ -320,25 +332,34 @@ class FeatureStore:
             **kwargs,
         )
 
-    def materialize(self, service_name: str, fromnow: str = None, start: str = None, end: str = None):
-        """incrementally join `views` to generate tables
+    def materialize(
+        self,
+        service: Union[str, Service],
+        fromnow: Optional[str] = None,
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+    ):
+        """Offline materialize, join features which specify by service name.
 
         Args:
-            service_name (str): name of service to materialize
-            start (str): begin of materialization
-            end(str):end of materialization
-            fromnow(str) : time interval from now
+            service (Union[str, Service]): name of service to materialize or an instance.
+            start (str): begin of materialization.
+            end (str): end of materialization.
+            fromnow (str): time interval from now.
 
         """
         if fromnow:
             start = pd.to_datetime(datetime.now(), utc=True) - Period.from_str(fromnow).to_py_timedelta()
-            # end = pd.to_datetime(end, utc=True)
             end = pd.to_datetime(end, utc=True) if end else pd.to_datetime(datetime.now(), utc=True)
         else:
             start = pd.to_datetime(start, utc=True) if start else pd.to_datetime(0, utc=True)
             end = pd.to_datetime(end, utc=True) if end else pd.to_datetime(datetime.now(), utc=True)
 
-        service = self.services[service_name]
+        if isinstance(service, str):
+            service_name = service
+            service = self.services[service]
+            assert service is not None, f"Service: {service_name} is not found in feature store."
+
         join_keys = list(
             {
                 join_key
@@ -449,10 +470,10 @@ class FeatureStore:
             "increment_begin": str(incremental_begin),
         }
         json_var = json.dumps(dict_var)
-        self.schedule_local_dbt_container(service.materialize_path, json_var, dbt_path)
+        self._schedule_local_dbt_container(service.materialize_path, json_var, dbt_path)
         # os.system(f"cd {dbt_path} && dbt run --profiles-dir {dbt_path} --vars '{json_var}' ")
 
-    def schedule_local_dbt_container(self, profile_name: str, vars: Dict, dbt_path: str):
+    def _schedule_local_dbt_container(self, profile_name: str, vars: Dict, dbt_path: str):
         docker_client = docker.from_env()
         dbt_profiles = jinja_env.get_template("profiles.yaml").render(
             profile=profile_name,
@@ -600,14 +621,21 @@ class FeatureStore:
             source=source, join_keys=join_keys, group_keys=group_keys, entity_df=entity, start=start
         )
 
-    def get_dataset(self, service_name: str, sampler: callable = None) -> Dataset:
-        """get from `start` to `end` length data for training from `views`
+    def get_dataset(self, service: Union[str, Service], sampler: callable = None) -> Dataset:
+        """Get an abstraction of F2AI customized Dataset with a specific service.
 
         Args:
-            service_name(str): name of `SERVICE` to use
+            service (Union[str, Service]): name of `SERVICE` to use, or a Service instance.
             sampler (callable, optional): sampler
         """
-        return Dataset(fs=self, service=self.services[service_name], sampler=sampler)
+        if isinstance(service, str):
+            service_name = service
+            service = self.services[service_name]
+            assert (
+                service is not None
+            ), f"service: {service_name} is not found, please double check your service name"
+
+        return Dataset(fs=self, service=service, sampler=sampler)
 
     def query(self, *args, **kwargs) -> pd.DataFrame:
         """Run a query though different types of offline store.

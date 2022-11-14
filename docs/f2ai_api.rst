@@ -1,8 +1,8 @@
-Python API
+API Reference
 ==================
 
 
-featurestore module
+featurestore
 ------------------------------
 
 .. automodule:: f2ai.featurestore
@@ -11,7 +11,7 @@ featurestore module
    :show-inheritance:
 
 
-definitions module
+definitions
 -----------------------------
 
 .. automodule:: f2ai.definitions
