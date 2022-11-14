@@ -586,7 +586,7 @@ class FeatureStore:
             entity[TIME_COL] = end
             group_keys = self._get_keys_to_join(view, join_keys)
         else:
-            join_keys = None
+            join_keys = []
             group_keys = self._get_keys_to_join(view, entity)
             entity = pd.DataFrame({TIME_COL: [end]})
 

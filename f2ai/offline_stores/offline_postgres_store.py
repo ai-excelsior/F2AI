@@ -273,26 +273,37 @@ class OfflinePostgresStore(OfflineStore):
         return self._get_dataframe(stats_sql, group_keys + [feature.name for feature in features])
 
     def get_latest_entities(
-        self, source: SqlSource, group_keys: list = [], entity_df: pd.DataFrame = None
+        self,
+        source: SqlSource,
+        join_keys: List[str] = [],
+        group_keys: list = None,
+        entity_df: pd.DataFrame = None,
+        start: datetime = None,
     ) -> pd.DataFrame:
         """_summary_
 
         Args:
             source (SqlSource): data source of featureview
+            join_keys List[str]:list to join ,default to [],
             group_keys (list, optional): dimension of stats. Defaults to [].
             entity_df (pd.DataFrame, optional): query condition specified by users. Defaults to None.
-
+            start: start time
         Returns:
             pd.DataFrame: _description_
         """
         source_df = self.read(source=source, features=[], join_keys=group_keys)
-        q = Query.from_(source_df).groupby(*group_keys)
+        source_df = source_df.where(Parameter(source.timestamp_field) > Parameter(f"'{start}'::timestamptz"))
+        entity_df, table_name = self._get_entity(entity_df, source, join_keys)
 
-        if entity_df is not None:
-            entity_df, table_name = self._get_entity(entity_df, source, group_keys)
-            q = q.inner_join(entity_df).using(*group_keys)
+        if join_keys:
+            sql_join = Query.from_(source_df).join(entity_df, JoinType.__getattr__("inner")).using(*join_keys)
+        else:
+            sql_join = Query.from_(source_df).cross_join(entity_df).cross()
 
-        sql_result = q.select(*group_keys, fn.Max(Parameter(SOURCE_EVENT_TIMESTAMP_FIELD)))
+        sql_query = self._point_in_time_filter(sql_join)
+        sql_result = sql_query.groupby(*group_keys).select(
+            *group_keys, fn.Max(Parameter(SOURCE_EVENT_TIMESTAMP_FIELD))
+        )
         df = self._get_dataframe(sql_result, group_keys + [DEFAULT_EVENT_TIMESTAMP_FIELD])
         if entity_df is not None:
             self._drop_table(table_name)
