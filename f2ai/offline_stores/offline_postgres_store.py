@@ -5,7 +5,7 @@ import datetime
 from io import StringIO
 from typing import List, Optional, Set, TYPE_CHECKING, Union, Tuple, Dict
 from pydantic import Field, PrivateAttr
-from pypika import Query, Parameter, functions as fn, JoinType, Field as PikaField
+from pypika import Query, Parameter, functions as fn, JoinType, Field as PikaField, Table, PostgreSQLQuery
 from pypika.queries import QueryBuilder
 from f2ai.definitions import (
     Feature,
@@ -24,6 +24,7 @@ DEFAULT_EVENT_TIMESTAMP_FIELD = "event_timestamp"
 ENTITY_EVENT_TIMESTAMP_FIELD = "_entity_event_timestamp_"
 SOURCE_EVENT_TIMESTAMP_FIELD = "_source_event_timestamp_"
 QUERY_COL = "query_timestamp"
+MATERIALIZE_TIME = "materialize_time"
 
 
 if TYPE_CHECKING:
@@ -229,27 +230,52 @@ class OfflinePostgresStore(OfflineStore):
                 )
                 joined_frame = sql_query.select(joined_frame.star, Parameter(f"{','.join(feature_names)}"))
 
-        # result_sql = Query.into(save_path).from_(joined_frame).select("*").on_conflict(["aa"]).do_update()
+        cols_except_time = (
+            [
+                f.name
+                for featureview in feature_views
+                for f in featureview["features"]
+                if f.name not in [l.name for l in label_view["labels"]]
+            ]
+            + [label.name for label in label_view["labels"]]
+            + label_view["join_keys"]
+        )
 
-        return joined_frame
+        unique_keys = [DEFAULT_EVENT_TIMESTAMP_FIELD] + label_view["join_keys"]
+        join_query = Query.from_(joined_frame).select(
+            Parameter(f"{','.join(cols_except_time)}"),
+            Parameter(f"{ENTITY_EVENT_TIMESTAMP_FIELD} as {DEFAULT_EVENT_TIMESTAMP_FIELD}"),
+            Parameter(f"current_timestamp as {MATERIALIZE_TIME}"),
+        )
 
-        # joined_frame["materialize_time"] = pd.to_datetime(datetime.datetime.now(), utc=True)
+        materialize_table = Query.create_table(save_path.query).if_not_exists().as_select(join_query)
+        with self.psy_conn.cursor() as cursor:
+            cursor.execute(
+                materialize_table if isinstance(materialize_table, str) else materialize_table.get_sql()
+            )
+            cursor.execute(
+                f"alter table {save_path.query} add constraint unique_key_{uuid.uuid4().hex[:8]} unique ({Parameter(','.join(unique_keys))})"
+            )
+            self.psy_conn.commit()
 
-        # engine = self.get_sqlalchemy_engine()
-        # table = self._create_sqlalchemy_table(
-        #     df, table_name=service.name, index_columns=[DEFAULT_EVENT_TIMESTAMP_FIELD] + all_entity_cols
-        # )
-        # table.create(engine, checkfirst=True)
+        materialize_table = Table(save_path.query)
+        all_columns = cols_except_time + [DEFAULT_EVENT_TIMESTAMP_FIELD] + [MATERIALIZE_TIME]
 
-        # with self.psy_conn.cursor() as cursor:
-        #     buffer = StringIO()
-        #     df.to_csv(buffer, index=False, header=False)
-        #     buffer.seek(0)
+        insert_fns = (
+            PostgreSQLQuery.into(materialize_table)
+            .columns(
+                Parameter(f"{','.join(all_columns)}"),
+            )
+            .from_(join_query)
+            .select(Parameter(f"{','.join(all_columns)}"))
+            .on_conflict(*unique_keys)
+        )
+        for c in all_columns:
+            insert_fns = insert_fns.do_update(materialize_table.field(c), Parameter(f"excluded.{c}"))
 
-        #     cursor.copy_from(buffer, table=service.name, sep=",", columns=df.columns)
-        #     self.psy_conn.commit()
-
-        # return df
+        with self.psy_conn.cursor() as cursor:
+            cursor.execute(insert_fns if isinstance(insert_fns, str) else insert_fns.get_sql())
+            self.psy_conn.commit()
 
     def stats(
         self,
