@@ -6,7 +6,7 @@ import os
 class EarlyStopping:
     """Early stops the training if validation loss doesn't improve after a given patience."""
 
-    def __init__(self, save_path=".", patience=7, verbose=False, delta=0):
+    def __init__(self, save_path=".", patience=7, verbose=False, delta=0, **kwargs):
         """
         Args:
             patience (int): How long to wait after last time validation loss improved.
@@ -27,6 +27,7 @@ class EarlyStopping:
         self.early_stop = False
         self.val_loss_min = np.Inf
         self.delta = delta
+        self.name = kwargs.get("cpnmae", "")
 
     def __call__(self, val_loss, model):
 
@@ -54,6 +55,6 @@ class EarlyStopping:
             print(
                 f"Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}).  Saving model ..."
             )
-        path_to_save = os.path.join(self.save_path, "best_chekpnt.pk")
+        path_to_save = os.path.join(self.save_path, f"best_chekpnt_{self.name}.pk")
         torch.save(model, path_to_save)
         self.val_loss_min = val_loss
