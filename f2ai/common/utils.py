@@ -3,7 +3,6 @@ import os
 import pandas as pd
 from typing import List, Tuple
 
-
 ENTITY_EVENT_TIMESTAMP_FIELD = "_entity_event_timestamp_"
 SOURCE_EVENT_TIMESTAMP_FIELD = "_source_event_timestamp_"
 
@@ -49,16 +48,19 @@ def read_file(
     return df
 
 
-def to_file(file, path, type):
+pd.DataFrame.to_parquet
+
+
+def to_file(file, path, type, mode="w"):
     path = remove_prefix(path, "file://")
     if type.startswith("parq"):
         file.to_parquet(path, index=False)
     elif type.startswith("tsv"):
-        file.to_csv(path, sep="\t", index=False)
+        file.to_csv(path, sep="\t", index=False, mode=mode)
     elif type.startswith("txt"):
-        file.to_csv(path, sep=" ", index=False)
+        file.to_csv(path, sep=" ", index=False, mode=mode)
     else:
-        file.to_csv(path, index=False)
+        file.to_csv(path, index=False, mode=mode)
 
 
 def get_bucket(bucket, endpoint=None):
