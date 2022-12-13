@@ -39,6 +39,7 @@ class OfflineFileStore(OfflineStore):
         label_view: Dict,
         start: pd.Timestamp = None,
         end: pd.Timestamp = None,
+        **kwargs,
     ):
 
         source = label_view["source"]
@@ -46,8 +47,7 @@ class OfflineFileStore(OfflineStore):
             source=source, features=label_view["labels"], join_keys=label_view["join_keys"]
         )
         joined_frame.drop(columns=["created_timestamp"], errors="ignore")
-
-        joined_frame = joined_frame[(joined_frame[TIME_COL] >= start) & (joined_frame[TIME_COL] <= end)]
+        joined_frame = joined_frame[(joined_frame[TIME_COL] >= start) & (joined_frame[TIME_COL] < end)]
 
         # join features dataframe
         for feature_view in feature_views:
@@ -70,14 +70,8 @@ class OfflineFileStore(OfflineStore):
                 )
 
         joined_frame[MATERIALIZE_TIME] = pd.to_datetime(datetime.datetime.now(), utc=True)
-        to_file(
-            joined_frame,
-            save_path.path,
-            save_path.path.split(".")[-1],
-        )
-        save_path = remove_prefix(save_path.path, "file://")
-        print(f"materialize done, file saved at '{save_path}'")
-        return joined_frame
+        to_file(joined_frame[sorted(joined_frame.columns)], save_path.path, "csv", mode="a")
+        kwargs["signal"].send(1)
 
     def get_features(
         self,

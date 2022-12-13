@@ -1,4 +1,6 @@
-from numpy import NaN
+from copy import deepcopy
+from multiprocessing import Pool, Pipe
+from tqdm import tqdm
 import pandas as pd
 import os
 import json
@@ -26,6 +28,8 @@ from f2ai.definitions import (
     init_offline_store_from_cfg,
     init_online_store_from_cfg,
     StatsFunctions,
+    BackoffTime,
+    backoff_to_split,
 )
 
 
@@ -334,33 +338,25 @@ class FeatureStore:
             **kwargs,
         )
 
-    def materialize(
-        self,
-        service: Union[str, Service],
-        fromnow: Optional[str] = None,
-        start: Optional[str] = None,
-        end: Optional[str] = None,
-    ):
+    def materialize(self, service: Union[str, Service, FeatureView], backoff: BackoffTime, online: bool):
         """Offline materialize, join features which specify by service name.
 
         Args:
             service (Union[str, Service]): name of service to materialize or an instance.
-            start (str): begin of materialization.
-            end (str): end of materialization.
-            fromnow (str): time interval from now.
-
+            backoff: start, end and step to materialize
         """
-        if fromnow:
-            start = pd.to_datetime(datetime.now(), utc=True) - Period.from_str(fromnow).to_py_timedelta()
-            end = pd.to_datetime(end, utc=True) if end else pd.to_datetime(datetime.now(), utc=True)
+        if online:
+            views_to_search = deepcopy(self.services)
+            views_to_search.update(self.feature_views)
         else:
-            start = pd.to_datetime(start, utc=True) if start else pd.to_datetime(0, utc=True)
-            end = pd.to_datetime(end, utc=True) if end else pd.to_datetime(datetime.now(), utc=True)
+            views_to_search = self.services
 
         if isinstance(service, str):
             service_name = service
-            service = self.services[service]
-            assert service is not None, f"Service: {service_name} is not found in feature store."
+            service = views_to_search.get(service, None)
+            assert (
+                service is not None
+            ), f"Service: {service_name} is not found in feature store in current materialize type."
 
         join_keys = list(
             {
@@ -388,13 +384,17 @@ class FeatureStore:
 
         dest_path = self.offline_store.get_offline_source(service)
 
-        self.offline_store.materialize(
-            save_path=dest_path,
-            feature_views=all_feature_views,
-            label_view=label_view_dict,
-            start=start,
-            end=end,
-        )
+        batch_params = [
+            [dest_path, all_feature_views, label_view_dict, t[0], t[1]] for t in backoff_to_split(backoff)
+        ]
+        cpu_ava = max(os.cpu_count() // 2, 1)
+        with tqdm(total=len(batch_params), desc="materializing") as pbar:
+            with Pool(processes=cpu_ava) as pool:
+                r, w = Pipe(duplex=False)
+                for args in batch_params:
+                    pool.apply_async(func=self.offline_store.materialize, args=args, kwds={"signal": w})
+                    pbar.update(r.recv())
+        print(f"materialize done, saved at '{dest_path.path}'")
 
     def _offline_pgsql_materialize_dbt(self, service: Service, incremental_begin):
         try:
