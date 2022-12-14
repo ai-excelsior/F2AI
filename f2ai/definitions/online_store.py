@@ -2,7 +2,7 @@ from __future__ import annotations
 import abc
 import pandas as pd
 from enum import Enum
-from typing import Dict, Any, TYPE_CHECKING, Set, List, Optional, Union
+from typing import Dict, Any, TYPE_CHECKING, Set, List, Optional
 from pydantic import BaseModel
 
 if TYPE_CHECKING:
@@ -15,8 +15,7 @@ if TYPE_CHECKING:
 class OnlineStoreType(str, Enum):
     """A constant numerate choices which is used to indicate how to initialize OnlineStore from configuration. If you want to add a new type of online store, you definitely want to modify this."""
 
-    PGSQL = "pgsql"
-    SPARK = "spark"
+    REDIS = "redis"
 
 
 class OnlineStore(BaseModel):
@@ -105,15 +104,10 @@ def init_online_store_from_cfg(cfg: Dict[Any]) -> OnlineStore:
     """
     offline_store_type = OnlineStore(cfg["type"])
 
-    if offline_store_type == OnlineStoreType.PGSQL:
-        from ..online_stores.online_postgres_store import OnlinePostgresStore
+    if offline_store_type == OnlineStoreType.REDIS:
+        from ..online_stores.OnlineRedisStore import OnlineRedisStore
 
-        pgsql_conf = cfg.pop("pgsql_conf", {})
-        return OnlinePostgresStore(**cfg, **pgsql_conf)
-
-    if offline_store_type == OnlineStoreType.SPARK:
-        from ..online_stores.online_spark_store import OnlineSparkStore
-
-        return OnlineSparkStore(**cfg)
+        redis_conf = cfg.pop("redis_conf", {})
+        return OnlineRedisStore(**cfg, **redis_conf)
 
     raise TypeError(f"offline store type must be one of [{','.join(e.value for e in OnlineStore)}]")
