@@ -7,6 +7,7 @@ from .label_view import LabelView
 from .services import Service
 from .sources import Source, FileSource, SqlSource, parse_source_yaml
 from .offline_store import OfflineStore, OfflineStoreType, init_offline_store_from_cfg
+from .online_store import OnlineStore, OnlineStoreType, init_online_store_from_cfg
 from .constants import LOCAL_TIMEZONE, StatsFunctions
 from .dtypes import FeatureDTypes
 
@@ -30,4 +31,7 @@ __all__ = [
     "LOCAL_TIMEZONE",
     "StatsFunctions",
     "FeatureDTypes",
+    "OnlineStoreType",
+    "OnlineStore",
+    "init_online_store_from_cfg",
 ]
