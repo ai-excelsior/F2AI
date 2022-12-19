@@ -216,6 +216,39 @@ class FeatureStore:
             **kwargs,
         )
 
+    def get_online_features(
+        self,
+        feature_view_name: str,
+        entity_df: Union[pd.DataFrame, str],
+        **kwargs,
+    ) -> pd.DataFrame:
+        """Get features in a certain view from online store.
+
+        Args:
+            feature_view (Union[str, FeatureView, Service]): A name which we can retrieve certain view from F2AI. Or, an instance of FeatureView or Service. If you want retrieve features from a service, materialize is require before to retrieve features.
+            entity_df (pd.DataFrame): A query DataFrame which must contains entity columns.
+
+        Returns:
+            pd.DataFrame: a pandas' DataFrame, where you can found your features in this.
+        """
+
+        self.__check_format(entity_df)
+        feature_view = self._get_views(feature_view_name)
+
+        assert isinstance(feature_view, (FeatureView, Service)), "only allowed FeatureView and Service"
+
+        join_keys = self._get_keys_to_join(feature_view, list(entity_df.columns))
+
+        path = remove_prefix(self.project_folder, "file://")
+        hkey = path.split("/")[-1] + ":" + feature_view_name
+
+        return self.online_store.read_batch(
+            entity_df=entity_df[join_keys],
+            hkey=hkey,
+            ttl=feature_view.ttl,
+            **kwargs,
+        )
+
     def get_period_features(
         self,
         feature_view: Union[str, FeatureView, Service],

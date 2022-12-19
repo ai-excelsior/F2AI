@@ -1,10 +1,10 @@
 import uuid
-from typing import Any, List, Optional, Set
+from typing import Optional
 
 import pandas as pd
 from redis import Redis
 
-from ..definitions.online_store import Feature, FeatureView, OnlineStore, OnlineStoreType, Period, Source
+from ..definitions.online_store import FeatureView, OnlineStore, OnlineStoreType, Period, Source
 
 
 class OnlineRedisStore(OnlineStore):
@@ -25,26 +25,16 @@ class OnlineRedisStore(OnlineStore):
     def read_batch(
         self,
         entity_df: pd.DataFrame,
-        features: Set[Feature],
-        source: Source,
-        join_keys: List[str] = ...,
+        hkey: str,
         ttl: Optional[Period] = None,
-        include: bool = True,
-        **kwargs
+        **kwargs,
     ) -> pd.DataFrame:
-        return super().read_batch(entity_df, features, source, join_keys, ttl, include, **kwargs)
 
-    def read_period_batch(
-        self,
-        entity_df: pd.DataFrame,
-        features: Set[Feature],
-        source: Source,
-        period: Period,
-        join_keys: List[str] = ...,
-        ttl: Optional[Period] = None,
-        include: bool = True,
-        **kwargs
-    ) -> pd.DataFrame:
-        return super().read_period_batch(
-            entity_df, features, source, period, join_keys, ttl, include, **kwargs
-        )
+        if ttl:
+            min_entity_timestamp = entity_df["event_timestamp"].min() - ttl.to_pandas_dateoffset()
+
+        zset_key = self.client.hget(hkey)
+        data = self.client.zrange(zset_key, start=0, end=-1, withscores=True)
+        data = data[data["event_timestamp"] >= min_entity_timestamp]
+
+        return data

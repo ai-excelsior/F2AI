@@ -2,16 +2,14 @@ from __future__ import annotations
 
 import abc
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
 import pandas as pd
 from pydantic import BaseModel
 
 if TYPE_CHECKING:
     from .feature_view import FeatureView
-    from .features import Feature
     from .period import Period
-    from .services import Service
     from .sources import Source
 
 
@@ -45,22 +43,16 @@ class OnlineStore(BaseModel):
     def read_batch(
         self,
         entity_df: pd.DataFrame,
-        features: Set[Feature],
-        source: Source,
-        join_keys: List[str] = [],
+        hkey: str,
         ttl: Optional[Period] = None,
-        include: bool = True,
         **kwargs,
     ) -> pd.DataFrame:
         """get data from current online store.
 
         Args:
             entity_df (pd.DataFrame): A query DataFrame which include entities and event_timestamp column.
-            features (Set[Feature]): A set of Features you want to retrieve.
-            source (Source): A specific implementation of Source. For example, OnlinePostgresStore will receive a SqlSource which point to table with time semantic.
-            join_keys (List[str], optional): Which columns to join the entity_df with source. Defaults to [].
+            hkey: hash key.
             ttl (Optional[Period], optional): Time to Live, if feature's event_timestamp exceeds the ttl, it will be dropped. Defaults to None.
-            include (bool, optional): If include (<=) the event_timestamp in entity_df, else (<). Defaults to True.
 
         Returns:
             pd.DataFrame
@@ -68,31 +60,7 @@ class OnlineStore(BaseModel):
         pass
 
     @abc.abstractmethod
-    def read_period_batch(
-        self,
-        entity_df: pd.DataFrame,
-        features: Set[Feature],
-        source: Source,
-        period: Period,
-        join_keys: List[str] = [],
-        ttl: Optional[Period] = None,
-        include: bool = True,
-        **kwargs,
-    ) -> pd.DataFrame:
-        """get a period of features from online store between [event_timestamp, event_timestamp + period] if period > 0 else [event_timestamp + period, event_timestamp].
-
-        Args:
-            entity_df (pd.DataFrame): A query DataFrame which include entities and event_timestamp column.
-            features (Set[Feature]): A set of Features you want to retrieve.
-            source (Source): A specific implementation of Source. For example, OnlinePostgresStore will receive a SqlSource which point to table with time semantic.
-            period (Period): A Period instance, which wrapped by F2AI.
-            join_keys (List[str], optional): Which columns to join the entity_df with source. Defaults to [].. Defaults to [].
-            ttl (Optional[Period], optional): Time to Live, if feature's event_timestamp exceeds the ttl, it will be dropped. Defaults to None.
-            include (bool, optional): If include (<=) the event_timestamp in entity_df, else (<). Defaults to True.
-
-        Returns:
-            pd.DataFrame
-        """
+    def set_up():
         pass
 
 
@@ -108,7 +76,7 @@ def init_online_store_from_cfg(cfg: Dict[Any]) -> OnlineStore:
     online_store_type = OnlineStoreType(cfg["type"])
 
     if online_store_type == OnlineStoreType.REDIS:
-        from ..online_stores.OnlineRedisStore import OnlineRedisStore
+        from ..online_stores.online_redis_store import OnlineRedisStore
 
         redis_conf = cfg.pop("redis_conf", {})
         return OnlineRedisStore(**cfg, **redis_conf)
