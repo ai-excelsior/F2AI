@@ -394,7 +394,7 @@ class FeatureStore:
                 for args in batch_params:
                     pool.apply_async(func=self.offline_store.materialize, args=args, kwds={"signal": w})
                     pbar.update(r.recv())
-        print(f"materialize done, saved at '{dest_path.path}'")
+        # print(f"materialize done, saved at '{dest_path.path if dest_path.path else dest_path.query}'")
 
     def _offline_pgsql_materialize_dbt(self, service: Service, incremental_begin):
         try:

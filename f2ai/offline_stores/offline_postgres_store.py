@@ -160,7 +160,7 @@ class OfflinePostgresStore(OfflineStore):
         time_columns = []
         if source.timestamp_field:
             time_columns.append(f"{source.timestamp_field} as {alias}")
-        if source.created_timestamp_field:
+        if source.created_timestamp_field and alias != ENTITY_EVENT_TIMESTAMP_FIELD:
             time_columns.append(source.created_timestamp_field)
 
         feature_columns = [feature if isinstance(feature, str) else feature.name for feature in features]
@@ -193,6 +193,7 @@ class OfflinePostgresStore(OfflineStore):
         label_view: Dict,
         start: str = None,
         end: str = None,
+        **kwargs,
     ):
 
         source = label_view["source"]
@@ -202,34 +203,40 @@ class OfflinePostgresStore(OfflineStore):
             join_keys=label_view["join_keys"],
             alias=ENTITY_EVENT_TIMESTAMP_FIELD,
         )
+        label_names = [l if isinstance(l, str) else l.name for l in label_view["labels"]]
 
         condition = (Parameter(DEFAULT_EVENT_TIMESTAMP_FIELD) <= end) & (
             Parameter(DEFAULT_EVENT_TIMESTAMP_FIELD) >= start
         )
 
         joined_frame = joined_frame.where(condition)
-
-        for featureview in feature_views:
-            entity_cols = featureview["join_keys"]
-            features = featureview["features"]
-            feature_names = [
-                f.name for f in features if f.name not in [label.name for label in label_view["labels"]]
-            ]
-            if feature_names:
-                source = featureview["source"]
-                source_df = self.read(source=source, features=features, join_keys=entity_cols)
-                sql_query = self._point_in_time_join(
-                    entity_df=joined_frame,
-                    source_df=source_df,
-                    timestamp_field=source.timestamp_field,
-                    created_timestamp_field=source.created_timestamp_field,
-                    ttl=featureview["ttl"],
-                    join_keys=entity_cols,
-                    include=True,
-                    how="right",
-                )
-                joined_frame = sql_query.select(joined_frame.star, Parameter(f"{','.join(feature_names)}"))
-
+        feature_names = []
+        feature_views.sort(key=lambda x: x["source"].name)
+        for featureview in feature_views[::-1]:
+            if 1 == 1:  # featureview["source"].name != "credit_history_source":
+                entity_cols = featureview["join_keys"]
+                features = featureview["features"]
+                feature_names = feature_names + [
+                    f.name for f in features if f.name not in [label.name for label in label_view["labels"]]
+                ]
+                if [f.name for f in features if f.name not in [label.name for label in label_view["labels"]]]:
+                    source = featureview["source"]
+                    source_df = self.read(source=source, features=features, join_keys=entity_cols)
+                    sql_query = self._point_in_time_join(
+                        entity_df=joined_frame,
+                        source_df=source_df,
+                        timestamp_field=source.timestamp_field,
+                        created_timestamp_field=source.created_timestamp_field,
+                        ttl=featureview["ttl"],
+                        join_keys=entity_cols,
+                        include=True,
+                        how="right",
+                    )
+                    joined_frame = sql_query.select(
+                        Parameter(
+                            f"{','.join(label_view['join_keys']+[ENTITY_EVENT_TIMESTAMP_FIELD]+feature_names+label_names)}"
+                        )
+                    )
         cols_except_time = (
             [
                 f.name
@@ -255,6 +262,7 @@ class OfflinePostgresStore(OfflineStore):
                     materialize_table if isinstance(materialize_table, str) else materialize_table.get_sql()
                 )
                 self.psy_conn.commit()
+                kwargs["signal"].send(1)
         except:
             self.psy_conn.commit()
             with self.psy_conn.cursor() as cursor:
@@ -278,6 +286,7 @@ class OfflinePostgresStore(OfflineStore):
 
                 cursor.execute(insert_fns if isinstance(insert_fns, str) else insert_fns.get_sql())
                 self.psy_conn.commit()
+                kwargs["signal"].send(1)
 
     def stats(
         self,
@@ -532,13 +541,13 @@ class OfflinePostgresStore(OfflineStore):
         """
 
         if ttl:
-            min_entity_timestamp = Query.from_(entity_df).select(
-                fn.Min(Parameter(ENTITY_EVENT_TIMESTAMP_FIELD)) + ttl.to_pgsql_interval()
+            min_entity_timestamp = Query.from_(entity_df.as_("min_entity_timestamp")).select(
+                fn.Min(Parameter(ENTITY_EVENT_TIMESTAMP_FIELD)) - Parameter(ttl.to_pgsql_interval())
             )
             if include:
-                pre_fil = Parameter(SOURCE_EVENT_TIMESTAMP_FIELD) > min_entity_timestamp
+                pre_fil = Parameter(timestamp_field) > min_entity_timestamp
             else:
-                pre_fil = Parameter(SOURCE_EVENT_TIMESTAMP_FIELD) >= min_entity_timestamp
+                pre_fil = Parameter(timestamp_field) >= min_entity_timestamp
             source_df = source_df.where(pre_fil)
 
         if len(join_keys) > 0:
@@ -581,7 +590,7 @@ class OfflinePostgresStore(OfflineStore):
         """
         if ttl:
             min_entity_timestamp = Query.from_(entity_df).select(
-                fn.Min(Parameter(ENTITY_EVENT_TIMESTAMP_FIELD)) + ttl.to_pgsql_interval()
+                fn.Min(Parameter(ENTITY_EVENT_TIMESTAMP_FIELD)) + Parameter(ttl.to_pgsql_interval())
             )
             if include:
                 pre_fil = Parameter(SOURCE_EVENT_TIMESTAMP_FIELD) > min_entity_timestamp
@@ -627,14 +636,14 @@ class OfflinePostgresStore(OfflineStore):
             if ttl:
                 candidates = candidates & (
                     Parameter(source_timestamp_field)
-                    > Parameter(entity_timestamp_field) - ttl.to_pgsql_interval()
+                    > Parameter(entity_timestamp_field) - Parameter(ttl.to_pgsql_interval())
                 )
         else:
             candidates = Parameter(entity_timestamp_field) >= Parameter(source_timestamp_field)
             if ttl:
                 candidates = candidates & (
                     Parameter(source_timestamp_field)
-                    >= Parameter(entity_timestamp_field) - ttl.to_pgsql_interval()
+                    >= Parameter(entity_timestamp_field) - Parameter(ttl.to_pgsql_interval())
                 )
         return df.where(candidates)
 
@@ -664,7 +673,7 @@ class OfflinePostgresStore(OfflineStore):
 
         earliest_timestamp = None
         if ttl:
-            earliest_timestamp = Parameter(entity_timestamp_field) - ttl.to_pgsql_interval()
+            earliest_timestamp = Parameter(entity_timestamp_field) - Parameter(ttl.to_pgsql_interval())
 
         if period.is_neg:
             if include:
@@ -673,7 +682,7 @@ class OfflinePostgresStore(OfflineStore):
                     >= Parameter(f"{source_timestamp_field}::timestamptz")
                 ) & (
                     Parameter(f"{entity_timestamp_field}::timestamptz")
-                    < Parameter(f"{source_timestamp_field}::timestamptz - {period.to_pgsql_interval()}")
+                    < Parameter(f"{source_timestamp_field}::timestamptz - {period.to_pgsql_()}")
                 )
                 if ttl:
                     candidates = candidates & (Parameter(source_timestamp_field) > earliest_timestamp)
