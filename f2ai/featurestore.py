@@ -1,37 +1,39 @@
-from copy import deepcopy
-from multiprocessing import Pool, Pipe
-from tqdm import tqdm
-import pandas as pd
-import os
 import json
-import docker
+import os
+from copy import deepcopy
 from datetime import datetime
-from typing import Dict, List, Union, Optional
-from f2ai.dataset.dataset import Dataset
+from multiprocessing import Pipe, Pool
+from typing import Dict, List, Optional, Union
+
+import docker
+import pandas as pd
+from tqdm import tqdm
+
 from f2ai.common.get_config import (
-    get_service_cfg,
     get_entity_cfg,
-    get_label_views,
     get_feature_views,
+    get_label_views,
+    get_service_cfg,
     get_source_cfg,
 )
-from f2ai.common.utils import remove_prefix
 from f2ai.common.jinja import jinja_env
 from f2ai.common.read_file import read_yml
+from f2ai.common.utils import remove_prefix
+from f2ai.dataset.dataset import Dataset
 from f2ai.definitions import (
+    BackoffTime,
     Feature,
-    Period,
     FeatureView,
-    LabelView,
-    Service,
     FileSource,
+    LabelView,
+    Period,
+    Service,
+    StatsFunctions,
+    backoff_to_split,
     init_offline_store_from_cfg,
     init_online_store_from_cfg,
-    StatsFunctions,
-    BackoffTime,
-    backoff_to_split,
 )
-
+from f2ai.online_stores.online_redis_store import OnlineRedisStore
 
 TIME_COL = "event_timestamp"  # timestamp of action taken in original tables or period-query result, or query time in single-query result table
 MATERIALIZE_TIME = "materialize_time"  # timestamp to done materialize, only used in materialized result
@@ -394,6 +396,10 @@ class FeatureStore:
                 for args in batch_params:
                     pool.apply_async(func=self.offline_store.materialize, args=args, kwds={"signal": w})
                     pbar.update(r.recv())
+        # if online:
+        #     redis_store = OnlineRedisStore(self.online_store)
+        #     redis_store.write_batch()
+
         # print(f"materialize done, saved at '{dest_path.path if dest_path.path else dest_path.query}'")
 
     def _offline_pgsql_materialize_dbt(self, service: Service, incremental_begin):

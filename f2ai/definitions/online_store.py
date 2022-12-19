@@ -1,15 +1,18 @@
 from __future__ import annotations
+
 import abc
-import pandas as pd
 from enum import Enum
-from typing import Dict, Any, TYPE_CHECKING, Set, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
+
+import pandas as pd
 from pydantic import BaseModel
 
 if TYPE_CHECKING:
-    from .services import Service
-    from .sources import Source
+    from .feature_view import FeatureView
     from .features import Feature
     from .period import Period
+    from .services import Service
+    from .sources import Source
 
 
 class OnlineStoreType(str, Enum):
@@ -27,7 +30,7 @@ class OnlineStore(BaseModel):
         extra = "allow"
 
     @abc.abstractmethod
-    def write_batch(self, service: Service) -> Source:
+    def write_batch(self, featrue_view: FeatureView, project_name: str, dt: pd.DataFrame) -> Source:
         """materialize data on redis
 
         Args:
@@ -102,9 +105,9 @@ def init_online_store_from_cfg(cfg: Dict[Any]) -> OnlineStore:
     Returns:
         OnlineStore: Different types of OnlineStore.
     """
-    offline_store_type = OnlineStore(cfg["type"])
+    online_store_type = OnlineStoreType(cfg["type"])
 
-    if offline_store_type == OnlineStoreType.REDIS:
+    if online_store_type == OnlineStoreType.REDIS:
         from ..online_stores.OnlineRedisStore import OnlineRedisStore
 
         redis_conf = cfg.pop("redis_conf", {})
