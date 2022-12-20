@@ -32,6 +32,8 @@ from f2ai.definitions import (
     backoff_to_split,
     init_offline_store_from_cfg,
     init_online_store_from_cfg,
+    init_persist_engine_from_cfg,
+    OnlineStore,
 )
 from f2ai.online_stores.online_redis_store import OnlineRedisStore
 
@@ -44,7 +46,8 @@ class FeatureStore:
         if project_folder:
             cfg = read_yml(os.path.join(project_folder, "feature_store.yml"))
             self.offline_store = init_offline_store_from_cfg(cfg["offline_store"])
-        #  self.online_store = init_online_store_from_cfg(cfg["online_store"])
+            self.online_store = init_online_store_from_cfg(cfg["online_store"])
+            self.persist_engine = init_persist_engine_from_cfg(self.offline_store, self.online_store)
         elif url and token and projectID:
             pass  # TODO: realize in future
         else:
@@ -427,7 +430,9 @@ class FeatureStore:
             with Pool(processes=cpu_ava) as pool:
                 r, w = Pipe(duplex=False)
                 for args in batch_params:
-                    pool.apply_async(func=self.offline_store.materialize, args=args, kwds={"signal": w})
+                    pool.apply_async(
+                        func=self.persist_engine.materialize, args=args, kwds={"signal": w, "online": online}
+                    )
                     pbar.update(r.recv())
         # if online:
         #     redis_store = OnlineRedisStore(self.online_store)

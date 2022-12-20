@@ -186,109 +186,6 @@ class OfflinePostgresStore(OfflineStore):
 
         return max_timestamp, max_timestamp_label
 
-    def materialize(
-        self,
-        save_path: SqlSource,
-        feature_views: List[Dict],
-        label_view: Dict,
-        start: str = None,
-        end: str = None,
-        **kwargs,
-    ):
-
-        source = label_view["source"]
-        joined_frame = self.read(
-            source=source,
-            features=label_view["labels"],
-            join_keys=label_view["join_keys"],
-            alias=ENTITY_EVENT_TIMESTAMP_FIELD,
-        )
-        label_names = [l if isinstance(l, str) else l.name for l in label_view["labels"]]
-
-        condition = (Parameter(DEFAULT_EVENT_TIMESTAMP_FIELD) <= end) & (
-            Parameter(DEFAULT_EVENT_TIMESTAMP_FIELD) >= start
-        )
-
-        joined_frame = joined_frame.where(condition)
-        feature_names = []
-        feature_views.sort(key=lambda x: x["source"].name)
-        for featureview in feature_views[::-1]:
-            if 1 == 1:  # featureview["source"].name != "credit_history_source":
-                entity_cols = featureview["join_keys"]
-                features = featureview["features"]
-                feature_names = feature_names + [
-                    f.name for f in features if f.name not in [label.name for label in label_view["labels"]]
-                ]
-                if [f.name for f in features if f.name not in [label.name for label in label_view["labels"]]]:
-                    source = featureview["source"]
-                    source_df = self.read(source=source, features=features, join_keys=entity_cols)
-                    sql_query = self._point_in_time_join(
-                        entity_df=joined_frame,
-                        source_df=source_df,
-                        timestamp_field=source.timestamp_field,
-                        created_timestamp_field=source.created_timestamp_field,
-                        ttl=featureview["ttl"],
-                        join_keys=entity_cols,
-                        include=True,
-                        how="right",
-                    )
-                    joined_frame = sql_query.select(
-                        Parameter(
-                            f"{','.join(label_view['join_keys']+[ENTITY_EVENT_TIMESTAMP_FIELD]+feature_names+label_names)}"
-                        )
-                    )
-        cols_except_time = (
-            [
-                f.name
-                for featureview in feature_views
-                for f in featureview["features"]
-                if f.name not in [l.name for l in label_view["labels"]]
-            ]
-            + [label.name for label in label_view["labels"]]
-            + label_view["join_keys"]
-        )
-
-        unique_keys = [DEFAULT_EVENT_TIMESTAMP_FIELD] + label_view["join_keys"]
-        join_query = Query.from_(joined_frame).select(
-            Parameter(f"{','.join(cols_except_time)}"),
-            Parameter(f"{ENTITY_EVENT_TIMESTAMP_FIELD} as {DEFAULT_EVENT_TIMESTAMP_FIELD}"),
-            Parameter(f"current_timestamp as {MATERIALIZE_TIME}"),
-        )
-
-        materialize_table = Query.create_table(save_path.query).as_select(join_query)
-
-        try:
-            with self.psy_conn.cursor() as cursor:
-                cursor.execute(
-                    materialize_table if isinstance(materialize_table, str) else materialize_table.get_sql()
-                )
-                cursor.execute(
-                    f"alter table {save_path.query} add constraint unique_key_{uuid.uuid4().hex[:8]} unique ({Parameter(','.join(unique_keys))})"
-                )
-                self.psy_conn.commit()
-                kwargs["signal"].send(1)
-        except:
-            self.psy_conn.commit()
-            with self.psy_conn.cursor() as cursor:
-                materialize_table = Table(save_path.query)
-                all_columns = cols_except_time + [DEFAULT_EVENT_TIMESTAMP_FIELD] + [MATERIALIZE_TIME]
-
-                insert_fns = (
-                    PostgreSQLQuery.into(materialize_table)
-                    .columns(*all_columns)
-                    #     Parameter(f"{','.join(all_columns)}"),
-                    # )
-                    .from_(join_query)
-                    .select(Parameter(f"{','.join(all_columns)}"))
-                    .on_conflict(*unique_keys)
-                )
-                for c in all_columns:
-                    insert_fns = insert_fns.do_update(materialize_table.field(c), Parameter(f"excluded.{c}"))
-                print(1)
-                cursor.execute(insert_fns if isinstance(insert_fns, str) else insert_fns.get_sql())
-                self.psy_conn.commit()
-                kwargs["signal"].send(1)
-
     def stats(
         self,
         source: SqlSource,
@@ -541,16 +438,6 @@ class OfflinePostgresStore(OfflineStore):
             Query: _description_
         """
 
-        # if ttl:
-        #     min_entity_timestamp = Query.from_(entity_df.as_("min_entity_timestamp")).select(
-        #         fn.Min(Parameter(ENTITY_EVENT_TIMESTAMP_FIELD)) - Parameter(ttl.to_pgsql_interval())
-        #     )
-        #     if include:
-        #         pre_fil = Parameter(timestamp_field) > min_entity_timestamp
-        #     else:
-        #         pre_fil = Parameter(timestamp_field) >= min_entity_timestamp
-        #     source_df = source_df.where(pre_fil)
-
         if len(join_keys) > 0:
             sql_join = Query.from_(source_df).join(entity_df, JoinType.__getattr__(how)).using(*join_keys)
         else:
@@ -589,16 +476,6 @@ class OfflinePostgresStore(OfflineStore):
         Returns:
             Query: _description_
         """
-        if ttl:
-            min_entity_timestamp = Query.from_(entity_df).select(
-                fn.Min(Parameter(ENTITY_EVENT_TIMESTAMP_FIELD)) + Parameter(ttl.to_pgsql_interval())
-            )
-            if include:
-                pre_fil = Parameter(SOURCE_EVENT_TIMESTAMP_FIELD) > min_entity_timestamp
-            else:
-                pre_fil = Parameter(SOURCE_EVENT_TIMESTAMP_FIELD) >= min_entity_timestamp
-            source_df = source_df.where(pre_fil)
-        # query source
 
         if len(join_keys) > 0:
             sql_join = Query.from_(source_df).join(entity_df, JoinType.__getattr__(how)).using(*join_keys)

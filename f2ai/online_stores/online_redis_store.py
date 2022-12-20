@@ -63,4 +63,3 @@ class OnlineRedisStore(OnlineStore):
 if __name__ == "__main__":
     online = OnlineRedisStore(host="localhost", port=6379, db=0, password="")
     # online.psy_conn
-

@@ -10,6 +10,14 @@ from .offline_store import OfflineStore, OfflineStoreType, init_offline_store_fr
 from .online_store import OnlineStore, OnlineStoreType, init_online_store_from_cfg
 from .constants import LOCAL_TIMEZONE, StatsFunctions
 from .backoff_time import BackoffTime, backoff_to_split
+from .persist_engine import (
+    PersistEngine,
+    OfflinePersistEngine,
+    OnlinePersistEngine,
+    OfflinePersistEngineType,
+    OnlinePersistEngineType,
+    init_persist_engine_from_cfg,
+)
 from .dtypes import FeatureDTypes
 
 __all__ = [
@@ -37,4 +45,10 @@ __all__ = [
     "init_online_store_from_cfg",
     "BackoffTime",
     "backoff_to_split",
+    "PersistEngine",
+    "OnlinePersistEngine",
+    "OfflinePersistEngine",
+    "OfflinePersistEngineType",
+    "OnlinePersistEngineType",
+    "init_persist_engine_from_cfg",
 ]
