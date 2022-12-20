@@ -14,6 +14,7 @@ def init(url):
 
 def materialize(url, views, backoff, online):
     fs = FeatureStore(url)
+
     for view in views:
         fs.materialize(view, backoff, online)
 

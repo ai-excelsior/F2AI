@@ -136,7 +136,7 @@ class OfflineFileStore(OfflineStore):
         source_df = source_df[source_df[SOURCE_EVENT_TIMESTAMP_FIELD] >= start]
         entity_df = entity_df.rename(columns={DEFAULT_EVENT_TIMESTAMP_FIELD: ENTITY_EVENT_TIMESTAMP_FIELD})
 
-        if join_keys is not None:
+        if join_keys:
             source_df = source_df.merge(entity_df, on=group_keys, how="inner")
         else:
             source_df = source_df.merge(entity_df, how="cross")

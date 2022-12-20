@@ -46,7 +46,8 @@ class FeatureStore:
         if project_folder:
             cfg = read_yml(os.path.join(project_folder, "feature_store.yml"))
             self.offline_store = init_offline_store_from_cfg(cfg["offline_store"])
-            self.online_store = init_online_store_from_cfg(cfg["online_store"])
+            #  self.online_store = init_online_store_from_cfg(cfg["online_store"])
+            self.online_store = None
             self.persist_engine = init_persist_engine_from_cfg(self.offline_store, self.online_store)
         elif url and token and projectID:
             pass  # TODO: realize in future
