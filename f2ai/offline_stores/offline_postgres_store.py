@@ -254,6 +254,7 @@ class OfflinePostgresStore(OfflineStore):
             Parameter(f"{ENTITY_EVENT_TIMESTAMP_FIELD} as {DEFAULT_EVENT_TIMESTAMP_FIELD}"),
             Parameter(f"current_timestamp as {MATERIALIZE_TIME}"),
         )
+
         materialize_table = Query.create_table(save_path.query).as_select(join_query)
 
         try:
@@ -261,29 +262,29 @@ class OfflinePostgresStore(OfflineStore):
                 cursor.execute(
                     materialize_table if isinstance(materialize_table, str) else materialize_table.get_sql()
                 )
+                cursor.execute(
+                    f"alter table {save_path.query} add constraint unique_key_{uuid.uuid4().hex[:8]} unique ({Parameter(','.join(unique_keys))})"
+                )
                 self.psy_conn.commit()
                 kwargs["signal"].send(1)
         except:
             self.psy_conn.commit()
             with self.psy_conn.cursor() as cursor:
-                cursor.execute(
-                    f"alter table {save_path.query} add constraint unique_key_{uuid.uuid4().hex[:8]} unique ({Parameter(','.join(unique_keys))})"
-                )
                 materialize_table = Table(save_path.query)
                 all_columns = cols_except_time + [DEFAULT_EVENT_TIMESTAMP_FIELD] + [MATERIALIZE_TIME]
 
                 insert_fns = (
                     PostgreSQLQuery.into(materialize_table)
-                    .columns(
-                        Parameter(f"{','.join(all_columns)}"),
-                    )
+                    .columns(*all_columns)
+                    #     Parameter(f"{','.join(all_columns)}"),
+                    # )
                     .from_(join_query)
                     .select(Parameter(f"{','.join(all_columns)}"))
                     .on_conflict(*unique_keys)
                 )
                 for c in all_columns:
                     insert_fns = insert_fns.do_update(materialize_table.field(c), Parameter(f"excluded.{c}"))
-
+                print(1)
                 cursor.execute(insert_fns if isinstance(insert_fns, str) else insert_fns.get_sql())
                 self.psy_conn.commit()
                 kwargs["signal"].send(1)
@@ -540,15 +541,15 @@ class OfflinePostgresStore(OfflineStore):
             Query: _description_
         """
 
-        if ttl:
-            min_entity_timestamp = Query.from_(entity_df.as_("min_entity_timestamp")).select(
-                fn.Min(Parameter(ENTITY_EVENT_TIMESTAMP_FIELD)) - Parameter(ttl.to_pgsql_interval())
-            )
-            if include:
-                pre_fil = Parameter(timestamp_field) > min_entity_timestamp
-            else:
-                pre_fil = Parameter(timestamp_field) >= min_entity_timestamp
-            source_df = source_df.where(pre_fil)
+        # if ttl:
+        #     min_entity_timestamp = Query.from_(entity_df.as_("min_entity_timestamp")).select(
+        #         fn.Min(Parameter(ENTITY_EVENT_TIMESTAMP_FIELD)) - Parameter(ttl.to_pgsql_interval())
+        #     )
+        #     if include:
+        #         pre_fil = Parameter(timestamp_field) > min_entity_timestamp
+        #     else:
+        #         pre_fil = Parameter(timestamp_field) >= min_entity_timestamp
+        #     source_df = source_df.where(pre_fil)
 
         if len(join_keys) > 0:
             sql_join = Query.from_(source_df).join(entity_df, JoinType.__getattr__(how)).using(*join_keys)
