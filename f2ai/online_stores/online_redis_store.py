@@ -1,12 +1,10 @@
-from datetime import datetime
 import uuid
-from typing import Optional
-
+import pickle
 import pandas as pd
 from redis import Redis
-
+from typing import Optional
 from pydantic import PrivateAttr
-
+from datetime import datetime
 from f2ai.definitions import FeatureView, OnlineStore, OnlineStoreType, Period, Source, online_store
 
 
@@ -51,8 +49,12 @@ class OnlineRedisStore(OnlineStore):
 
         zset_key = self.client.hget(hkey.split(":")[0], hkey.split(":")[1])
         data = self.client.zrangebyscore(
-            zset_key, min=min_ttl_timestamp, max=pd.to_datetime(datetime.now(), utc=True), withscores=True
+            zset_key, min=min_ttl_timestamp, max=pd.to_datetime(datetime.now(), utc=True), withscores=False
         )
+        columns = list(pickle.loads(data[0]).keys())
+        batch_data_list = []
+        {batch_data_list.append([pickle.loads(data[i])[key] for key in columns]) for i in range(len(data))}
+        data = pd.DataFrame(batch_data_list, columns=columns)
         if period:
             min_period_timestamp = data["event_timestamp"].max() - period.to_pandas_dateoffset()
             data = data[data["event_timestamp"] >= min_period_timestamp]
