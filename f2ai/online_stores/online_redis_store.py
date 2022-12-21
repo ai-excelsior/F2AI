@@ -42,19 +42,23 @@ class OnlineRedisStore(OnlineStore):
         entity_df: pd.DataFrame,
         hkey: str,
         ttl: Optional[Period] = None,
+        period: Optional[Period] = None,
         **kwargs,
     ) -> pd.DataFrame:
 
         if ttl:
-            min_entity_timestamp = pd.to_datetime(datetime.now(), utc=True) - ttl.to_pandas_dateoffset()
+            min_ttl_timestamp = pd.to_datetime(datetime.now(), utc=True) - ttl.to_pandas_dateoffset()
 
         zset_key = self.client.hget(hkey.split(":")[0], hkey.split(":")[1])
         data = self.client.zrangebyscore(
-            zset_key, min=min_entity_timestamp, max=pd.to_datetime(datetime.now(), utc=True), withscores=True
+            zset_key, min=min_ttl_timestamp, max=pd.to_datetime(datetime.now(), utc=True), withscores=True
         )
-        result_data = pd.merge(entity_df, data, on=entity_df.columns, how="inner")
+        if period:
+            min_period_timestamp = data["event_timestamp"].max() - period.to_pandas_dateoffset()
+            data = data[data["event_timestamp"] >= min_period_timestamp]
+        batch_data = pd.merge(entity_df, data, on=entity_df.columns, how="inner")
 
-        return result_data
+        return batch_data
 
     def set_up():
         pass
@@ -62,4 +66,5 @@ class OnlineRedisStore(OnlineStore):
 
 if __name__ == "__main__":
     online = OnlineRedisStore(host="localhost", port=6379, db=0, password="")
-    # online.psy_conn
+    # online.client.hset("guizhou_traffic", "a", "1")
+    pass

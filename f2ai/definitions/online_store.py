@@ -45,6 +45,7 @@ class OnlineStore(BaseModel):
         entity_df: pd.DataFrame,
         hkey: str,
         ttl: Optional[Period] = None,
+        period: Optional[Period] = None,
         **kwargs,
     ) -> pd.DataFrame:
         """get data from current online store.
