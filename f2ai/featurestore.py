@@ -245,7 +245,7 @@ class FeatureStore:
 
         if isinstance(feature_view, FeatureView):
             hkey = path.split("/")[-1] + ":" + feature_view_name
-            ttl: Period = -Period.from_str(feature_view.ttl)
+            ttl: Period = Period.from_str(feature_view.ttl)
             return self.online_store.read_batch(
                 entity_df=entity_df[join_keys],
                 hkey=hkey,

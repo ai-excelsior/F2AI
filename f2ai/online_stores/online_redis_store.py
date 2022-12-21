@@ -48,18 +48,26 @@ class OnlineRedisStore(OnlineStore):
             min_ttl_timestamp = pd.to_datetime(datetime.now(), utc=True) - ttl.to_pandas_dateoffset()
 
         zset_key = self.client.hget(hkey.split(":")[0], hkey.split(":")[1])
-        data = self.client.zrangebyscore(
-            zset_key, min=min_ttl_timestamp, max=pd.to_datetime(datetime.now(), utc=True), withscores=False
-        )
-        columns = list(pickle.loads(data[0]).keys())
-        batch_data_list = []
-        {batch_data_list.append([pickle.loads(data[i])[key] for key in columns]) for i in range(len(data))}
-        data = pd.DataFrame(batch_data_list, columns=columns)
-        if period:
-            min_period_timestamp = data["event_timestamp"].max() - period.to_pandas_dateoffset()
-            data = data[data["event_timestamp"] >= min_period_timestamp]
-        batch_data = pd.merge(entity_df, data, on=entity_df.columns, how="inner")
-
+        if zset_key:
+            data = self.client.zrangebyscore(
+                zset_key,
+                min=min_ttl_timestamp,
+                max=pd.to_datetime(datetime.now(), utc=True),
+                withscores=False,
+            )
+            columns = list(pickle.loads(data[0]).keys())
+            batch_data_list = []
+            {
+                batch_data_list.append([pickle.loads(data[i])[key] for key in columns])
+                for i in range(len(data))
+            }
+            data = pd.DataFrame(batch_data_list, columns=columns)
+            if period:
+                min_period_timestamp = data["event_timestamp"].max() - period.to_pandas_dateoffset()
+                data = data[data["event_timestamp"] >= min_period_timestamp]
+            batch_data = pd.merge(entity_df, data, on=entity_df.columns, how="inner")
+        else:
+            batch_data = None
         return batch_data
 
     def set_up():
@@ -68,5 +76,9 @@ class OnlineRedisStore(OnlineStore):
 
 if __name__ == "__main__":
     online = OnlineRedisStore(host="localhost", port=6379, db=0, password="")
-    # online.client.hset("guizhou_traffic", "a", "1")
+    entity_df = pd.DataFrame([[1, 3], [2, 4]], columns=["A", "B"])
+    hkey = "guizhou_traffic:tt"
+    ttl = Period.from_str("1 days")
+
+    aa = online.read_batch(entity_df=entity_df, hkey=hkey, ttl=ttl, period=None)
     pass
