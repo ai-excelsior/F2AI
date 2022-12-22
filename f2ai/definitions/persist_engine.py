@@ -1,25 +1,14 @@
 from __future__ import annotations
-import uuid
-import pandas as pd
-import datetime
-from io import StringIO
-from typing import List, Optional, Set, TYPE_CHECKING, Union, Tuple, Dict
-from pydantic import Field, PrivateAttr
-from pypika import Query, Parameter, functions as fn, JoinType, Field as PikaField, Table, PostgreSQLQuery
-from pypika.queries import QueryBuilder
+import abc
+from typing import List, Dict
+from pydantic import BaseModel
+from enum import Enum
 from f2ai.definitions import (
-    Feature,
-    Period,
-    LabelView,
-    FileSource,
-    SqlSource,
     OfflineStoreType,
     OfflineStore,
     OnlineStore,
-    StatsFunctions,
     Source,
 )
-from f2ai.common.utils import convert_dtype_to_sqlalchemy_type
 
 
 DEFAULT_EVENT_TIMESTAMP_FIELD = "event_timestamp"
@@ -27,10 +16,6 @@ ENTITY_EVENT_TIMESTAMP_FIELD = "_entity_event_timestamp_"
 SOURCE_EVENT_TIMESTAMP_FIELD = "_source_event_timestamp_"
 QUERY_COL = "query_timestamp"
 MATERIALIZE_TIME = "materialize_time"
-from pydantic import BaseModel
-from enum import Enum
-from .offline_store import OfflineStoreType
-from .online_store import OnlineStoreType
 
 
 class PersistEngineType(str, Enum):
@@ -68,6 +53,10 @@ class OfflinePersistEngine(PersistEngine):
 
     class Config:
         extra = "allow"
+
+    @abc.abstractmethod
+    def materialize():
+        pass
 
 
 class OnlinePersistEngine(PersistEngine):
