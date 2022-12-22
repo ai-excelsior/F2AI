@@ -434,6 +434,30 @@ class FeatureStore:
                 service is not None
             ), f"Service: {service_name} is not found in feature store in current materialize type."
 
+        if online:
+            if service.ttl is not None:
+                period = str(service.ttl)
+                if backoff.start.timestamp() > (datetime.now() - service.ttl.to_py_timedelta()).timestamp():
+                    start = backoff.start
+                else:
+                    start = datetime.now() - service.ttl.to_py_timedelta()
+                date_range = pd.date_range(
+                    start=start,
+                    end=backoff.end + backoff.step.to_py_timedelta(),
+                    freq=backoff.step.to_py_timedelta(),
+                )
+            else:
+                period = str(backoff.end - backoff.start)
+                date_range = pd.date_range(
+                    start=backoff.start,
+                    end=backoff.end + backoff.step.to_py_timedelta(),
+                    freq=backoff.step.to_py_timedelta(),
+                )
+            date_df = pd.DataFrame(data=date_range, columns=["event_timestamp"])
+            latest_entities = self.get_latest_entities(service).drop(columns=["event_timestamp"])
+            entity = pd.merge(latest_entities, date_df, how="cross")
+            dt = self.get_period_features(service, entity, period)
+            self.online_store.write_batch(service, self.name, dt)
         join_keys = list(
             {
                 join_key
@@ -472,30 +496,6 @@ class FeatureStore:
                         func=self.persist_engine.materialize, args=args, kwds={"signal": w, "online": online}
                     )
                     pbar.update(r.recv())
-        if online:
-            if service.ttl is not None:
-                period = str(service.ttl)
-                if backoff.start.timestamp() > (datetime.now() - service.ttl.to_py_timedelta()).timestamp():
-                    start = backoff.start
-                else:
-                    start = datetime.now() - service.ttl.to_py_timedelta()
-                date_range = pd.date_range(
-                    start=start,
-                    end=backoff.end + backoff.step.to_py_timedelta(),
-                    freq=backoff.step.to_py_timedelta(),
-                )
-            else:
-                period = str(backoff.end - backoff.start)
-                date_range = pd.date_range(
-                    start=backoff.start,
-                    end=backoff.end + backoff.step.to_py_timedelta(),
-                    freq=backoff.step.to_py_timedelta(),
-                )
-            date_df = pd.DataFrame(data=date_range, columns=["event_timestamp"])
-            latest_entities = self.get_latest_entities(service).drop(columns=["event_timestamp"])
-            entity = pd.merge(latest_entities, date_df, how="cross")
-            dt = self.get_period_features(service, entity, period)
-            self.online_store.write_batch(service, self.name, dt)
 
         # print(f"materialize done, saved at '{dest_path.path if dest_path.path else dest_path.query}'")
 
