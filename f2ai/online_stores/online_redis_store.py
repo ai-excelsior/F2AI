@@ -1,11 +1,14 @@
-import uuid
+import json
 import pickle
-import pandas as pd
-from redis import Redis
-from typing import Optional
-from pydantic import PrivateAttr
+import uuid
 from datetime import datetime
+from typing import Optional
+
+import pandas as pd
+from f2ai.common.utils import DateEncoder
 from f2ai.definitions import FeatureView, OnlineStore, OnlineStoreType, Period, Source, online_store
+from pydantic import PrivateAttr
+from redis import Redis
 
 
 class OnlineRedisStore(OnlineStore):
@@ -30,10 +33,20 @@ class OnlineRedisStore(OnlineStore):
 
         return self._cilent
 
-    def write_batch(self, featrue_view: FeatureView, project_name: str, dt: pd.DataFrame) -> Source:
-        set_key = uuid.uuid4().hex[:8]
-        self.client.hset(project_name, featrue_view.name, set_key)
-        return super().write_batch(featrue_view, project_name, dt)
+    def write_batch(self, featrue_view: FeatureView, project_name: str, dt: pd.DataFrame):
+        if self.client.hget(project_name, featrue_view.name) == None:
+            zset_key = uuid.uuid4().hex[:8]
+            self.client.hset(project_name, featrue_view.name, zset_key)
+        else:
+            zset_key = self.client.hget(project_name, featrue_view.name)
+        zset_dict = {}
+        for row in dt.to_dict("records"):
+            if row.get("event_timestamp") == None:
+                event_timestamp = datetime.now().timestamp()
+            else:
+                event_timestamp = row.get("event_timestamp").timestamp()
+            zset_dict.setdefault(json.dumps(row, cls=DateEncoder), event_timestamp)
+        self.client.zadd(name=zset_key, mapping=zset_dict)
 
     def read_batch(
         self,

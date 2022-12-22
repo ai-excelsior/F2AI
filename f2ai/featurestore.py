@@ -26,6 +26,7 @@ from f2ai.definitions import (
     FeatureView,
     FileSource,
     LabelView,
+    OnlineStore,
     Period,
     Service,
     StatsFunctions,
@@ -33,7 +34,6 @@ from f2ai.definitions import (
     init_offline_store_from_cfg,
     init_online_store_from_cfg,
     init_persist_engine_from_cfg,
-    OnlineStore,
 )
 
 TIME_COL = "event_timestamp"  # timestamp of action taken in original tables or period-query result, or query time in single-query result table
@@ -44,9 +44,9 @@ class FeatureStore:
     def __init__(self, project_folder=None, url=None, token=None, projectID=None):
         if project_folder:
             cfg = read_yml(os.path.join(project_folder, "feature_store.yml"))
+            self.name = cfg["project"]
             self.offline_store = init_offline_store_from_cfg(cfg["offline_store"])
-            #  self.online_store = init_online_store_from_cfg(cfg["online_store"])
-            self.online_store = None
+            self.online_store = init_online_store_from_cfg(cfg["online_store"])
             self.persist_engine = init_persist_engine_from_cfg(self.offline_store, self.online_store)
         elif url and token and projectID:
             pass  # TODO: realize in future
@@ -466,9 +466,30 @@ class FeatureStore:
                         func=self.persist_engine.materialize, args=args, kwds={"signal": w, "online": online}
                     )
                     pbar.update(r.recv())
-        # if online:
-        #     redis_store = OnlineRedisStore(self.online_store)
-        #     redis_store.write_batch()
+        if online:
+            if service.ttl is not None:
+                period = str(service.ttl)
+                if backoff.start.timestamp() > (datetime.now() - service.ttl.to_py_timedelta()).timestamp():
+                    start = backoff.start
+                else:
+                    start = datetime.now() - service.ttl.to_py_timedelta()
+                date_range = pd.date_range(
+                    start=start,
+                    end=backoff.end + backoff.step.to_py_timedelta(),
+                    freq=backoff.step.to_py_timedelta(),
+                )
+            else:
+                period = str(backoff.end - backoff.start)
+                date_range = pd.date_range(
+                    start=backoff.start,
+                    end=backoff.end + backoff.step.to_py_timedelta(),
+                    freq=backoff.step.to_py_timedelta(),
+                )
+            date_df = pd.DataFrame(data=date_range, columns=["event_timestamp"])
+            latest_entities = self.get_latest_entities(service).drop(columns=["event_timestamp"])
+            entity = pd.merge(latest_entities, date_df, how="cross")
+            dt = self.get_period_features(service, entity, period)
+            self.online_store.write_batch(service, self.name, dt)
 
         # print(f"materialize done, saved at '{dest_path.path if dest_path.path else dest_path.query}'")
 

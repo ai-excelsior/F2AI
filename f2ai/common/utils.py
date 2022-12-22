@@ -1,10 +1,21 @@
-import oss2
+import datetime
+import json
 import os
-import pandas as pd
 from typing import List, Tuple
+
+import oss2
+import pandas as pd
 
 ENTITY_EVENT_TIMESTAMP_FIELD = "_entity_event_timestamp_"
 SOURCE_EVENT_TIMESTAMP_FIELD = "_source_event_timestamp_"
+
+
+class DateEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, datetime.datetime):
+            return o.strftime("%Y-%m-%dT%H:%M:%S")
+        else:
+            return json.JSONEncoder.default(self, o)
 
 
 def remove_prefix(text: str, prefix: str):
@@ -87,6 +98,7 @@ def get_bucket_from_oss_url(url: str):
 
 # the code below copied from https://github.com/pandas-dev/pandas/blob/91111fd99898d9dcaa6bf6bedb662db4108da6e6/pandas/io/sql.py#L1155
 def convert_dtype_to_sqlalchemy_type(col):
+    from pandas._libs.lib import infer_dtype
     from sqlalchemy.types import (
         TIMESTAMP,
         BigInteger,
@@ -99,7 +111,6 @@ def convert_dtype_to_sqlalchemy_type(col):
         Text,
         Time,
     )
-    from pandas._libs.lib import infer_dtype
 
     col_type = infer_dtype(col, skipna=True)
 

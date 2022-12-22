@@ -1,9 +1,9 @@
 import os
 from argparse import ArgumentParser
-from f2ai.common.cmd_parser import get_f2ai_parser, get_materialize_parser
-from f2ai.featurestore import FeatureStore
-from f2ai.definitions.backoff_time import cfg_to_date
 
+from f2ai.common.cmd_parser import get_f2ai_parser, get_materialize_parser
+from f2ai.definitions.backoff_time import cfg_to_date
+from f2ai.featurestore import FeatureStore
 
 TIME_COL = "event_timestamp"
 
