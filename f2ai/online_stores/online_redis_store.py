@@ -87,13 +87,3 @@ class OnlineRedisStore(OnlineStore):
 
     def set_up():
         pass
-
-
-if __name__ == "__main__":
-    online = OnlineRedisStore(host="localhost", port=6379, db=0, password="")
-    entity_df = pd.DataFrame([[1, 3], [2, 4]], columns=["A", "B"])
-    hkey = "guizhou_traffic:tt"
-    ttl = Period.from_str("1 days")
-
-    aa = online.read_batch(entity_df=entity_df, hkey=hkey, ttl=ttl, period=None)
-    pass
