@@ -59,6 +59,8 @@ class OnlineRedisStore(OnlineStore):
 
         if ttl:
             min_ttl_timestamp = pd.to_datetime(datetime.now(), utc=True) - ttl.to_pandas_dateoffset()
+        else:
+            min_ttl_timestamp = pd.to_datetime("1970-01-01", utc=True)
 
         zset_key = self.client.hget(hkey.split(":")[0], hkey.split(":")[1])
         if zset_key:

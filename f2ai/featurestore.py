@@ -47,6 +47,8 @@ class FeatureStore:
             self.name = cfg["project"]
             self.offline_store = init_offline_store_from_cfg(cfg["offline_store"])
             self.online_store = init_online_store_from_cfg(cfg["online_store"])
+            # self.online_store = init_online_store_from_cfg(cfg["online_store"])
+            self.online_store = None
             self.persist_engine = init_persist_engine_from_cfg(self.offline_store, self.online_store)
         elif url and token and projectID:
             pass  # TODO: realize in future
@@ -235,7 +237,9 @@ class FeatureStore:
             pd.DataFrame: a pandas' DataFrame, where you can found your features in this.
         """
 
-        self.__check_format(entity_df)
+        assert (
+            isinstance(entity_df, pd.DataFrame) and len(entity_df.columns) >= 1
+        ), "entity_df is a Dataframe and have at least one coulmn"
         feature_view = self._get_views(feature_view_name)
 
         assert isinstance(feature_view, (FeatureView, Service)), "only allowed FeatureView and Service"
@@ -245,7 +249,7 @@ class FeatureStore:
 
         if isinstance(feature_view, FeatureView):
             hkey = path.split("/")[-1] + ":" + feature_view_name
-            ttl: Period = Period.from_str(feature_view.ttl)
+            ttl = Period.from_str(feature_view.ttl) if feature_view.ttl else None
             return self.online_store.read_batch(
                 entity_df=entity_df[join_keys],
                 hkey=hkey,
@@ -267,11 +271,13 @@ class FeatureStore:
                 for anchor in feature_view.features
             ]
             for featureview in feature_view_list:
-                fea_join_keys = [join_key for join_key in join_keys if join_key in featureview["join_keys"]]
-                ttl: Period = Period.from_str(feature_view["ttl"])
-                period: Period = Period.from_str(featureview["period"])
+                fea_join_keys = [
+                    join_key for join_key in join_keys if join_key in featureview["join_keys"][0]
+                ]
+                ttl = Period.from_str(featureview["ttl"]) if featureview["ttl"] else None
+                period = Period.from_str(featureview["period"]) if featureview["period"] else None
                 feature_view_batch = self.online_store.read_batch(
-                    entity_df=entity_df[fea_join_keys],
+                    entity_df=entity_df[featureview["join_keys"][0]],
                     hkey=path.split("/")[-1] + ":" + featureview["name"],
                     ttl=ttl,
                     period=period,
