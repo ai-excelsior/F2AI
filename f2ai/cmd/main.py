@@ -36,9 +36,15 @@ if __name__ == "__main__":
     get_materialize_parser(subparsers)
     kwargs = vars(parser.parse_args())
     command = kwargs.pop("command")
+    import pandas as pd
+
+    entity_df = pd.DataFrame(
+        ["7675", "38654", "38860", "39566", "39565", "39564", "39656"], columns=["zipcode"]
+    )
 
     if command == "initialize":
         fs = init(kwargs.pop("url"))
+        fs.get_online_features("zipcode_features", entity_df)
     elif command == "materialize":
         materialize_time = cfg_to_date(
             kwargs.pop("fromnow"), kwargs.pop("start"), kwargs.pop("end"), kwargs.pop("step")
