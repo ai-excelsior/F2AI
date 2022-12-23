@@ -48,7 +48,7 @@ if __name__ == "__main__":
     entity_df_history = pd.DataFrame(["19650216_4059", "19730313_4796"], columns=["dob_ssn"])
     if command == "initialize":
         fs = init(kwargs.pop("url"))
-        fs.get_online_features("loan_features", entity_df)
+        fs.get_online_features("credit_scoring_v1", entity_df_loan_features)
     elif command == "materialize":
         materialize_time = cfg_to_date(
             kwargs.pop("fromnow"), kwargs.pop("start"), kwargs.pop("end"), kwargs.pop("step")

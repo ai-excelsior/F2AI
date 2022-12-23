@@ -241,7 +241,7 @@ class FeatureStore:
         assert isinstance(feature_view, (FeatureView, Service)), "only allowed FeatureView and Service"
 
         join_keys = self._get_keys_to_join(feature_view, list(entity_df.columns))
-        project_name = self.name
+        project_name = self.online_store.name
 
         if isinstance(feature_view, FeatureView):
             hkey = project_name + ":" + feature_view_name
