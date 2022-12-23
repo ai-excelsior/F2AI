@@ -10,6 +10,8 @@ from f2ai.definitions import FeatureView, OnlineStore, OnlineStoreType, Period, 
 from pydantic import PrivateAttr
 from redis import Redis
 
+DEFAULT_EVENT_TIMESTAMP_FIELD = "event_timestamp"
+
 
 class OnlineRedisStore(OnlineStore):
     type: OnlineStoreType = OnlineStoreType.REDIS
@@ -17,6 +19,7 @@ class OnlineRedisStore(OnlineStore):
     port: int = 6379
     db: int = 0
     password: str = ""
+    name: str
 
     _cilent: Optional[Redis] = PrivateAttr(default=None)
 
@@ -41,10 +44,10 @@ class OnlineRedisStore(OnlineStore):
             zset_key = self.client.hget(project_name, featrue_view.name)
         zset_dict = {}
         for row in dt.to_dict("records"):
-            if row.get("event_timestamp") == None:
-                event_timestamp = datetime.now().timestamp()
+            if row.get(DEFAULT_EVENT_TIMESTAMP_FIELD) == None:
+                event_timestamp = pd.to_datetime(datetime.now(), utc=True)
             else:
-                event_timestamp = row.get("event_timestamp").timestamp()
+                event_timestamp = row.get(DEFAULT_EVENT_TIMESTAMP_FIELD).timestamp()
             zset_dict.setdefault(json.dumps(row, cls=DateEncoder), event_timestamp)
         self.client.zadd(name=zset_key, mapping=zset_dict)
 
@@ -84,3 +87,6 @@ class OnlineRedisStore(OnlineStore):
 
     def set_up():
         pass
+
+    def get_online_source(self):
+        return self.name

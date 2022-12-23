@@ -26,7 +26,6 @@ from f2ai.definitions import (
     FeatureView,
     FileSource,
     LabelView,
-    OnlineStore,
     Period,
     Service,
     StatsFunctions,
@@ -44,12 +43,9 @@ class FeatureStore:
     def __init__(self, project_folder=None, url=None, token=None, projectID=None):
         if project_folder:
             cfg = read_yml(os.path.join(project_folder, "feature_store.yml"))
-            self.name = cfg["project"]
             self.offline_store = init_offline_store_from_cfg(cfg["offline_store"])
-            self.online_store = init_online_store_from_cfg(cfg["online_store"])
-            self.online_store = init_online_store_from_cfg(cfg["online_store"])
-            # self.online_store = None
-            # self.persist_engine = init_persist_engine_from_cfg(self.offline_store, self.online_store)
+            self.online_store = init_online_store_from_cfg(cfg["online_store"], cfg["project"])
+            self.persist_engine = init_persist_engine_from_cfg(self.offline_store, self.online_store)
         elif url and token and projectID:
             pass  # TODO: realize in future
         else:
@@ -433,58 +429,17 @@ class FeatureStore:
                 service is not None
             ), f"Service: {service_name} is not found in feature store in current materialize type."
 
-        if online:
-            if service.ttl is not None:
-                period = str(service.ttl)
-                if backoff.start.timestamp() > (datetime.now() - service.ttl.to_py_timedelta()).timestamp():
-                    start = backoff.start
-                else:
-                    start = datetime.now() - service.ttl.to_py_timedelta()
-                date_range = pd.date_range(
-                    start=start,
-                    end=backoff.end + backoff.step.to_py_timedelta(),
-                    freq=backoff.step.to_py_timedelta(),
-                )
-            else:
-                period = str(backoff.end - backoff.start)
-                date_range = pd.date_range(
-                    start=backoff.start,
-                    end=backoff.end + backoff.step.to_py_timedelta(),
-                    freq=backoff.step.to_py_timedelta(),
-                )
-            date_df = pd.DataFrame(data=date_range, columns=["event_timestamp"])
-            latest_entities = self.get_latest_entities(service).drop(columns=["event_timestamp"])
-            entity = pd.merge(latest_entities, date_df, how="cross")
-            dt = self.get_period_features(service, entity, period)
-            self.online_store.write_batch(service, self.name, dt)
-        join_keys = list(
-            {
-                join_key
-                for entity_name in service.get_label_entities(self.label_views)
-                for join_key in self.entities[entity_name].join_keys
-            }
-        )
-        label_view = service.get_label_views(self.label_views)[0]
-        label_view_dict = {
-            "source": self.sources[label_view.batch_source],
-            "labels": label_view.get_label_objects(),
-            "join_keys": join_keys,
-        }
-
-        all_feature_views = [
-            {
-                "join_keys": [self.entities[entity].join_keys[0] for entity in feature_view.entities],
-                "features": feature_view.get_feature_objects(),
-                "source": self.sources[feature_view.batch_source],
-                "ttl": feature_view.ttl,
-            }
-            for feature_view in service.get_feature_views(self.feature_views)
-        ]
-
-        dest_path = self.offline_store.get_offline_source(service)
-
         batch_params = [
-            [dest_path, all_feature_views, label_view_dict, t[0], t[1]] for t in backoff_to_split(backoff)
+            [
+                service,
+                self.label_views,
+                self.feature_views,
+                self.entities,
+                self.sources,
+                t[0],
+                t[1],
+            ]
+            for t in backoff_to_split(backoff)
         ]
         cpu_ava = max(os.cpu_count() // 2, 1)
         with tqdm(total=len(batch_params), desc="materializing") as pbar:

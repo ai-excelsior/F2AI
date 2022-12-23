@@ -64,8 +64,12 @@ class OnlineStore(BaseModel):
     def set_up():
         pass
 
+    @abc.abstractmethod
+    def get_online_source(self, **kwargs):
+        pass
 
-def init_online_store_from_cfg(cfg: Dict[Any]) -> OnlineStore:
+
+def init_online_store_from_cfg(cfg: Dict[Any], name: str) -> OnlineStore:
     """Initialize an implementation of OnlineStore from yaml config.
 
     Args:
@@ -80,6 +84,7 @@ def init_online_store_from_cfg(cfg: Dict[Any]) -> OnlineStore:
         from ..online_stores.online_redis_store import OnlineRedisStore
 
         redis_conf = cfg.pop("redis_conf", {})
+        redis_conf.update({"name": name})
         return OnlineRedisStore(**cfg, **redis_conf)
 
     raise TypeError(f"offline store type must be one of [{','.join(e.value for e in OnlineStore)}]")
