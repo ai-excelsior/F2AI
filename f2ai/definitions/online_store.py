@@ -60,10 +60,6 @@ class OnlineStore(BaseModel):
         pass
 
     @abc.abstractmethod
-    def set_up():
-        pass
-
-    @abc.abstractmethod
     def get_online_source(self, **kwargs):
         pass
 

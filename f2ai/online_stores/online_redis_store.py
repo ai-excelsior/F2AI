@@ -83,8 +83,5 @@ class OnlineRedisStore(OnlineStore):
             data = None
         return data
 
-    def set_up():
-        pass
-
     def get_online_source(self):
         return self.name
