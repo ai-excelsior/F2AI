@@ -83,6 +83,7 @@ class RealPersistEngine(BaseModel):
     ):
 
         if online:
+            # load data from offlinestore
             self.on_line.materialize(save_path, feature_views, label_view, start, end, **kwargs)
         else:
             self.off_line.materialize(save_path, feature_views, label_view, start, end, **kwargs)
