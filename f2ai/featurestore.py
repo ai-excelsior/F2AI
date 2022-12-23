@@ -47,9 +47,9 @@ class FeatureStore:
             self.name = cfg["project"]
             self.offline_store = init_offline_store_from_cfg(cfg["offline_store"])
             self.online_store = init_online_store_from_cfg(cfg["online_store"])
-            # self.online_store = init_online_store_from_cfg(cfg["online_store"])
-            self.online_store = None
-            self.persist_engine = init_persist_engine_from_cfg(self.offline_store, self.online_store)
+            self.online_store = init_online_store_from_cfg(cfg["online_store"])
+            # self.online_store = None
+            # self.persist_engine = init_persist_engine_from_cfg(self.offline_store, self.online_store)
         elif url and token and projectID:
             pass  # TODO: realize in future
         else:
@@ -245,15 +245,14 @@ class FeatureStore:
         assert isinstance(feature_view, (FeatureView, Service)), "only allowed FeatureView and Service"
 
         join_keys = self._get_keys_to_join(feature_view, list(entity_df.columns))
-        path = remove_prefix(self.project_folder, "file://")
+        project_name = self.name
 
         if isinstance(feature_view, FeatureView):
-            hkey = path.split("/")[-1] + ":" + feature_view_name
-            ttl = Period.from_str(feature_view.ttl) if feature_view.ttl else None
+            hkey = project_name + ":" + feature_view_name
             return self.online_store.read_batch(
                 entity_df=entity_df[join_keys],
                 hkey=hkey,
-                ttl=ttl,
+                ttl=feature_view.ttl,
                 period=None,
                 **kwargs,
             )
@@ -278,7 +277,7 @@ class FeatureStore:
                 period = Period.from_str(featureview["period"]) if featureview["period"] else None
                 feature_view_batch = self.online_store.read_batch(
                     entity_df=entity_df[featureview["join_keys"][0]],
-                    hkey=path.split("/")[-1] + ":" + featureview["name"],
+                    hkey=project_name + ":" + featureview["name"],
                     ttl=ttl,
                     period=period,
                     **kwargs,
