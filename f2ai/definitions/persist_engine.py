@@ -1,6 +1,7 @@
 from __future__ import annotations
 import abc
 from datetime import datetime
+from executing import Source
 import pandas as pd
 from typing import List, Dict, Union
 from pydantic import BaseModel
@@ -60,7 +61,7 @@ class OfflinePersistEngine(PersistEngine):
         extra = "allow"
 
     @abc.abstractmethod
-    def materialize():
+    def materialize(self, **kwargs):
         pass
 
 
@@ -82,28 +83,42 @@ class RealPersistEngine(BaseModel):
 
     def materialize(
         self,
-        service: Union[str, Service, FeatureView],
-        label_views: LabelView,
-        feature_views: FeatureView,
+        service: Union[Service, FeatureView],
+        label_views: Dict[str, LabelView],
+        feature_views: Dict[str, FeatureView],
         entities: Dict[Entity],
-        sources: Dict,
-        start: str = None,
-        end: str = None,
+        sources: Dict[str, Source],
+        start: pd.Timestamp,
+        end: pd.Timestamp,
         online: bool = False,
         **kwargs,
     ):
 
         if online:
-            join_keys = list(
-                {join_key for entity_name in service.entities for join_key in entities[entity_name].join_keys}
-            )
-            if service.ttl is not None:
-                start = max(start, pd.to_datetime(datetime.now(), utc=True) - service.ttl.to_py_timedelta())
-
-            source = sources[service.batch_source]
-            self.on_line.materialize(service, source, start, end, join_keys, self.off_line.store)
-
+            service = feature_views if isinstance(service, Service) else service
+            save_path = self.on_line.store.get_online_source()
+            for name, feature_view in service.items():
+                join_keys = list(
+                    {
+                        join_key
+                        for entity_name in feature_view.entities
+                        for join_key in entities[entity_name].join_keys
+                    }
+                )
+                if feature_view.ttl is not None:
+                    start = max(
+                        start, pd.to_datetime(datetime.now(), utc=True) - feature_view.ttl.to_py_timedelta()
+                    )
+                all_views = {
+                    "join_keys": join_keys,
+                    "features": feature_view.get_feature_objects(),
+                    "source": sources[feature_view.batch_source],
+                    "ttl": feature_view.ttl,
+                    "name": name,
+                }
+                self.on_line.materialize(save_path, all_views, start, end, self.off_line.store)
         else:
+            assert isinstance(service, Service), "offline materialize can only be applied on Service"
             save_path = self.off_line.store.get_offline_source(service)
             join_keys = list(
                 {
@@ -118,7 +133,6 @@ class RealPersistEngine(BaseModel):
                 "labels": label_view.get_label_objects(),
                 "join_keys": join_keys,
             }
-
             all_feature_views = [
                 {
                     "join_keys": [entities[entity].join_keys[0] for entity in feature_view.entities],
@@ -128,7 +142,8 @@ class RealPersistEngine(BaseModel):
                 }
                 for feature_view in service.get_feature_views(feature_views)
             ]
-            self.off_line.materialize(save_path, all_feature_views, label_view_dict, start, end, **kwargs)
+            all_views = {"label": label_view_dict, "features": all_feature_views}
+            self.off_line.materialize(save_path, all_views, start, end, **kwargs)
 
 
 def init_persist_engine_from_cfg(cfg1, cfg2):

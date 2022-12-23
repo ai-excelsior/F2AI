@@ -18,12 +18,13 @@ class OfflineFilePersistEngine(OfflinePersistEngine):
     def materialize(
         self,
         save_path: FileSource,
-        feature_views: List[Dict],
-        label_view: Dict,
+        all_views: Dict,
         start: pd.Timestamp = None,
         end: pd.Timestamp = None,
         **kwargs,
     ):
+        feature_views = all_views["features"]
+        label_view = all_views["label"]
 
         source = label_view["source"]
         joined_frame = self.store._read_file(

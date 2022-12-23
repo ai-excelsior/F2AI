@@ -19,28 +19,27 @@ class OnlineLocalPersistEngine(OnlinePersistEngine):
 
     def materialize(
         self,
-        service: FeatureView,
-        source: Source,
+        save_path: str,
+        feature_views: Dict,
         start: pd.Timestamp,
         end: pd.Timestamp,
-        join_keys: List[str],
         off_store: OfflineStore,
     ):
-        save_path = self.store.get_online_source()
+
         date_df = pd.DataFrame(data=[end], columns=[DEFAULT_EVENT_TIMESTAMP_FIELD])
         period = -Period.from_str(str(end - start))
         entities_in_range = off_store.get_latest_entities(
-            source=source,
-            group_keys=join_keys,
+            source=feature_views["source"],
+            group_keys=feature_views["join_keys"],
             entity_df=date_df,
             start=start,
         ).drop(columns=DEFAULT_EVENT_TIMESTAMP_FIELD)
         data_to_write = off_store.get_period_features(
             entity_df=pd.merge(entities_in_range, date_df, how="cross"),
-            features=service.get_feature_objects(),
-            source=source,
+            features=feature_views["features"],
+            source=feature_views["source"],
             period=period,
-            join_keys=join_keys,
-            ttl=service.ttl,
+            join_keys=feature_views["join_keys"],
+            ttl=feature_views["ttl"],
         )
-        self.store.write_batch(service, save_path, data_to_write)
+        self.store.write_batch(feature_views["name"], save_path, data_to_write)

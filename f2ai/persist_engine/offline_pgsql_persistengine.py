@@ -1,8 +1,8 @@
 from __future__ import annotations
 from f2ai.definitions import OfflinePersistEngine, OfflinePersistEngineType
 import uuid
-from typing import List,  Dict
-from pypika import Query, Parameter,  Table, PostgreSQLQuery
+from typing import List, Dict
+from pypika import Query, Parameter, Table, PostgreSQLQuery
 from f2ai.definitions import SqlSource
 from f2ai.offline_stores.offline_postgres_store import OfflinePostgresStore
 
@@ -11,8 +11,6 @@ ENTITY_EVENT_TIMESTAMP_FIELD = "_entity_event_timestamp_"
 SOURCE_EVENT_TIMESTAMP_FIELD = "_source_event_timestamp_"
 QUERY_COL = "query_timestamp"
 MATERIALIZE_TIME = "materialize_time"
-
-
 
 
 class OfflinePgsqlPersistEngine(OfflinePersistEngine):
@@ -24,12 +22,15 @@ class OfflinePgsqlPersistEngine(OfflinePersistEngine):
     def materialize(
         self,
         save_path: SqlSource,
-        feature_views: List[Dict],
-        label_view: Dict,
+        all_views: Dict,
         start: str = None,
         end: str = None,
         **kwargs,
     ):
+
+        feature_views = all_views["features"]
+        label_view = all_views["label"]
+
         source = label_view["source"]
         joined_frame = self.store.read(
             source=source,

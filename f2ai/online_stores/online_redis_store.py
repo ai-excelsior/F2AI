@@ -36,12 +36,12 @@ class OnlineRedisStore(OnlineStore):
 
         return self._cilent
 
-    def write_batch(self, featrue_view: FeatureView, project_name: str, dt: pd.DataFrame):
-        if self.client.hget(project_name, featrue_view.name) == None:
+    def write_batch(self, name: str, project_name: str, dt: pd.DataFrame):
+        if self.client.hget(project_name, name) == None:
             zset_key = uuid.uuid4().hex[:8]
-            self.client.hset(project_name, featrue_view.name, zset_key)
+            self.client.hset(project_name, name, zset_key)
         else:
-            zset_key = self.client.hget(project_name, featrue_view.name)
+            zset_key = self.client.hget(project_name, name)
         zset_dict = {}
         for row in dt.to_dict("records"):
             if row.get(DEFAULT_EVENT_TIMESTAMP_FIELD) == None:
