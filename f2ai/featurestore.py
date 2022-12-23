@@ -245,13 +245,13 @@ class FeatureStore:
 
         if isinstance(feature_view, FeatureView):
             hkey = project_name + ":" + feature_view_name
-            return self.online_store.read_batch(
-                entity_df=entity_df[join_keys],
+            data = self.online_store.read_batch(
                 hkey=hkey,
                 ttl=feature_view.ttl,
                 period=None,
                 **kwargs,
             )
+            return pd.merge(entity_df[join_keys], data, on=join_keys, how="inner") if data.shape[0] else None
         else:
             feature_view_list = [
                 {
@@ -266,13 +266,15 @@ class FeatureStore:
                 for anchor in feature_view.features
             ]
             for featureview in feature_view_list:
-                fea_join_keys = [
-                    join_key for join_key in join_keys if join_key in featureview["join_keys"][0]
-                ]
-                ttl = Period.from_str(featureview["ttl"]) if featureview["ttl"] else None
-                period = Period.from_str(featureview["period"]) if featureview["period"] else None
+                fea_entities = []
+                {
+                    fea_entities.extend(featureview["join_keys"][i])
+                    for i in range(len(featureview["join_keys"]))
+                }
+                fea_join_keys = [join_key for join_key in join_keys if join_key in fea_entities]
+                ttl = featureview["ttl"]
+                period = featureview["period"]
                 feature_view_batch = self.online_store.read_batch(
-                    entity_df=entity_df[featureview["join_keys"][0]],
                     hkey=project_name + ":" + featureview["name"],
                     ttl=ttl,
                     period=period,

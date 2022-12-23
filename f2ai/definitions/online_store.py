@@ -42,7 +42,6 @@ class OnlineStore(BaseModel):
     @abc.abstractmethod
     def read_batch(
         self,
-        entity_df: pd.DataFrame,
         hkey: str,
         ttl: Optional[Period] = None,
         period: Optional[Period] = None,

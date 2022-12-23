@@ -38,13 +38,17 @@ if __name__ == "__main__":
     command = kwargs.pop("command")
     import pandas as pd
 
-    entity_df = pd.DataFrame(
-        ["7675", "38654", "38860", "39566", "39565", "39564", "39656"], columns=["zipcode"]
+    entity_df = pd.DataFrame(["43938", "46990", "72202"], columns=["zipcode"])
+
+    entity_df_loan_features = pd.DataFrame(
+        [["19650216_4059", "43938"], ["19730313_4796", "46990"], ["19880427_8332", "72202"]],
+        columns=["dob_ssn", "zipcode"],
     )
 
+    entity_df_history = pd.DataFrame(["19650216_4059", "19730313_4796"], columns=["dob_ssn"])
     if command == "initialize":
         fs = init(kwargs.pop("url"))
-        fs.get_online_features("zipcode_features", entity_df)
+        fs.get_online_features("loan_features", entity_df)
     elif command == "materialize":
         materialize_time = cfg_to_date(
             kwargs.pop("fromnow"), kwargs.pop("start"), kwargs.pop("end"), kwargs.pop("step")

@@ -53,7 +53,6 @@ class OnlineRedisStore(OnlineStore):
 
     def read_batch(
         self,
-        entity_df: pd.DataFrame,
         hkey: str,
         ttl: Optional[Period] = None,
         period: Optional[Period] = None,
@@ -80,10 +79,9 @@ class OnlineRedisStore(OnlineStore):
             if period:
                 min_period_timestamp = data["event_timestamp"].max() - period.to_pandas_dateoffset()
                 data = data[data["event_timestamp"] >= min_period_timestamp]
-            batch_data = pd.merge(entity_df, data, on=list(entity_df.columns), how="inner")
         else:
-            batch_data = None
-        return batch_data
+            data = None
+        return data
 
     def set_up():
         pass
