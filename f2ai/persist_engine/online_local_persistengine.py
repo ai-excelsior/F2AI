@@ -42,4 +42,4 @@ class OnlineLocalPersistEngine(OnlinePersistEngine):
             join_keys=feature_views["join_keys"],
             ttl=feature_views["ttl"],
         )
-        self.store.write_batch(feature_views["name"], save_path, data_to_write)
+        self.store.write_batch(feature_views["name"], save_path, data_to_write, feature_views["ttl"])

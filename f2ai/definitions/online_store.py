@@ -28,7 +28,9 @@ class OnlineStore(BaseModel):
         extra = "allow"
 
     @abc.abstractmethod
-    def write_batch(self, featrue_view: FeatureView, project_name: str, dt: pd.DataFrame) -> Source:
+    def write_batch(
+        self, featrue_view: FeatureView, project_name: str, dt: pd.DataFrame, ttl: Optional[Period]
+    ) -> Source:
         """materialize data on redis
 
         Args:
