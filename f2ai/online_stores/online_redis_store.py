@@ -42,9 +42,9 @@ class OnlineRedisStore(OnlineStore):
         else:
             zset_key = self.client.hget(name=project_name, key=name)
         zset_dict = {}
-        for row in dt.to_dict("records"):
+        for row in dt.to_dict(orient="records"):
             event_timestamp = pd.to_datetime(row.get(DEFAULT_EVENT_TIMESTAMP_FIELD, datetime.now()), utc=True)
-            zset_dict.setdefault(json.dumps(row, cls=DateEncoder), event_timestamp)
+            zset_dict.setdefault(json.dumps(row, cls=DateEncoder), event_timestamp.timestamp())
         self.client.zadd(name=zset_key, mapping=zset_dict)
 
     def read_batch(

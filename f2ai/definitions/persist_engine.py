@@ -95,7 +95,7 @@ class RealPersistEngine(BaseModel):
     ):
 
         if online:
-            service = feature_views if isinstance(service, Service) else service
+            service = feature_views if isinstance(service, Service) else {service.name:service}
             save_path = self.on_line.store.get_online_source()
             for name, feature_view in service.items():
                 join_keys = list(
