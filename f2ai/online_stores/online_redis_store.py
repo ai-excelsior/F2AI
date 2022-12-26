@@ -51,33 +51,32 @@ class OnlineRedisStore(OnlineStore):
             self.client.expireat(zset_key, expir_time)
 
     def read_batch(
-        self,
-        hkey: str,
-        ttl: Optional[Period] = None,
-        period: Optional[Period] = None,
-        **kwargs,
+        self, hkey: str, ttl: Optional[Period] = None, period: Optional[Period] = None
     ) -> pd.DataFrame:
 
-        if ttl:
-            min_ttl_timestamp = pd.to_datetime(datetime.now(), utc=True) - ttl.to_pandas_dateoffset()
-        else:
-            min_ttl_timestamp = pd.to_datetime("1970-01-01", utc=True)
-
+        min_timestamp = max(
+            (
+                pd.to_datetime(datetime.now(), utc=True) - period.to_pandas_dateoffset()
+                if period
+                else pd.to_datetime(0, utc=True)
+            ),
+            (
+                pd.to_datetime(datetime.now(), utc=True) - ttl.to_pandas_dateoffset()
+                if ttl
+                else pd.to_datetime(0, utc=True)
+            ),
+        )
         zset_key = self.client.hget(hkey.split(":")[0], hkey.split(":")[1])
         if zset_key:
             data = self.client.zrangebyscore(
-                zset_key,
-                min=min_ttl_timestamp.timestamp(),
+                name=zset_key,
+                min=min_timestamp.timestamp(),
                 max=datetime.now().timestamp(),
                 withscores=False,
             )
             columns = list(json.loads(data[0]).keys())
-            batch_data_list = []
-            {batch_data_list.append([json.loads(data[i])[key] for key in columns]) for i in range(len(data))}
-            data = pd.DataFrame(batch_data_list, columns=columns)
-            if period:
-                min_period_timestamp = data["event_timestamp"].max() - period.to_pandas_dateoffset()
-                data = data[data["event_timestamp"] >= min_period_timestamp]
+            batch_data_list = [[json.loads(data[i])[key] for key in columns] for i in range(len(data))]
+            data = pd.DataFrame(data=batch_data_list, columns=columns)
         else:
             data = None
         return data
