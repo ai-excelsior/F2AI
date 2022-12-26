@@ -24,6 +24,7 @@ class OnlineLocalPersistEngine(OnlinePersistEngine):
         start: pd.Timestamp,
         end: pd.Timestamp,
         off_store: OfflineStore,
+        **kwargs
     ):
 
         date_df = pd.DataFrame(data=[end], columns=[DEFAULT_EVENT_TIMESTAMP_FIELD])
@@ -42,4 +43,6 @@ class OnlineLocalPersistEngine(OnlinePersistEngine):
             join_keys=feature_views["join_keys"],
             ttl=feature_views["ttl"],
         )
-        self.store.write_batch(feature_views["name"], save_path, data_to_write, feature_views["ttl"])
+        self.store.write_batch(
+            feature_views["name"], save_path, data_to_write, feature_views["ttl"], **kwargs
+        )

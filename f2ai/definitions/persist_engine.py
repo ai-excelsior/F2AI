@@ -95,7 +95,7 @@ class RealPersistEngine(BaseModel):
     ):
 
         if online:
-            service = feature_views if isinstance(service, Service) else {service.name:service}
+            service = feature_views if isinstance(service, Service) else {service.name: service}
             save_path = self.on_line.store.get_online_source()
             for name, feature_view in service.items():
                 join_keys = list(
@@ -116,7 +116,7 @@ class RealPersistEngine(BaseModel):
                     "ttl": feature_view.ttl,
                     "name": name,
                 }
-                self.on_line.materialize(save_path, all_views, start, end, self.off_line.store)
+            self.on_line.materialize(save_path, all_views, start, end, self.off_line.store, **kwargs)
         else:
             assert isinstance(service, Service), "offline materialize can only be applied on Service"
             save_path = self.off_line.store.get_offline_source(service)

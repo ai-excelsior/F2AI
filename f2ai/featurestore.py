@@ -232,10 +232,7 @@ class FeatureStore:
         Returns:
             pd.DataFrame: a pandas' DataFrame, where you can found your features in this.
         """
-
-        assert (
-            isinstance(entity_df, pd.DataFrame) and len(entity_df.columns) >= 1
-        ), "entity_df is a Dataframe and have at least one coulmn"
+        self.__check_format(entity_df)
         feature_view = self._get_views(feature_view_name)
 
         assert isinstance(feature_view, (FeatureView, Service)), "only allowed FeatureView and Service"

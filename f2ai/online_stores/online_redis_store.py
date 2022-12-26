@@ -7,7 +7,7 @@ import pandas as pd
 from f2ai.common.utils import DateEncoder
 from f2ai.definitions import OnlineStore, OnlineStoreType, Period
 from pydantic import PrivateAttr
-from redis import Redis
+from redis import Redis, ConnectionPool
 
 DEFAULT_EVENT_TIMESTAMP_FIELD = "event_timestamp"
 
@@ -24,31 +24,38 @@ class OnlineRedisStore(OnlineStore):
 
     @property
     def client(self):
-
         if self._cilent is None:
-            self._cilent = Redis(
-                password=self.password,
-                host=self.host,
-                port=self.port,
-                db=self.db,
+            pool = ConnectionPool(
+                host=self.host, port=self.port, db=self.db, password=self.password, decode_responses=True
             )
+            self._cilent = Redis(connection_pool=pool)
 
         return self._cilent
 
-    def write_batch(self, name: str, project_name: str, dt: pd.DataFrame, ttl: Optional[Period] = None):
+    def write_batch(
+        self, name: str, project_name: str, dt: pd.DataFrame, ttl: Optional[Period] = None, **kwargs
+    ):
+        pipe = self.client.pipeline()
         if self.client.hget(project_name, name) is None:
             zset_key = uuid.uuid4().hex[:8]
-            self.client.hset(name=project_name, key=name, value=zset_key)
+            pipe.hset(name=project_name, key=name, value=zset_key)
         else:
             zset_key = self.client.hget(name=project_name, key=name)
         zset_dict = {}
+
         for row in dt.to_dict(orient="records"):
             event_timestamp = pd.to_datetime(row.get(DEFAULT_EVENT_TIMESTAMP_FIELD, datetime.now()), utc=True)
-            zset_dict.setdefault(json.dumps(row, cls=DateEncoder), event_timestamp.timestamp())
-        self.client.zadd(name=zset_key, mapping=zset_dict)
-        if ttl is not None:
-            expir_time = event_timestamp + ttl.to_py_timedelta()
-            self.client.expireat(zset_key, expir_time)
+            zset_dict.setdefault(
+                json.dumps(sorted(row.items(), key=lambda x: x[0]), cls=DateEncoder),
+                event_timestamp.timestamp(),
+            )
+        if zset_dict:
+            pipe.zadd(name=zset_key, mapping=zset_dict)
+            if ttl is not None:
+                expir_time = event_timestamp + ttl.to_py_timedelta()
+                pipe.expireat(zset_key, expir_time)
+        pipe.execute()
+        kwargs["signal"].send(1)
 
     def read_batch(
         self, hkey: str, ttl: Optional[Period] = None, period: Optional[Period] = None
