@@ -41,7 +41,7 @@ class OnlineRedisStore(OnlineStore):
             pipe.hset(name=project_name, key=name, value=zset_key)
         else:
             zset_key = self.client.hget(name=project_name, key=name)
-            # remove data that has been expired in zset according to score
+            # remove data that has expired in `zset`` according to `score`
             if ttl is not None:
                 pipe.zremrangebyscore(
                     name=zset_key, min=0, max=(datetime.now() - ttl.to_py_timedelta()).timestamp
