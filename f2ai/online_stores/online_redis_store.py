@@ -35,7 +35,7 @@ class OnlineRedisStore(OnlineStore):
 
         return self._cilent
 
-    def write_batch(self, name: str, project_name: str, dt: pd.DataFrame):
+    def write_batch(self, name: str, project_name: str, dt: pd.DataFrame, ttl: Period = None):
         if self.client.hget(project_name, name) is None:
             zset_key = uuid.uuid4().hex[:8]
             self.client.hset(name=project_name, key=name, value=zset_key)
@@ -46,6 +46,9 @@ class OnlineRedisStore(OnlineStore):
             event_timestamp = pd.to_datetime(row.get(DEFAULT_EVENT_TIMESTAMP_FIELD, datetime.now()), utc=True)
             zset_dict.setdefault(json.dumps(row, cls=DateEncoder), event_timestamp.timestamp())
         self.client.zadd(name=zset_key, mapping=zset_dict)
+        if ttl is not None:
+            expir_time = event_timestamp + ttl.to_py_timedelta()
+            self.client.expireat(zset_key, expir_time)
 
     def read_batch(
         self,
