@@ -35,7 +35,7 @@ class OnlineRedisStore(OnlineStore):
 
         return self._cilent
 
-    def write_batch(self, name: str, project_name: str, dt: pd.DataFrame, ttl: Period = None):
+    def write_batch(self, name: str, project_name: str, dt: pd.DataFrame, ttl: Optional[Period] = None):
         if self.client.hget(project_name, name) is None:
             zset_key = uuid.uuid4().hex[:8]
             self.client.hset(name=project_name, key=name, value=zset_key)
