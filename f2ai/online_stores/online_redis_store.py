@@ -41,8 +41,12 @@ class OnlineRedisStore(OnlineStore):
             pipe.hset(name=project_name, key=name, value=zset_key)
         else:
             zset_key = self.client.hget(name=project_name, key=name)
+            # remove data that has been expired in zset according to score
+            if ttl is not None:
+                pipe.zremrangebyscore(
+                    name=zset_key, min=0, max=(datetime.now() - ttl.to_py_timedelta()).timestamp
+                )
         zset_dict = {}
-
         for row in dt.to_dict(orient="records"):
             event_timestamp = pd.to_datetime(row.get(DEFAULT_EVENT_TIMESTAMP_FIELD, datetime.now()), utc=True)
             zset_dict.setdefault(
@@ -51,8 +55,8 @@ class OnlineRedisStore(OnlineStore):
             )
         if zset_dict:
             pipe.zadd(name=zset_key, mapping=zset_dict)
-            if ttl is not None:
-                expir_time = event_timestamp + ttl.to_py_timedelta()
+            if ttl is not None:  # add a general expire constrains on hash-key
+                expir_time = dt[DEFAULT_EVENT_TIMESTAMP_FIELD].max() + ttl.to_py_timedelta()
                 pipe.expireat(zset_key, expir_time)
         pipe.execute()
         kwargs["signal"].send(1)
