@@ -44,16 +44,15 @@ class OnlineRedisStore(OnlineStore):
             # remove data that has expired in `zset`` according to `score`
             if ttl is not None:
                 pipe.zremrangebyscore(
-                    name=zset_key, min=0, max=(datetime.now() - ttl.to_py_timedelta()).timestamp
+                    name=zset_key, min=0, max=(datetime.now() - ttl.to_py_timedelta()).timestamp()
                 )
-        zset_dict = {}
-        for row in dt.to_dict(orient="records"):
-            event_timestamp = pd.to_datetime(row.get(DEFAULT_EVENT_TIMESTAMP_FIELD, datetime.now()), utc=True)
-            zset_dict.setdefault(
-                json.dumps(sorted(row.items(), key=lambda x: x[0]), cls=DateEncoder),
-                event_timestamp.timestamp(),
-            )
-        if zset_dict:
+        if not dt.empty:
+            zset_dict = {
+                json.dumps(sorted(row.items(), key=lambda x: x[0]), cls=DateEncoder): pd.to_datetime(
+                    row.get(DEFAULT_EVENT_TIMESTAMP_FIELD, datetime.now()), utc=True
+                ).timestamp()
+                for row in dt.to_dict(orient="records")
+            }
             pipe.zadd(name=zset_key, mapping=zset_dict)
             if ttl is not None:  # add a general expire constrains on hash-key
                 expir_time = dt[DEFAULT_EVENT_TIMESTAMP_FIELD].max() + ttl.to_py_timedelta()
