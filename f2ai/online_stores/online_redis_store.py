@@ -38,15 +38,12 @@ class OnlineRedisStore(OnlineStore):
     def write_batch(self, name: str, project_name: str, dt: pd.DataFrame):
         if self.client.hget(project_name, name) is None:
             zset_key = uuid.uuid4().hex[:8]
-            self.client.hset(project_name, name, zset_key)
+            self.client.hset(name - project_name, key=name, value=zset_key)
         else:
-            zset_key = self.client.hget(project_name, name)
+            zset_key = self.client.hget(name=project_name, key=name)
         zset_dict = {}
         for row in dt.to_dict("records"):
-            if row.get(DEFAULT_EVENT_TIMESTAMP_FIELD) is None:
-                event_timestamp = pd.to_datetime(datetime.now(), utc=True)
-            else:
-                event_timestamp = pd.to_datetime(row.get(DEFAULT_EVENT_TIMESTAMP_FIELD), utc=True)
+            event_timestamp = pd.to_datetime(row.get(DEFAULT_EVENT_TIMESTAMP_FIELD, datetime.now()), utc=True)
             zset_dict.setdefault(json.dumps(row, cls=DateEncoder), event_timestamp)
         self.client.zadd(name=zset_key, mapping=zset_dict)
 
