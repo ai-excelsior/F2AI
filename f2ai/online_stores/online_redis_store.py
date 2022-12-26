@@ -1,12 +1,11 @@
 import json
-import pickle
 import uuid
 from datetime import datetime
 from typing import Optional
 
 import pandas as pd
 from f2ai.common.utils import DateEncoder
-from f2ai.definitions import FeatureView, OnlineStore, OnlineStoreType, Period, Source, online_store
+from f2ai.definitions import OnlineStore, OnlineStoreType, Period
 from pydantic import PrivateAttr
 from redis import Redis
 
@@ -37,17 +36,17 @@ class OnlineRedisStore(OnlineStore):
         return self._cilent
 
     def write_batch(self, name: str, project_name: str, dt: pd.DataFrame):
-        if self.client.hget(project_name, name) == None:
+        if self.client.hget(project_name, name) is None:
             zset_key = uuid.uuid4().hex[:8]
             self.client.hset(project_name, name, zset_key)
         else:
             zset_key = self.client.hget(project_name, name)
         zset_dict = {}
         for row in dt.to_dict("records"):
-            if row.get(DEFAULT_EVENT_TIMESTAMP_FIELD) == None:
+            if row.get(DEFAULT_EVENT_TIMESTAMP_FIELD) is None:
                 event_timestamp = pd.to_datetime(datetime.now(), utc=True)
             else:
-                event_timestamp = row.get(DEFAULT_EVENT_TIMESTAMP_FIELD).timestamp()
+                event_timestamp = pd.to_datetime(row.get(DEFAULT_EVENT_TIMESTAMP_FIELD), utc=True)
             zset_dict.setdefault(json.dumps(row, cls=DateEncoder), event_timestamp)
         self.client.zadd(name=zset_key, mapping=zset_dict)
 
