@@ -38,7 +38,7 @@ class OnlineRedisStore(OnlineStore):
     def write_batch(self, name: str, project_name: str, dt: pd.DataFrame):
         if self.client.hget(project_name, name) is None:
             zset_key = uuid.uuid4().hex[:8]
-            self.client.hset(name - project_name, key=name, value=zset_key)
+            self.client.hset(name=project_name, key=name, value=zset_key)
         else:
             zset_key = self.client.hget(name=project_name, key=name)
         zset_dict = {}
