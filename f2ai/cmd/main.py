@@ -1,6 +1,4 @@
-import os
 from argparse import ArgumentParser
-
 from f2ai.common.cmd_parser import get_f2ai_parser, get_materialize_parser
 from f2ai.definitions.backoff_time import cfg_to_date
 from f2ai.featurestore import FeatureStore
@@ -17,6 +15,7 @@ def materialize(url, views, backoff, online):
 
     for view in views:
         fs.materialize(view, backoff, online)
+        # fs.get_online_features(view, entity_df=pd.DataFrame(data=[1, 2, 3], columns=["loan_id"]))
 
     # for view in views:
     #     try:

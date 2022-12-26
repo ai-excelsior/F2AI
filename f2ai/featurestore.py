@@ -4,10 +4,12 @@ from copy import deepcopy
 from datetime import datetime
 from multiprocessing import Pipe, Pool
 from typing import Dict, List, Optional, Union
-
 import docker
 import pandas as pd
 from tqdm import tqdm
+from definitions.offline_store import OfflineStore
+from definitions.online_store import OnlineStore
+from definitions.persist_engine import RealPersistEngine
 
 from f2ai.common.get_config import (
     get_entity_cfg,
@@ -43,9 +45,11 @@ class FeatureStore:
     def __init__(self, project_folder=None, url=None, token=None, projectID=None):
         if project_folder:
             cfg = read_yml(os.path.join(project_folder, "feature_store.yml"))
-            self.offline_store = init_offline_store_from_cfg(cfg["offline_store"])
-            self.online_store = init_online_store_from_cfg(cfg["online_store"], cfg["project"])
-            self.persist_engine = init_persist_engine_from_cfg(self.offline_store, self.online_store)
+            self.offline_store: OfflineStore = init_offline_store_from_cfg(cfg["offline_store"])
+            self.online_store: OnlineStore = init_online_store_from_cfg(cfg["online_store"], cfg["project"])
+            self.persist_engine: RealPersistEngine = init_persist_engine_from_cfg(
+                self.offline_store, self.online_store
+            )
         elif url and token and projectID:
             pass  # TODO: realize in future
         else:
@@ -230,59 +234,23 @@ class FeatureStore:
             entity_df (pd.DataFrame): A query DataFrame which must contains entity columns.
 
         Returns:
-            pd.DataFrame: a pandas' DataFrame, where you can found your features in this.
+            pd.DataFrame: a pandas DataFrame, where you can found your features in this.
         """
-        self.__check_format(entity_df)
+        assert (
+            isinstance(entity_df, pd.DataFrame) and len(entity_df.columns) >= 1
+        ), "entity_df should be a pd.Dataframe and have at least one column of entities"
+
         feature_view = self._get_views(feature_view_name)
-
-        assert isinstance(feature_view, (FeatureView, Service)), "only allowed FeatureView and Service"
-
         join_keys = self._get_keys_to_join(feature_view, list(entity_df.columns))
-        project_name = self.online_store.name
-
-        if isinstance(feature_view, FeatureView):
-            hkey = project_name + ":" + feature_view_name
-            data = self.online_store.read_batch(
-                hkey=hkey,
-                ttl=feature_view.ttl,
-                period=None,
-                **kwargs,
-            )
-            return pd.merge(entity_df[join_keys], data, on=join_keys, how="inner") if data.shape[0] else None
-        else:
-            feature_view_list = [
-                {
-                    "name": anchor.view_name,
-                    "ttl": self.feature_views[anchor.view_name].ttl,
-                    "period": anchor.period,
-                    "join_keys": [
-                        self.entities[entity].join_keys
-                        for entity in self.feature_views[anchor.view_name].entities
-                    ],
-                }
-                for anchor in feature_view.features
-            ]
-            for featureview in feature_view_list:
-                fea_entities = []
-                {
-                    fea_entities.extend(featureview["join_keys"][i])
-                    for i in range(len(featureview["join_keys"]))
-                }
-                fea_join_keys = [join_key for join_key in join_keys if join_key in fea_entities]
-                ttl = featureview["ttl"]
-                period = featureview["period"]
-                feature_view_batch = self.online_store.read_batch(
-                    hkey=project_name + ":" + featureview["name"],
-                    ttl=ttl,
-                    period=period,
-                    **kwargs,
-                )
-                if len(fea_join_keys) > 0:
-                    entity_df = feature_view_batch.merge(entity_df, on=fea_join_keys, how="inner")
-                else:
-                    entity_df = feature_view_batch.merge(entity_df, how="cross")
-
-            return entity_df
+        return self.online_store.read_batch(
+            entity_df=entity_df,
+            project_name=self.online_store.name,
+            view=feature_view,
+            feature_views=self.feature_views,
+            entities=self.entities,
+            join_keys=join_keys,
+            **kwargs,
+        )
 
     def get_period_features(
         self,
@@ -428,27 +396,9 @@ class FeatureStore:
                 service is not None
             ), f"Service: {service_name} is not found in feature store in current materialize type."
 
-        batch_params = [
-            [
-                service,
-                self.label_views,
-                self.feature_views,
-                self.entities,
-                self.sources,
-                t[0],
-                t[1],
-            ]
-            for t in backoff_to_split(backoff)
-        ]
-        cpu_ava = max(os.cpu_count() // 2, 1)
-        with tqdm(total=len(batch_params), desc="materializing") as pbar:
-            with Pool(processes=cpu_ava) as pool:
-                r, w = Pipe(duplex=False)
-                for args in batch_params:
-                    pool.apply_async(
-                        func=self.persist_engine.materialize, args=args, kwds={"signal": w, "online": online}
-                    )
-                    pbar.update(r.recv())
+        self.persist_engine.materialize(
+            service, self.label_views, self.feature_views, self.entities, self.sources, backoff, online
+        )
 
         # print(f"materialize done, saved at '{dest_path.path if dest_path.path else dest_path.query}'")
 

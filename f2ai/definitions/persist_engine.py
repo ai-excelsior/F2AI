@@ -14,8 +14,12 @@ from f2ai.definitions import (
     Service,
     FeatureView,
     LabelView,
+    BackoffTime,
+    backoff_to_split,
 )
-
+from multiprocessing import Pipe, Pool
+from tqdm import tqdm
+import os
 
 DEFAULT_EVENT_TIMESTAMP_FIELD = "event_timestamp"
 ENTITY_EVENT_TIMESTAMP_FIELD = "_entity_event_timestamp_"
@@ -88,14 +92,15 @@ class RealPersistEngine(BaseModel):
         feature_views: Dict[str, FeatureView],
         entities: Dict[Entity],
         sources: Dict[str, Source],
-        start: pd.Timestamp,
-        end: pd.Timestamp,
+        backoff: BackoffTime,
         online: bool = False,
-        **kwargs,
     ):
 
+        cpu_ava = max(os.cpu_count() // 2, 1)
         if online:
-            service = feature_views if isinstance(service, Service) else {service.name: service}
+            service: Dict[str, FeatureView] = (
+                feature_views if isinstance(service, Service) else {service.name: service}
+            )
             save_path = self.on_line.store.get_online_source()
             for name, feature_view in service.items():
                 join_keys = list(
@@ -105,10 +110,6 @@ class RealPersistEngine(BaseModel):
                         for join_key in entities[entity_name].join_keys
                     }
                 )
-                if feature_view.ttl is not None:
-                    start = max(
-                        start, pd.to_datetime(datetime.now(), utc=True) - feature_view.ttl.to_py_timedelta()
-                    )
                 all_views = {
                     "join_keys": join_keys,
                     "features": feature_view.get_feature_objects(),
@@ -116,7 +117,27 @@ class RealPersistEngine(BaseModel):
                     "ttl": feature_view.ttl,
                     "name": name,
                 }
-            self.on_line.materialize(save_path, all_views, start, end, self.off_line.store, **kwargs)
+                batch_params = [
+                    [
+                        save_path,
+                        all_views,
+                        max(
+                            t[0],
+                            pd.to_datetime(datetime.now(), utc=True) - feature_view.ttl.to_py_timedelta(),
+                        )
+                        if feature_view.ttl is not None
+                        else t[0],
+                        t[1],
+                        self.off_line.store,
+                    ]
+                    for t in backoff_to_split(backoff)
+                ]
+                with tqdm(total=len(batch_params), desc=f"materializing {name}") as pbar:
+                    with Pool(processes=cpu_ava) as pool:
+                        r, w = Pipe(duplex=False)
+                        for args in batch_params:
+                            pool.apply_async(func=self.on_line.materialize, args=args, kwds={"signal": w})
+                            pbar.update(r.recv())
         else:
             assert isinstance(service, Service), "offline materialize can only be applied on Service"
             save_path = self.off_line.store.get_offline_source(service)
@@ -143,7 +164,21 @@ class RealPersistEngine(BaseModel):
                 for feature_view in service.get_feature_views(feature_views)
             ]
             all_views = {"label": label_view_dict, "features": all_feature_views}
-            self.off_line.materialize(save_path, all_views, start, end, **kwargs)
+            batch_params = [
+                [
+                    save_path,
+                    all_views,
+                    t[0],
+                    t[1],
+                ]
+                for t in backoff_to_split(backoff)
+            ]
+            with tqdm(total=len(batch_params), desc=f"materializing {service.name}") as pbar:
+                with Pool(processes=cpu_ava) as pool:
+                    r, w = Pipe(duplex=False)
+                    for args in batch_params:
+                        pool.apply_async(func=self.off_line.materialize, args=args, kwds={"signal": w})
+                        pbar.update(r.recv())
 
 
 def init_persist_engine_from_cfg(cfg1, cfg2):

@@ -23,6 +23,7 @@ class OnlineStore(BaseModel):
     """An abstraction of what functionalities a OnlineStore should implements. If you want to be one of the online store contributor. This is the core."""
 
     type: OnlineStoreType
+    name: str
 
     class Config:
         extra = "allow"

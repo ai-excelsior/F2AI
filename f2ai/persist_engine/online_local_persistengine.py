@@ -44,5 +44,9 @@ class OnlineLocalPersistEngine(OnlinePersistEngine):
             ttl=feature_views["ttl"],
         )
         self.store.write_batch(
-            feature_views["name"], save_path, data_to_write, feature_views["ttl"], **kwargs
+            feature_views["name"],
+            save_path,
+            data_to_write[sorted(data_to_write.columns)],
+            feature_views["ttl"],
+            **kwargs
         )

@@ -54,5 +54,5 @@ class OfflineFilePersistEngine(OfflinePersistEngine):
                 )
 
         joined_frame[MATERIALIZE_TIME] = pd.to_datetime(datetime.datetime.now(), utc=True)
-        to_file(joined_frame[sorted(joined_frame.columns)], save_path.path, "csv", mode="a")
+        to_file(joined_frame[sorted(joined_frame.columns)], save_path.path, "csv", mode="a", header=0)
         kwargs["signal"].send(1)
