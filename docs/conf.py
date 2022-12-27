@@ -9,8 +9,9 @@ import os
 import sys
 
 docs_dir = os.path.dirname(os.path.realpath(__file__))
-project_dir = os.path.join(docs_dir, "..")
+project_dir = os.path.realpath(os.path.join(docs_dir, ".."))
 sys.path.append(project_dir)
+print(f'Append sys path: {project_dir}')
 
 project = "F2AI"
 copyright = "2022, eavae"

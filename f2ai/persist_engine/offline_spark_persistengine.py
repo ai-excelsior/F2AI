@@ -1,4 +1,4 @@
-from f2ai.definitions import OfflinePersistEngine, OfflinePersistEngineType
+from ..definitions import OfflinePersistEngine, OfflinePersistEngineType
 
 
 class OfflineSparkPersistEngine(OfflinePersistEngine):

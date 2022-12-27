@@ -1,9 +1,9 @@
 import torch
-import pandas as pd
 from torch import nn
 from torchmetrics import MeanAbsoluteError
 from typing import List, Dict, Tuple
 from torch.utils.data import DataLoader
+
 from f2ai.featurestore import FeatureStore
 from f2ai.common.sampler import GroupFixednbrSampler
 from f2ai.common.collect_fn import nbeats_collet_fn

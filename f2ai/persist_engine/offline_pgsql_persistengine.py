@@ -1,10 +1,11 @@
 from __future__ import annotations
-from f2ai.definitions import OfflinePersistEngine, OfflinePersistEngineType
 import uuid
-from typing import List, Dict
+from typing import Dict
 from pypika import Query, Parameter, Table, PostgreSQLQuery
-from f2ai.definitions import SqlSource
-from f2ai.offline_stores.offline_postgres_store import OfflinePostgresStore
+
+from ..definitions import OfflinePersistEngine, OfflinePersistEngineType
+from ..definitions import SqlSource
+from ..offline_stores.offline_postgres_store import OfflinePostgresStore
 
 DEFAULT_EVENT_TIMESTAMP_FIELD = "event_timestamp"
 ENTITY_EVENT_TIMESTAMP_FIELD = "_entity_event_timestamp_"

@@ -6,8 +6,8 @@ from copy import deepcopy
 
 
 if TYPE_CHECKING:
-    from f2ai.definitions.services import Service
-    from f2ai.featurestore import FeatureStore
+    from ..definitions.services import Service
+    from ..featurestore import FeatureStore
 
 TIME_COL = "event_timestamp"
 QUERY_COL = "query_timestamp"

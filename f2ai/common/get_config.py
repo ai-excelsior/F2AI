@@ -1,7 +1,8 @@
 import os
 import glob
 from typing import List, Dict
-from f2ai.definitions import (
+
+from ..definitions import (
     OfflineStoreType,
     Entity,
     FeatureView,

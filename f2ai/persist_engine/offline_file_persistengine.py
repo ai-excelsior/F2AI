@@ -1,11 +1,12 @@
 from __future__ import annotations
-from typing import List, Dict
+from typing import Dict
 import pandas as pd
 import datetime
-from f2ai.definitions import OfflinePersistEngine, OfflinePersistEngineType
-from f2ai.offline_stores.offline_file_store import OfflineFileStore
-from f2ai.definitions import FileSource
-from f2ai.common.utils import to_file
+
+from ..definitions import OfflinePersistEngine, OfflinePersistEngineType
+from ..offline_stores.offline_file_store import OfflineFileStore
+from ..definitions import FileSource
+from ..common.utils import to_file
 
 TIME_COL = "event_timestamp"
 MATERIALIZE_TIME = "materialize_time"

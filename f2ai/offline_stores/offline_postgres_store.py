@@ -3,11 +3,12 @@ import uuid
 import pandas as pd
 import datetime
 from io import StringIO
-from typing import List, Optional, Set, TYPE_CHECKING, Union, Tuple, Dict
+from typing import List, Optional, Set, TYPE_CHECKING, Union, Tuple
 from pydantic import Field, PrivateAttr
-from pypika import Query, Parameter, functions as fn, JoinType, Field as PikaField, Table, PostgreSQLQuery
+from pypika import Query, Parameter, functions as fn, JoinType, Field as PikaField
 from pypika.queries import QueryBuilder
-from f2ai.definitions import (
+
+from ..definitions import (
     Feature,
     Period,
     LabelView,
@@ -17,7 +18,7 @@ from f2ai.definitions import (
     OfflineStore,
     StatsFunctions,
 )
-from f2ai.common.utils import convert_dtype_to_sqlalchemy_type
+from ..common.utils import convert_dtype_to_sqlalchemy_type
 
 
 DEFAULT_EVENT_TIMESTAMP_FIELD = "event_timestamp"

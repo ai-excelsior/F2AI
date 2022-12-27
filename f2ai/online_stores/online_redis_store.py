@@ -5,10 +5,12 @@ from typing import Optional, Dict, List, Union
 import functools
 import pandas as pd
 from definitions.entities import Entity
-from f2ai.common.utils import DateEncoder
-from f2ai.definitions import OnlineStore, OnlineStoreType, Period, FeatureView, Service
 from pydantic import PrivateAttr
 from redis import Redis, ConnectionPool
+
+from ..common.utils import DateEncoder
+from ..definitions import OnlineStore, OnlineStoreType, Period, FeatureView, Service
+
 
 DEFAULT_EVENT_TIMESTAMP_FIELD = "event_timestamp"
 

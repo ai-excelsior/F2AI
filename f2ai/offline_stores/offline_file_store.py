@@ -1,7 +1,8 @@
 import pandas as pd
 import datetime
-from typing import List, Optional, Set, Dict
-from f2ai.definitions import (
+from typing import List, Optional, Set
+
+from ..definitions import (
     Feature,
     Period,
     Service,

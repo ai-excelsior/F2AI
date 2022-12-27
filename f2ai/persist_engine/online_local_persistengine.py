@@ -1,14 +1,14 @@
-from executing import Source
-from definitions import offline_store
-from f2ai.definitions import OnlinePersistEngine, OnlinePersistEngineType, OnlineStore
-from typing import List, Dict
+from typing import Dict
 import pandas as pd
-from f2ai.definitions import (
+
+from ..definitions import (
     OfflineStore,
     OnlineStore,
     Period,
-    FeatureView,
+    OnlinePersistEngine,
+    OnlinePersistEngineType,
 )
+
 
 DEFAULT_EVENT_TIMESTAMP_FIELD = "event_timestamp"
 

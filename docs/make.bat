@@ -33,3 +33,6 @@ goto end
 
 :end
 popd
+
+livehtml:
+	sphinx-autobuild "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
