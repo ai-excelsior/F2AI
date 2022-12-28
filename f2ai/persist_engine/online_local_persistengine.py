@@ -48,5 +48,6 @@ class OnlineLocalPersistEngine(OnlinePersistEngine):
             save_path,
             data_to_write[sorted(data_to_write.columns)],
             feature_views["ttl"],
+            join_keys=sorted(feature_views["join_keys"]),
             **kwargs
         )

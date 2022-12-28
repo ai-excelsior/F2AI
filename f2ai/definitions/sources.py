@@ -2,7 +2,7 @@ from typing import Dict, List, Optional, Any
 from pydantic import BaseModel, Field
 from enum import Enum
 
-from ..common.utils import read_file
+from f2ai.common.utils import read_file
 from .offline_store import OfflineStoreType
 from .features import FeatureSchema
 

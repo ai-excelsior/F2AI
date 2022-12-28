@@ -238,14 +238,17 @@ class FeatureStore:
         ), "entity_df should be a pd.Dataframe and have at least one column of entities"
 
         feature_view = self._get_views(feature_view_name)
-        join_keys = self._get_keys_to_join(feature_view, list(entity_df.columns))
+        join_keys = self._get_keys_to_join(feature_view)
+        assert not [
+            col for col in join_keys if col not in entity_df.columns
+        ], f"make sure columns in entity_df mush involve that in {feature_view_name},{','.join([col for col in join_keys if col not in entity_df.columns])} not in entity_df's columns"
         return self.online_store.read_batch(
             entity_df=entity_df,
             project_name=self.online_store.name,
             view=feature_view,
             feature_views=self.feature_views,
             entities=self.entities,
-            join_keys=join_keys,
+            join_keys=join_keys.sort(),
             **kwargs,
         )
 
@@ -396,8 +399,6 @@ class FeatureStore:
         self.persist_engine.materialize(
             service, self.label_views, self.feature_views, self.entities, self.sources, backoff, online
         )
-
-        # print(f"materialize done, saved at '{dest_path.path if dest_path.path else dest_path.query}'")
 
     def _offline_pgsql_materialize_dbt(self, service: Service, incremental_begin):
         try:

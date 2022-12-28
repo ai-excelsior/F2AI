@@ -2,7 +2,7 @@ import pandas as pd
 from datetime import datetime
 from dataclasses import dataclass
 
-from ..definitions.period import Period
+from f2ai.definitions.period import Period
 
 
 @dataclass

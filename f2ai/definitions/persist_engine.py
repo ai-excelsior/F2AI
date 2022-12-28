@@ -9,7 +9,7 @@ from multiprocessing import Pipe, Pool
 from tqdm import tqdm
 import os
 
-from ..definitions import (
+from f2ai.definitions import (
     OfflineStoreType,
     OfflineStore,
     OnlineStore,
@@ -18,6 +18,7 @@ from ..definitions import (
     FeatureView,
     LabelView,
     BackoffTime,
+    Source,
     backoff_to_split,
 )
 
@@ -136,7 +137,7 @@ class RealPersistEngine(BaseModel):
                     with Pool(processes=cpu_ava) as pool:
                         r, w = Pipe(duplex=False)
                         for args in batch_params:
-                            pool.apply_async(func=self.on_line.materialize, args=args, kwds={"signal": w})
+                            pool.apply(func=self.on_line.materialize, args=args, kwds={"signal": w})
                             pbar.update(r.recv())
         else:
             assert isinstance(service, Service), "offline materialize can only be applied on Service"
