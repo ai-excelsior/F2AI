@@ -376,7 +376,7 @@ class FeatureStore:
             **kwargs,
         )
 
-    def materialize(self, service: Union[str, Service, FeatureView], backoff: BackoffTime, online: bool):
+    def materialize(self, service: Union[str, Service, FeatureView], backoff: BackoffTime, online: bool = False):
         """Offline materialize, join features which specify by service name.
 
         Args:

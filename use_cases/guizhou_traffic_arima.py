@@ -52,7 +52,7 @@ if __name__ == "__main__":
     )
 
     sample = fs.get_dataset(
-        service_name="traval_time_prediction_embedding_v1",
+        service="traval_time_prediction_embedding_v1",
         sampler=GroupFixednbrSampler(
             time_bucket="20 minutes",
             stride=4,

@@ -4,13 +4,11 @@ from datetime import datetime
 from typing import Optional, Dict, List, Union
 import functools
 import pandas as pd
-from sqlalchemy import true
-from definitions.entities import Entity
 from pydantic import PrivateAttr
 from redis import Redis, ConnectionPool
 
 from ..common.utils import DateEncoder
-from ..definitions import OnlineStore, OnlineStoreType, Period, FeatureView, Service
+from ..definitions import OnlineStore, OnlineStoreType, Period, FeatureView, Service, Entity
 
 
 DEFAULT_EVENT_TIMESTAMP_FIELD = "event_timestamp"

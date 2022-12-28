@@ -208,23 +208,23 @@ class NbeatsNetwork(nn.Module):
 
 
 if __name__ == "__main__":
-    TIME_COL ="event_timestamp"
+    TIME_COL = "event_timestamp"
 
     # data = pd.read_csv("/Users/zhao123456/Desktop/gitlab/guizhou_traffic/guizhou_traffic.csv")
     # data = data.iloc[:20000,:]
     # data.to_csv("/Users/zhao123456/Desktop/gitlab/guizhou_traffic/guizhou_traffic_20000.csv")
 
     fs = FeatureStore("file:///Users/zhao123456/Desktop/gitlab/guizhou_traffic")
-    
+
     dataset = fs.get_dataset(
-        service_name="traval_time_prediction_embedding_v1",
-        sampler=GroupFixednbrSampler( 
+        service="traval_time_prediction_embedding_v1",
+        sampler=GroupFixednbrSampler(
             time_bucket="10 minutes",
             stride=1,
             group_ids=None,
             group_names=None,
             start=fs.get_latest_entities(fs.services["traval_time_prediction_embedding_v1"])[TIME_COL].min(),
-            end=fs.get_latest_entities(fs.services["traval_time_prediction_embedding_v1"])[TIME_COL].max(),  
+            end=fs.get_latest_entities(fs.services["traval_time_prediction_embedding_v1"])[TIME_COL].max(),
         ),
     )
 
@@ -243,23 +243,31 @@ if __name__ == "__main__":
     ).to_dict()
     cat_count = {key: len(cat_unique[key]) for key in cat_unique.keys()}
     cont_scalar_max = fs.stats(
-        fs.services["traval_time_prediction_embedding_v1"], fn="max", group_key=[], start=fs.get_latest_entities(fs.services["traval_time_prediction_embedding_v1"])[TIME_COL].min(), end=fs.get_latest_entities(fs.services["traval_time_prediction_embedding_v1"])[TIME_COL].max()
+        fs.services["traval_time_prediction_embedding_v1"],
+        fn="max",
+        group_key=[],
+        start=fs.get_latest_entities(fs.services["traval_time_prediction_embedding_v1"])[TIME_COL].min(),
+        end=fs.get_latest_entities(fs.services["traval_time_prediction_embedding_v1"])[TIME_COL].max(),
     ).to_dict()
     cont_scalar_min = fs.stats(
-        fs.services["traval_time_prediction_embedding_v1"], fn="min", group_key=[], start=fs.get_latest_entities(fs.services["traval_time_prediction_embedding_v1"])[TIME_COL].min(), end=fs.get_latest_entities(fs.services["traval_time_prediction_embedding_v1"])[TIME_COL].max()
+        fs.services["traval_time_prediction_embedding_v1"],
+        fn="min",
+        group_key=[],
+        start=fs.get_latest_entities(fs.services["traval_time_prediction_embedding_v1"])[TIME_COL].min(),
+        end=fs.get_latest_entities(fs.services["traval_time_prediction_embedding_v1"])[TIME_COL].max(),
     ).to_dict()
     cont_scalar = {key: [cont_scalar_min[key], cont_scalar_max[key]] for key in cont_scalar_min.keys()}
-    
+
     label = fs._get_available_labels(fs.services["traval_time_prediction_embedding_v1"])
     del cont_scalar[label[0]]
 
     i_ds = dataset.to_pytorch()
-    test_data_loader = DataLoader(  
+    test_data_loader = DataLoader(
         i_ds,
         collate_fn=lambda x: nbeats_collet_fn(
             x,
             cont_scalar=cont_scalar,
-            categoricals=cat_unique,           
+            categoricals=cat_unique,
             label=label,
         ),
         batch_size=8,
@@ -270,18 +278,18 @@ if __name__ == "__main__":
     model = NbeatsNetwork(
         targets=label,
         # prediction_length= fs.services["traval_time_prediction_embedding_v1"].labels[0].period,
-        # context_length= max([feature.period for feature in fs.services["traval_time_prediction_embedding_v1"].features if feature.period is not None]), 
-        prediction_length= 30,
-        context_length= 60,        
-        covariate_number = len(cont_scalar),
-        encoder_cont = list(cont_scalar.keys()) + label,
-        decoder_cont = list(cont_scalar.keys()), 
-        x_categoricals = features_cat,
+        # context_length= max([feature.period for feature in fs.services["traval_time_prediction_embedding_v1"].features if feature.period is not None]),
+        prediction_length=30,
+        context_length=60,
+        covariate_number=len(cont_scalar),
+        encoder_cont=list(cont_scalar.keys()) + label,
+        decoder_cont=list(cont_scalar.keys()),
+        x_categoricals=features_cat,
         output_size=1,
-    ) 
+    )
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)  
-    loss_fn = MeanAbsoluteError() 
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    loss_fn = MeanAbsoluteError()
 
     for epoch in range(10):  # assume 10 epoch
         print(f"epoch: {epoch} begin")
@@ -293,5 +301,3 @@ if __name__ == "__main__":
             loss.backward()
             optimizer.step()
         print(f"epoch: {epoch} done, loss: {loss}")
-
-    

@@ -28,9 +28,13 @@ class OfflineFilePersistEngine(OfflinePersistEngine):
         label_view = all_views["label"]
 
         source = label_view["source"]
+        # TODO:
+        # 1. 这里是否需要进行更合理的抽象，而不是使用一个私有函数
+        # 2. 在读取数据之前，框定时间可以可以提高效率
         joined_frame = self.store._read_file(
             source=source, features=label_view["labels"], join_keys=label_view["join_keys"]
         )
+        # TODO: 这里是否应该丢弃created_timestamp？
         joined_frame.drop(columns=["created_timestamp"], errors="ignore")
         joined_frame = joined_frame[(joined_frame[TIME_COL] >= start) & (joined_frame[TIME_COL] < end)]
 

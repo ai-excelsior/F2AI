@@ -88,7 +88,7 @@ def test_dataset_to_pytorch_pgsql(make_guizhou_traffic):
     project_folder = make_guizhou_traffic("pgsql")
     store = FeatureStore(project_folder)
     ds = store.get_dataset(
-        service_name="traval_time_prediction_embedding_v1",
+        service="traval_time_prediction_embedding_v1",
         sampler=GroupFixednbrSampler(
             time_bucket="1 hours",
             stride=1,
