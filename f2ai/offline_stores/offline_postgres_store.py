@@ -270,7 +270,7 @@ class OfflinePostgresStore(OfflineStore):
 
         entity_cols = kwargs.pop("entity_cols", [])
         source_df = self.read(source=source, features=features, join_keys=join_keys + entity_cols)
-        if isinstance(entity_df, pd, pd.DataFrame):
+        if isinstance(entity_df, pd.DataFrame):
             residue = [c for c in entity_df.columns if c not in join_keys + [DEFAULT_EVENT_TIMESTAMP_FIELD]]
         else:
             residue = kwargs.get("residue", [])
@@ -360,7 +360,7 @@ class OfflinePostgresStore(OfflineStore):
         entity_cols = kwargs.pop("entity_cols", [])
         source_df = self.read(source=source, features=features, join_keys=join_keys + entity_cols)
 
-        if isinstance(entity_df, pd, pd.DataFrame):
+        if isinstance(entity_df, pd.DataFrame):
             residue = [c for c in entity_df.columns if c not in join_keys + [DEFAULT_EVENT_TIMESTAMP_FIELD]]
         else:
             residue = kwargs.get("residue", [])
