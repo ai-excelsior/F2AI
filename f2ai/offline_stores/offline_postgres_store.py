@@ -561,7 +561,7 @@ class OfflinePostgresStore(OfflineStore):
                     >= Parameter(f"{source_timestamp_field}::timestamptz")
                 ) & (
                     Parameter(f"{entity_timestamp_field}::timestamptz")
-                    < Parameter(f"{source_timestamp_field}::timestamptz - {period.to_pgsql_()}")
+                    < Parameter(f"{source_timestamp_field}::timestamptz - {period.to_pgsql_interval()}")
                 )
                 if ttl:
                     candidates = candidates & (Parameter(source_timestamp_field) > earliest_timestamp)

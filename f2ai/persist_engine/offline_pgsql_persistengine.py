@@ -117,6 +117,9 @@ class OfflinePgsqlPersistEngine(OfflinePersistEngine):
                 )
                 for c in all_columns:
                     insert_fns = insert_fns.do_update(materialize_table.field(c), Parameter(f"excluded.{c}"))
+                cursor.execute(
+                    f"alter table {save_path.query} add constraint unique_key_{uuid.uuid4().hex[:8]} unique ({Parameter(','.join(unique_keys))})"
+                )
                 cursor.execute(insert_fns if isinstance(insert_fns, str) else insert_fns.get_sql())
                 self.store.psy_conn.commit()
                 kwargs["signal"].send(1)

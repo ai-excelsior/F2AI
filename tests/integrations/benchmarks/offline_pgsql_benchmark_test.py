@@ -3,16 +3,12 @@ import timeit
 from f2ai import FeatureStore
 from f2ai.definitions import StatsFunctions
 from f2ai.common.sampler import GroupFixednbrSampler
+from f2ai.definitions.backoff_time import cfg_to_date
 
 
 def get_guizhou_traffic_entities(store):
-    query_entities = pd.DataFrame(
-        store.offline_store._get_dataframe(
-            sql_result=f"select link_id,event_timestamp from {store.services['traval_time_prediction_embedding_v1'].materialize_path} limit 100",
-            join_keys=["link_id"],
-            timecol=["event_timestamp"],
-            feature_names=[],
-        ),
+    query_entities = store.offline_store._get_dataframe(
+        sql_result=f"select link_id,event_timestamp from {store.services['traval_time_prediction_embedding_v1'].materialize_path} limit 100",
         columns=["link_id", "event_timestamp"],
     )
     return query_entities.astype({"link_id": "string"})
@@ -105,12 +101,15 @@ def test_dataset_to_pytorch_pgsql(make_guizhou_traffic):
 def test_materialize(make_guizhou_traffic):
     project_folder = make_guizhou_traffic("pgsql")
     store = FeatureStore(project_folder)
+    backoff_time = cfg_to_date(
+        fromnow=None, start="2016-03-01 08:02:00+08", end="2016-03-01 08:06:00+08", step="4 minutes"
+    )
     measured_time = timeit.timeit(
         lambda: store.materialize(
-            "traval_time_prediction_embedding_v1",
-            start="2016-03-01 08:02:00+08",
-            end="2016-03-01 08:06:00+08",
+            service="traval_time_prediction_embedding_v1",
+            backoff=backoff_time,
         ),
         number=1,
     )
+
     print(f"materialize performance pgsql: {measured_time}s")
