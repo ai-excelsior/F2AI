@@ -3,6 +3,7 @@ import timeit
 from os import path
 from f2ai import FeatureStore
 from f2ai.common.sampler import GroupFixednbrSampler
+from f2ai.definitions.backoff_time import cfg_to_date
 from f2ai.definitions import BackoffTime, Period
 
 LINE_LIMIT = 1000
@@ -51,8 +52,10 @@ def test_get_labels_from_label_views(make_credit_score):
 def test_materialize(make_credit_score):
     project_folder = make_credit_score("file")
     store = FeatureStore(project_folder)
-
-    measured_time = timeit.timeit(lambda: store.materialize("credit_scoring_v1"), number=1)
+    backoff_time = cfg_to_date(fromnow=None, start="2020-08-25", end="2021-08-26", step="100 days")
+    measured_time = timeit.timeit(
+        lambda: store.materialize(service="credit_scoring_v1", backoff=backoff_time, online=False), number=1
+    )
     print(f"materialize performance: {measured_time}s")
 
 
@@ -113,7 +116,9 @@ def test_sampler_with_groups(make_credit_score):
 
 def test_dataset_to_pytorch(make_credit_score):
     project_folder = make_credit_score("file")
-    backoff = BackoffTime(start=pd.Timestamp('2020-05-01'), end=pd.Timestamp('2020-07-01'), step=Period.from_str('1 month'))
+    backoff = BackoffTime(
+        start=pd.Timestamp("2020-05-01"), end=pd.Timestamp("2020-07-01"), step=Period.from_str("1 month")
+    )
     store = FeatureStore(project_folder)
     store.materialize(service="credit_scoring_v1", backoff=backoff)
     ds = store.get_dataset(

@@ -11,7 +11,7 @@ def git_clone(cwd: str, repo: str, branch: str):
             repo,
             cwd,
         ],
-        check=True,
+        check=False,
     )
 
 
