@@ -39,7 +39,7 @@ class OfflinePgsqlPersistEngine(OfflinePersistEngine):
             join_keys=label_view["join_keys"],
             alias=ENTITY_EVENT_TIMESTAMP_FIELD,
         )
-        label_names = [l if isinstance(l, str) else l.name for l in label_view["labels"]]
+        label_names = [label if isinstance(label, str) else label.name for label in label_view["labels"]]
 
         condition = (Parameter(DEFAULT_EVENT_TIMESTAMP_FIELD) <= end) & (
             Parameter(DEFAULT_EVENT_TIMESTAMP_FIELD) >= start
@@ -77,7 +77,7 @@ class OfflinePgsqlPersistEngine(OfflinePersistEngine):
                 f.name
                 for featureview in feature_views
                 for f in featureview["features"]
-                if f.name not in [l.name for l in label_view["labels"]]
+                if f.name not in [label.name for label in label_view["labels"]]
             ]
             + [label.name for label in label_view["labels"]]
             + label_view["join_keys"]
@@ -95,7 +95,7 @@ class OfflinePgsqlPersistEngine(OfflinePersistEngine):
         try:
             with self.store.psy_conn.cursor() as cursor:
                 cursor.execute(
-                    materialize_table if isinstance(materialize_table, str) else materialize_table.get_sql()
+                    materialize_table if isinstance(materialize_table, str) else materialize_table.get_sql(quote_char="")
                 )
                 cursor.execute(
                     f"alter table {save_path.query} add constraint unique_key_{uuid.uuid4().hex[:8]} unique ({Parameter(','.join(unique_keys))})"
@@ -120,6 +120,6 @@ class OfflinePgsqlPersistEngine(OfflinePersistEngine):
                 cursor.execute(
                     f"alter table {save_path.query} add constraint unique_key_{uuid.uuid4().hex[:8]} unique ({Parameter(','.join(unique_keys))})"
                 )
-                cursor.execute(insert_fns if isinstance(insert_fns, str) else insert_fns.get_sql())
+                cursor.execute(insert_fns if isinstance(insert_fns, str) else insert_fns.get_sql(quote_char=""))
                 self.store.psy_conn.commit()
                 kwargs["signal"].send(1)

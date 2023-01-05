@@ -11,7 +11,6 @@ from pypika.queries import QueryBuilder
 from ..definitions import (
     Feature,
     Period,
-    LabelView,
     Service,
     SqlSource,
     OfflineStoreType,
@@ -67,7 +66,7 @@ class OfflinePostgresStore(OfflineStore):
     def get_offline_source(self, service: Service) -> SqlSource:
         return SqlSource(
             name=service.name,
-            query=service.name,
+            query=f'{self.materialize_path}.{service.name}',
             timestamp_field=DEFAULT_EVENT_TIMESTAMP_FIELD,
             created_timestamp_field="materialize_time",
         )
