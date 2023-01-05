@@ -1,5 +1,6 @@
 import pandas as pd
 import datetime
+import os
 from typing import List, Optional, Set
 
 from ..definitions import (
@@ -27,7 +28,7 @@ class OfflineFileStore(OfflineStore):
     def get_offline_source(self, service: Service) -> FileSource:
         return FileSource(
             name=f"{service.name}_source",
-            path=service.materialize_path,
+            path=os.path.join(self.materialize_path, service.name),
             timestamp_field="event_timestamp",
             created_timestamp_field="materialize_time",
         )

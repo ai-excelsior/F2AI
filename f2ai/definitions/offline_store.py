@@ -2,6 +2,7 @@ from __future__ import annotations
 import abc
 import pandas as pd
 import datetime
+import os
 from enum import Enum
 from typing import Dict, Any, TYPE_CHECKING, Set, List, Optional, Union
 from pydantic import BaseModel
@@ -26,6 +27,7 @@ class OfflineStore(BaseModel):
     """An abstraction of what functionalities a OfflineStore should implements. If you want to be a one of the offline store contributor. This is the core."""
 
     type: OfflineStoreType
+    materialize_path: Optional[str]
 
     class Config:
         extra = "allow"
@@ -103,7 +105,7 @@ class OfflineStore(BaseModel):
         join_keys: List[str] = None,
         group_keys: List[str] = None,
         entity_df: pd.DataFrame = None,
-        start = None,
+        start: datetime.datetime = None,
     ) -> pd.DataFrame:
         """get latest unique entities from a source. Which is useful when you want to know how many entities you have, or what is the latest features appear in your data source.
 
@@ -153,7 +155,7 @@ class OfflineStore(BaseModel):
         pass
 
 
-def init_offline_store_from_cfg(cfg: Dict[Any]) -> OfflineStore:
+def init_offline_store_from_cfg(cfg: Dict[Any], project_name: str) -> OfflineStore:
     """Initialize an implementation of OfflineStore from yaml config.
 
     Args:
@@ -167,13 +169,21 @@ def init_offline_store_from_cfg(cfg: Dict[Any]) -> OfflineStore:
     if offline_store_type == OfflineStoreType.FILE:
         from ..offline_stores.offline_file_store import OfflineFileStore
 
-        return OfflineFileStore()
+        offline_store = OfflineFileStore(**cfg)
+        if offline_store.materialize_path is None:
+            offline_store.materialize_path = os.path.join(os.path.expanduser("~"), '.f2ai', project_name)
+
+        return offline_store
 
     if offline_store_type == OfflineStoreType.PGSQL:
         from ..offline_stores.offline_postgres_store import OfflinePostgresStore
 
         pgsql_conf = cfg.pop("pgsql_conf", {})
-        return OfflinePostgresStore(**cfg, **pgsql_conf)
+        offline_store = OfflinePostgresStore(**cfg, **pgsql_conf)
+        if offline_store.materialize_path is None:
+            offline_store.materialize_path = f'{offline_store.database}.{offline_store.db_schema}'
+
+        return offline_store
 
     if offline_store_type == OfflineStoreType.SPARK:
         from ..offline_stores.offline_spark_store import OfflineSparkStore

@@ -1,11 +1,10 @@
 import datetime
 import json
 import os
-from typing import List, Tuple
-
 import oss2
 import pandas as pd
-from requests import head
+from typing import List, Tuple
+
 
 ENTITY_EVENT_TIMESTAMP_FIELD = "_entity_event_timestamp_"
 SOURCE_EVENT_TIMESTAMP_FIELD = "_source_event_timestamp_"
@@ -58,9 +57,6 @@ def read_file(
         df[col] = pd.to_datetime(df[col], utc=True)
 
     return df
-
-
-pd.DataFrame.to_parquet
 
 
 def to_file(file: pd.DataFrame, path, type, mode="w", header=True):

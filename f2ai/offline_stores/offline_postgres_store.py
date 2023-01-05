@@ -67,7 +67,7 @@ class OfflinePostgresStore(OfflineStore):
     def get_offline_source(self, service: Service) -> SqlSource:
         return SqlSource(
             name=service.name,
-            query=service.materialize_path,
+            query=service.name,
             timestamp_field=DEFAULT_EVENT_TIMESTAMP_FIELD,
             created_timestamp_field="materialize_time",
         )
@@ -153,7 +153,7 @@ class OfflinePostgresStore(OfflineStore):
             source (SqlSource): data source to build query from
             features (Set[Feature], optional): features cols to select. Defaults to {}.
             join_keys (List[str], optional): entity cols to select. Defaults to [].
-            alias (str, optional): alias of time col to avoid duplcates of merge. Defaults to SOURCE_EVENT_TIMESTAMP_FIELD.
+            alias (str, optional): alias of time col to avoid duplicates of merge. Defaults to SOURCE_EVENT_TIMESTAMP_FIELD.
 
         Returns:
             Query: _description_
@@ -168,24 +168,6 @@ class OfflinePostgresStore(OfflineStore):
         all_columns = list(set(time_columns + join_keys + feature_columns))
         source_sql = Query.from_(source.query).select(Parameter(",".join(all_columns)))
         return source_sql
-
-    def materialize_dbt(
-        self,
-        service: Service,
-        label_views: List[LabelView],
-        sources: List[SqlSource],
-    ):
-
-        label_view = service.get_label_view(label_views)
-
-        max_timestamp = Query.from_(service.materialize_path).select(
-            fn.Max(Parameter(sources[label_view.batch_source].timestamp_field))
-        )
-        max_timestamp_label = Query.from_(label_view.batch_source).select(
-            fn.Max(Parameter(sources[label_view.batch_source].timestamp_field))
-        )
-
-        return max_timestamp, max_timestamp_label
 
     def stats(
         self,

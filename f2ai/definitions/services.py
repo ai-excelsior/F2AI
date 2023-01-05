@@ -1,5 +1,5 @@
 from typing import List, Optional, Dict, Set
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from .entities import Entity
 from .features import SchemaAnchor, Feature
@@ -15,11 +15,6 @@ class Service(BaseModel):
     features: List[SchemaAnchor] = []
     labels: List[SchemaAnchor] = []
     ttl: Optional[str] = None
-
-    # TODO: remove below configs in future
-    materialize_path: Optional[str] = Field(alias="materialize", default="materialize_table")
-    materialize_type: Optional[str] = Field(alias="type", default="file")
-    dbt_path: Optional[str] = Field(alias="dbt", default="dbt_path")
 
     @classmethod
     def from_yaml(cls, cfg: Dict) -> "Service":

@@ -1,9 +1,7 @@
-import json
 import os
 from copy import deepcopy
 from datetime import datetime
-from typing import Dict, List, Optional, Union
-import docker
+from typing import List, Optional, Union
 import pandas as pd
 
 from .definitions.offline_store import OfflineStore
@@ -16,9 +14,7 @@ from .common.get_config import (
     get_service_cfg,
     get_source_cfg,
 )
-from .common.jinja import jinja_env
 from .common.read_file import read_yml
-from .common.utils import remove_prefix
 from .dataset.dataset import Dataset
 from .definitions import (
     BackoffTime,
@@ -42,7 +38,9 @@ class FeatureStore:
     def __init__(self, project_folder=None, url=None, token=None, projectID=None):
         if project_folder:
             cfg = read_yml(os.path.join(project_folder, "feature_store.yml"))
-            self.offline_store: OfflineStore = init_offline_store_from_cfg(cfg["offline_store"])
+            self.offline_store: OfflineStore = init_offline_store_from_cfg(
+                cfg["offline_store"], cfg["project"]
+            )
             self.online_store: OnlineStore = init_online_store_from_cfg(cfg["online_store"], cfg["project"])
             self.persist_engine: RealPersistEngine = init_persist_engine_from_cfg(
                 self.offline_store, self.online_store
@@ -64,11 +62,6 @@ class FeatureStore:
         for _, source in self.sources.items():
             if isinstance(source, FileSource) and not os.path.isabs(source.path):
                 source.path = os.path.join(self.project_folder, source.path)
-
-        # fmodity the services' materialize path if it is not a absolute path
-        for _, service in self.services.items():
-            if service.materialize_type == "file" and not os.path.isabs(service.materialize_path):
-                service.materialize_path = os.path.join(self.project_folder, service.materialize_path)
 
     def __check_format(self, entity_df):
         if isinstance(entity_df, pd.DataFrame):
@@ -208,6 +201,11 @@ class FeatureStore:
         else:
             source = self.offline_store.get_offline_source(feature_view)
 
+        # check feature columns should not appear in entity_df columns
+        assert not any(
+            [feature.name in entity_df.columns for feature in feature_objects]
+        ), "Naming conflict: entity_df should not contain any columns same as features"
+
         return self.offline_store.get_features(
             entity_df=entity_df,
             features=feature_objects,
@@ -242,6 +240,7 @@ class FeatureStore:
         assert not [
             col for col in join_keys if col not in entity_df.columns
         ], f"make sure columns in entity_df mush involve that in {feature_view_name},{','.join([col for col in join_keys if col not in entity_df.columns])} not in entity_df's columns"
+
         return self.online_store.read_batch(
             entity_df=entity_df,
             project_name=self.online_store.name,
@@ -376,7 +375,9 @@ class FeatureStore:
             **kwargs,
         )
 
-    def materialize(self, service: Union[str, Service, FeatureView], backoff: BackoffTime, online: bool = False):
+    def materialize(
+        self, service: Union[str, Service, FeatureView], backoff: BackoffTime, online: bool = False
+    ):
         """Offline materialize, join features which specify by service name.
 
         Args:
@@ -399,143 +400,6 @@ class FeatureStore:
         self.persist_engine.materialize(
             service, self.label_views, self.feature_views, self.entities, self.sources, backoff, online
         )
-
-    def _offline_pgsql_materialize_dbt(self, service: Service, incremental_begin):
-        try:
-            incremental_begin = pd.to_datetime(incremental_begin, utc=True) if incremental_begin else None
-        except Exception:
-            incremental_begin = Period.from_str(incremental_begin)
-        except:
-            raise TypeError("please check your `incremental_begin` type")
-
-        # dir to store dbt project
-        label_view: LabelView = service.get_label_view(self.label_views)
-        label_view_dict = label_view.dict()
-        label_view_dict.update(
-            {
-                "labels": [label.name for label in label_view.get_label_objects()],
-                "event_time": self.sources[label_view.batch_source].timestamp_field,
-                "create_time": self.sources[label_view.batch_source].created_timestamp_field,
-            }
-        )
-
-        all_features_use = [feature.name for feature in service.get_feature_objects(self.feature_views)]
-
-        feature_views = []
-        for feature_view in service.get_feature_views(self.feature_views):
-            feature_view_dict = feature_view.dict()
-            feature_view_dict.update(
-                {
-                    "features": [
-                        feature_name
-                        for feature_name in feature_view.get_feature_names()
-                        if feature_name in all_features_use and feature_name not in label_view_dict["labels"]
-                    ],
-                    "event_time": self.sources[feature_view.batch_source].timestamp_field,
-                    "create_time": self.sources[feature_view.batch_source].created_timestamp_field,
-                }
-            )
-            feature_views.append(feature_view_dict)
-
-        entity_names = list(service.get_entities(self.feature_views, self.label_views))
-        entities_dict = {entity_name: self.entities[entity_name].join_keys[0] for entity_name in entity_names}
-
-        conn = self.offline_store.psy_conn(self.offline_store)
-
-        max_timestamp, max_timestamp_label = self.offline_store.materialize_dbt(
-            service=service,
-            label_views=self.label_views,
-            sources=self.sources,
-        )
-
-        label_result = pd.to_datetime(self.offline_store._get_dataframe(sql_result=max_timestamp_label)[0][0])
-        try:
-            result = pd.to_datetime(self.offline_store._get_dataframe(sql_result=max_timestamp)[0][0])
-        except:
-            result = pd.to_datetime("1970-01-01 00:00:00", utc=True)
-
-        conn.close()
-
-        if incremental_begin is None:
-            incremental_begin = result.tz_localize(None)
-        elif isinstance(incremental_begin, Period):
-            incremental_begin = label_result - incremental_begin.to_py_timedelta()
-        else:
-            incremental_begin = incremental_begin
-
-        dbt_path = os.path.join(
-            remove_prefix(self.project_folder, "file://"),
-            f"{service.dbt_path}",
-            f"{service.materialize_path}",
-        )
-        pd.to_datetime
-        dict_var = {
-            "labelviews": label_view_dict,
-            "featureviews": feature_views,
-            "entities": entities_dict,
-            "increment_begin": str(incremental_begin),
-        }
-        json_var = json.dumps(dict_var)
-        self._schedule_local_dbt_container(service.materialize_path, json_var, dbt_path)
-        # os.system(f"cd {dbt_path} && dbt run --profiles-dir {dbt_path} --vars '{json_var}' ")
-
-    def _schedule_local_dbt_container(self, profile_name: str, vars: Dict, dbt_path: str):
-        docker_client = docker.from_env()
-        dbt_profiles = jinja_env.get_template("profiles.yaml").render(
-            profile=profile_name,
-            host=self.offline_store.host,
-            port=self.offline_store.port,
-            user=self.offline_store.user,
-            password=self.offline_store.password,
-            database=self.offline_store.database,
-            db_schema=self.offline_store.db_schema,
-        )
-        profile_path = os.path.join(dbt_path, "profiles.yml")
-        if not os.path.exists(profile_path):
-            with open(profile_path, "w") as f:
-                f.write(dbt_profiles)
-        docker_client.containers.run(
-            "ghcr.io/dbt-labs/dbt-postgres:1.3.latest",
-            command=f"run --vars '{vars}' ",
-            volumes={
-                dbt_path: {"bind": "/usr/app", "mode": "rw"},
-                profile_path: {"bind": "/root/.dbt/profiles.yml", "mode": "rw"},
-            },
-            network="host",
-            remove=True,
-        )
-
-    # def _offline_record_materialize(self, service: Service, incremental_begin):
-    #     """materialize offline file
-
-    #     Args:
-    #         service (Service): service entity
-    #         incremental_begin: time to begin materialize
-    #     """
-    #     try:
-    #         incremental_begin = pd.to_datetime(incremental_begin if incremental_begin else 0, utc=True)
-    #     except Exception:
-    #         incremental_begin = Period.from_str(incremental_begin)
-    #     except:
-    #         raise TypeError("please check your `incremental_begin` type")
-
-    #     joined_frame = self.offline_store.materialize(
-    #         service=service,
-    #         feature_views=self.feature_views,
-    #         label_views=self.label_views,
-    #         sources=self.sources,
-    #         entities=self.entities,
-    #         incremental_begin=incremental_begin,
-    #     )
-    #     joined_frame[MATERIALIZE_TIME] = pd.to_datetime(datetime.now(), utc=True)
-    #     to_file(
-    #         joined_frame,
-    #         os.path.join(self.project_folder, f"{service.materialize_path}"),
-    #         f"{service.materialize_path}".split(".")[-1],
-    #     )
-    #     print(
-    #         f"materialize done, file saved at {os.path.join(self.project_folder, service.materialize_path)}"
-    #     )
 
     def stats(
         self,

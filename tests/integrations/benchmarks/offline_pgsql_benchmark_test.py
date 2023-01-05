@@ -6,10 +6,11 @@ from f2ai.common.sampler import GroupFixednbrSampler
 from f2ai.definitions.backoff_time import cfg_to_date
 
 
-def get_guizhou_traffic_entities(store):
+def get_guizhou_traffic_entities(store: FeatureStore):
+    columns = ["link_id", "event_timestamp"]
     query_entities = store.offline_store._get_dataframe(
-        sql_result=f"select link_id,event_timestamp from {store.services['traval_time_prediction_embedding_v1'].materialize_path} limit 100",
-        columns=["link_id", "event_timestamp"],
+        f"select {', '.join(columns)} from gy_link_travel_time order by event_timestamp limit 1000",
+        columns=columns,
     )
     return query_entities.astype({"link_id": "string"})
 
