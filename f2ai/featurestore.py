@@ -17,7 +17,7 @@ from .common.get_config import (
 from .common.read_file import read_yml
 from .dataset.dataset import Dataset
 from .definitions import (
-    BackoffTime,
+    BackOffTime,
     Feature,
     FeatureView,
     FileSource,
@@ -376,7 +376,7 @@ class FeatureStore:
         )
 
     def materialize(
-        self, service: Union[str, Service, FeatureView], backoff: BackoffTime, online: bool = False
+        self, service: Union[str, Service, FeatureView], backoff: BackOffTime, online: bool = False
     ):
         """Offline materialize, join features which specify by service name.
 

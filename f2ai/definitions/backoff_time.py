@@ -1,13 +1,13 @@
 import pandas as pd
 from datetime import datetime
 from dataclasses import dataclass
-from typing import Union
+from typing import Iterator, Union
 
 from f2ai.definitions.period import Period
 
 
 @dataclass
-class BackoffTime:
+class BackOffTime:
     """
     Useful to define how to split data by time.
     """
@@ -39,9 +39,22 @@ class BackoffTime:
         self.end = end
         self.step = step
 
-    @classmethod
-    def from_str(cls, start: str, end: str, step: str) -> "BackoffTime":
-        return BackoffTime(start=pd.Timestamp(start, tz="UTC"))
+    def to_units(self) -> Iterator[Period]:
+        pd_offset = self.step.to_pandas_dateoffset()
+        start = self.step.normalize(self.start, 'ceil')
+        end = self.step.normalize(self.end, 'floor')
+
+        bins = pd.date_range(
+            start=start,
+            end=end,
+            freq=pd_offset,
+        )
+        for (start, end) in zip(bins[:-1], bins[1:]):
+            yield BackOffTime(
+                start=start,
+                end=end,
+                step=self.step,
+            )
 
 
 def cfg_to_date(fromnow, start, end, step):
@@ -53,10 +66,10 @@ def cfg_to_date(fromnow, start, end, step):
         start = pd.to_datetime(start, utc=True) if start else pd.to_datetime(0, utc=True)
         end = pd.to_datetime(end, utc=True) if end else pd.to_datetime(datetime.now(), utc=True)
 
-    return BackoffTime(start=start, end=end, step=Period.from_str(step))
+    return BackOffTime(start=start, end=end, step=Period.from_str(step))
 
 
-def backoff_to_split(backoff: BackoffTime):
+def backoff_to_split(backoff: BackOffTime):
     bins = pd.date_range(
         start=backoff.start,
         end=backoff.end + backoff.step.to_py_timedelta(),

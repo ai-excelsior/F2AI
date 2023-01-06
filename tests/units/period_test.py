@@ -27,3 +27,13 @@ def test_period_negative():
 
     neg_ten_years = Period.from_str("-10 years")
     assert neg_ten_years.n == -10
+
+
+def test_get_pandas_datetime_components():
+    three_minutes = Period.from_str("3 minutes")
+    components = three_minutes.get_pandas_datetime_components()
+    assert components == ["year", "month", "day", "hour", "minute"]
+
+    one_month = Period.from_str("1 month")
+    components = one_month.get_pandas_datetime_components()
+    assert components == ["year", "month"]

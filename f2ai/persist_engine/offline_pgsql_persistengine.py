@@ -3,8 +3,7 @@ import uuid
 from typing import Dict
 from pypika import Query, Parameter, Table, PostgreSQLQuery
 
-from ..definitions import OfflinePersistEngine, OfflinePersistEngineType
-from ..definitions import SqlSource
+from ..definitions import SqlSource, OfflinePersistEngine, OfflinePersistEngineType, BackOffTime
 from ..offline_stores.offline_postgres_store import OfflinePostgresStore
 
 DEFAULT_EVENT_TIMESTAMP_FIELD = "event_timestamp"
@@ -24,8 +23,7 @@ class OfflinePgsqlPersistEngine(OfflinePersistEngine):
         self,
         save_path: SqlSource,
         all_views: Dict,
-        start: str = None,
-        end: str = None,
+        back_off_time: BackOffTime,
         **kwargs,
     ):
 
@@ -41,8 +39,8 @@ class OfflinePgsqlPersistEngine(OfflinePersistEngine):
         )
         label_names = [label if isinstance(label, str) else label.name for label in label_view["labels"]]
 
-        condition = (Parameter(DEFAULT_EVENT_TIMESTAMP_FIELD) <= end) & (
-            Parameter(DEFAULT_EVENT_TIMESTAMP_FIELD) >= start
+        condition = (Parameter(DEFAULT_EVENT_TIMESTAMP_FIELD) <= back_off_time.end) & (
+            Parameter(DEFAULT_EVENT_TIMESTAMP_FIELD) >= back_off_time.start
         )
 
         joined_frame = joined_frame.where(condition)

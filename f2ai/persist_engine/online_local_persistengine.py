@@ -5,6 +5,7 @@ from ..definitions import (
     OfflineStore,
     OnlineStore,
     Period,
+    BackOffTime,
     OnlinePersistEngine,
     OnlinePersistEngineType,
 )
@@ -21,19 +22,18 @@ class OnlineLocalPersistEngine(OnlinePersistEngine):
         self,
         save_path: str,
         feature_views: Dict,
-        start: pd.Timestamp,
-        end: pd.Timestamp,
+        back_off_time: BackOffTime,
         off_store: OfflineStore,
         **kwargs
     ):
 
-        date_df = pd.DataFrame(data=[end], columns=[DEFAULT_EVENT_TIMESTAMP_FIELD])
-        period = -Period.from_str(str(end - start))
+        date_df = pd.DataFrame(data=[back_off_time.end], columns=[DEFAULT_EVENT_TIMESTAMP_FIELD])
+        period = -Period.from_str(str(back_off_time.end - back_off_time.start))
         entities_in_range = off_store.get_latest_entities(
             source=feature_views["source"],
             group_keys=feature_views["join_keys"],
             entity_df=date_df,
-            start=start,
+            start=back_off_time.start,
         ).drop(columns=DEFAULT_EVENT_TIMESTAMP_FIELD)
         data_to_write = off_store.get_period_features(
             entity_df=pd.merge(entities_in_range, date_df, how="cross"),

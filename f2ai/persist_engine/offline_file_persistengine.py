@@ -3,10 +3,9 @@ from typing import Dict
 import pandas as pd
 import datetime
 
-from ..definitions import OfflinePersistEngine, OfflinePersistEngineType
 from ..offline_stores.offline_file_store import OfflineFileStore
-from ..definitions import FileSource
-from ..common.utils import to_file
+from ..definitions import FileSource, OfflinePersistEngine, OfflinePersistEngineType, BackOffTime
+from ..common.utils import write_df_to_dataset
 
 TIME_COL = "event_timestamp"
 MATERIALIZE_TIME = "materialize_time"
@@ -18,10 +17,9 @@ class OfflineFilePersistEngine(OfflinePersistEngine):
 
     def materialize(
         self,
-        save_path: FileSource,
+        dest: FileSource,
         all_views: Dict,
-        start: pd.Timestamp = None,
-        end: pd.Timestamp = None,
+        back_off_time: BackOffTime,
         **kwargs,
     ):
         feature_views = all_views["features"]
@@ -36,7 +34,7 @@ class OfflineFilePersistEngine(OfflinePersistEngine):
         )
         # TODO: 这里是否应该丢弃created_timestamp？
         joined_frame.drop(columns=["created_timestamp"], errors="ignore")
-        joined_frame = joined_frame[(joined_frame[TIME_COL] >= start) & (joined_frame[TIME_COL] < end)]
+        joined_frame = joined_frame[(joined_frame[TIME_COL] >= back_off_time.start) & (joined_frame[TIME_COL] < back_off_time.end)]
 
         # join features dataframe
         for feature_view in feature_views:
@@ -59,5 +57,5 @@ class OfflineFilePersistEngine(OfflinePersistEngine):
                 )
 
         joined_frame[MATERIALIZE_TIME] = pd.to_datetime(datetime.datetime.now(), utc=True)
-        to_file(joined_frame[sorted(joined_frame.columns)], save_path.path, "csv", mode="a", header=0)
+        write_df_to_dataset(joined_frame, dest.path, time_col=dest.timestamp_field, period=back_off_time.step)
         kwargs["signal"].send(1)

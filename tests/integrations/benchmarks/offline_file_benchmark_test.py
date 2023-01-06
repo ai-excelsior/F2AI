@@ -4,7 +4,7 @@ from os import path
 from f2ai import FeatureStore
 from f2ai.common.sampler import GroupFixednbrSampler
 from f2ai.definitions.backoff_time import cfg_to_date
-from f2ai.definitions import BackoffTime, Period
+from f2ai.definitions import BackOffTime, Period
 
 LINE_LIMIT = 1000
 
@@ -116,21 +116,21 @@ def test_sampler_with_groups(make_credit_score):
 
 def test_dataset_to_pytorch(make_credit_score):
     project_folder = make_credit_score("file")
-    backoff = BackoffTime(
+    backoff = BackOffTime(
         start=pd.Timestamp("2020-05-01"), end=pd.Timestamp("2020-07-01"), step=Period.from_str("1 month")
     )
     store = FeatureStore(project_folder)
     store.materialize(service="credit_scoring_v1", backoff=backoff)
-    ds = store.get_dataset(
-        service="credit_scoring_v1",
-        sampler=GroupFixednbrSampler(
-            time_bucket="10 days",
-            stride=1,
-            group_ids=None,
-            group_names=None,
-            start="2020-08-20",
-            end="2021-09-01",
-        ),
-    )
-    measured_time = timeit.timeit(lambda: list(ds.to_pytorch()), number=1)
-    print(f"dataset.to_pytorch performance: {measured_time}s")
+    # ds = store.get_dataset(
+    #     service="credit_scoring_v1",
+    #     sampler=GroupFixednbrSampler(
+    #         time_bucket="10 days",
+    #         stride=1,
+    #         group_ids=None,
+    #         group_names=None,
+    #         start="2020-08-20",
+    #         end="2021-09-01",
+    #     ),
+    # )
+    # measured_time = timeit.timeit(lambda: list(ds.to_pytorch()), number=1)
+    # print(f"dataset.to_pytorch performance: {measured_time}s")

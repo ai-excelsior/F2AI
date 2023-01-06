@@ -4,6 +4,9 @@ import os
 import oss2
 import pandas as pd
 from typing import List, Tuple
+from pathlib import Path
+
+from ..definitions import Period
 
 
 ENTITY_EVENT_TIMESTAMP_FIELD = "_entity_event_timestamp_"
@@ -37,14 +40,16 @@ def read_file(
     keep_cols: List[str] = [],
     file_format=None,
 ):
-    path = remove_prefix(path, "file://")
+    path = Path(remove_prefix(path, "file://"))
     dtypes = {en: str for en in str_cols}
     usecols = list(set(keep_cols + parse_dates + str_cols))
 
     if file_format is None:
-        file_format = path.split(".")[-1]
+        file_format = path.parts[-1].split(".")[-1]
 
-    if file_format.startswith("parq"):
+    if path.is_dir():
+        df = read_df_from_dataset(path, usecols=usecols).astype(dtypes)
+    elif file_format.startswith("parq"):
         df = pd.read_parquet(path, columns=usecols).astype(dtypes)
     elif file_format.startswith("tsv"):
         df = pd.read_csv(path, sep="\t", parse_dates=parse_dates, dtype=dtypes, usecols=usecols)
@@ -147,3 +152,32 @@ def convert_dtype_to_sqlalchemy_type(col):
         raise ValueError("Complex datatypes not supported")
 
     return Text
+
+
+def write_df_to_dataset(data: pd.DataFrame, root_path: str, time_col: str, period: Period):
+    import pyarrow
+
+    # create partitioning cols
+    times = pd.to_datetime(data[time_col])
+    components = dict()
+    for component in period.get_pandas_datetime_components():
+        components[f"_f2ai_{component}_"] = getattr(times.dt, component)
+
+    data_with_components = pd.concat(
+        [
+            pd.DataFrame(components),
+            data,
+        ],
+        axis=1,
+    )
+    table = pyarrow.Table.from_pandas(data_with_components)
+    pyarrow.parquet.write_to_dataset(table, root_path=root_path, partition_cols=components)
+
+
+def read_df_from_dataset(root_path: str, usecols: List[str] = []) -> pd.DataFrame:
+    from pyarrow.parquet import ParquetDataset
+
+    table = ParquetDataset(root_path).read(columns=usecols)
+    df: pd.DataFrame = table.to_pandas()
+    drop_columns = [col_name for col_name in df.columns if col_name.startswith("_f2ai_")]
+    return df.drop(columns=drop_columns)
