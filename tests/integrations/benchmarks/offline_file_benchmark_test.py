@@ -3,7 +3,6 @@ import timeit
 from os import path
 from f2ai import FeatureStore
 from f2ai.common.sampler import GroupFixednbrSampler
-from f2ai.definitions.backoff_time import cfg_to_date
 from f2ai.definitions import BackOffTime, Period
 
 LINE_LIMIT = 1000
@@ -52,11 +51,19 @@ def test_get_labels_from_label_views(make_credit_score):
 def test_materialize(make_credit_score):
     project_folder = make_credit_score("file")
     store = FeatureStore(project_folder)
-    backoff_time = cfg_to_date(fromnow=None, start="2020-08-25", end="2021-08-26", step="100 days")
+    back_off_time = BackOffTime(start="2020-08-25", end="2021-08-26", step="1 month")
     measured_time = timeit.timeit(
-        lambda: store.materialize(service="credit_scoring_v1", backoff=backoff_time, online=False), number=1
+        lambda: store.materialize(service="credit_scoring_v1", backoff=back_off_time, online=False), number=1
     )
     print(f"materialize performance: {measured_time}s")
+
+
+def test_get_features_from_service(make_credit_score):
+    """this test should run after materialize"""
+    project_folder = make_credit_score("file")
+    store = FeatureStore(project_folder)
+    entity_df = get_credit_score_entities(project_folder)
+    store.get_features('credit_scoring_v1', entity_df)
 
 
 def test_get_period_features_from_feature_view(make_guizhou_traffic):
@@ -121,16 +128,16 @@ def test_dataset_to_pytorch(make_credit_score):
     )
     store = FeatureStore(project_folder)
     store.materialize(service="credit_scoring_v1", backoff=backoff)
-    # ds = store.get_dataset(
-    #     service="credit_scoring_v1",
-    #     sampler=GroupFixednbrSampler(
-    #         time_bucket="10 days",
-    #         stride=1,
-    #         group_ids=None,
-    #         group_names=None,
-    #         start="2020-08-20",
-    #         end="2021-09-01",
-    #     ),
-    # )
-    # measured_time = timeit.timeit(lambda: list(ds.to_pytorch()), number=1)
-    # print(f"dataset.to_pytorch performance: {measured_time}s")
+    ds = store.get_dataset(
+        service="credit_scoring_v1",
+        sampler=GroupFixednbrSampler(
+            time_bucket="10 days",
+            stride=1,
+            group_ids=None,
+            group_names=None,
+            start="2020-08-20",
+            end="2021-09-01",
+        ),
+    )
+    measured_time = timeit.timeit(lambda: list(ds.to_pytorch()), number=1)
+    print(f"dataset.to_pytorch performance: {measured_time}s")

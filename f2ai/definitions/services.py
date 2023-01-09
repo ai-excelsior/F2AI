@@ -1,4 +1,4 @@
-from typing import List, Optional, Dict, Set
+from typing import List, Optional, Dict
 from pydantic import BaseModel
 
 from .entities import Entity
@@ -25,13 +25,13 @@ class Service(BaseModel):
 
         return cls(**cfg)
 
-    def get_feature_names(self, feature_views: Dict[str, FeatureView], is_numeric=False) -> Set[Feature]:
-        return set([feature.name for feature in self.get_feature_objects(feature_views, is_numeric)])
+    def get_feature_names(self, feature_views: Dict[str, FeatureView], is_numeric=False) -> List[str]:
+        return [feature.name for feature in self.get_feature_objects(feature_views, is_numeric)]
 
-    def get_label_names(self, label_views: Dict[str, FeatureView], is_numeric=False) -> Set[Feature]:
-        return set([label.name for label in self.get_label_objects(label_views, is_numeric)])
+    def get_label_names(self, label_views: Dict[str, FeatureView], is_numeric=False) -> List[str]:
+        return [label.name for label in self.get_label_objects(label_views, is_numeric)]
 
-    def get_feature_objects(self, feature_views: Dict[str, FeatureView], is_numeric=False) -> Set[Feature]:
+    def get_feature_objects(self, feature_views: Dict[str, FeatureView], is_numeric=False) -> List[Feature]:
         """get all the feature objects which included in this service based on features' schema anchor.
 
         Args:
@@ -39,15 +39,17 @@ class Service(BaseModel):
             is_numeric (bool, optional): If only include numeric features. Defaults to False.
 
         Returns:
-            Set[Feature]
+            List[Feature]
         """
-        return {
-            feature
-            for schema_anchor in self.features
-            for feature in schema_anchor.get_features_from_views(feature_views, is_numeric)
-        }
+        return list(
+            dict.fromkeys(
+                feature
+                for schema_anchor in self.features
+                for feature in schema_anchor.get_features_from_views(feature_views, is_numeric)
+            )
+        )
 
-    def get_label_objects(self, label_views: Dict[str, LabelView], is_numeric=False) -> Set[Feature]:
+    def get_label_objects(self, label_views: Dict[str, LabelView], is_numeric=False) -> List[Feature]:
         """get all the label objects which included in this service based on labels' schema anchor.
 
         Args:
@@ -55,13 +57,15 @@ class Service(BaseModel):
             is_numeric (bool, optional): If only include numeric labels. Defaults to False.
 
         Returns:
-            Set[Feature]
+            List[Feature]
         """
-        return {
-            label
-            for schema_anchor in self.labels
-            for label in schema_anchor.get_features_from_views(label_views, is_numeric)
-        }
+        return list(
+            dict.fromkeys(
+                label
+                for schema_anchor in self.labels
+                for label in schema_anchor.get_features_from_views(label_views, is_numeric)
+            )
+        )
 
     def get_feature_views(self, feature_views: Dict[str, FeatureView]) -> List[FeatureView]:
         """Get FeatureViews of this service. This will automatically filter out the feature view not given by parameters.
@@ -87,35 +91,41 @@ class Service(BaseModel):
         label_view_names = {anchor.view_name for anchor in self.labels}
         return [label_views[label_view_name] for label_view_name in label_view_names]
 
-    def get_feature_entities(self, feature_views: Dict[str, FeatureView]) -> Set[Entity]:
+    def get_feature_entities(self, feature_views: Dict[str, FeatureView]) -> List[Entity]:
         """Get all entities which appeared in related feature views to this service and without duplicate entity.
 
         Args:
             feature_views (Dict[str, FeatureView])
 
         Returns:
-            Set[Entity]
+            List[Entity]
         """
-        return {
-            entity
-            for feature_view in self.get_feature_views(feature_views)
-            for entity in feature_view.entities
-        }
+        return list(
+            dict.fromkeys(
+                entity
+                for feature_view in self.get_feature_views(feature_views)
+                for entity in feature_view.entities
+            )
+        )
 
-    def get_label_entities(self, label_views: Dict[str, LabelView]) -> Set[str]:
+    def get_label_entities(self, label_views: Dict[str, LabelView]) -> List[str]:
         """Get all entities which appeared in related label views to this service and without duplicate entity.
 
         Args:
             label_views (Dict[str, LabelView])
 
         Returns:
-            Set[str]
+            List[str]
         """
-        return {entity for label_view in self.get_label_views(label_views) for entity in label_view.entities}
+        return list(
+            dict.fromkeys(
+                entity for label_view in self.get_label_views(label_views) for entity in label_view.entities
+            )
+        )
 
     def get_entities(
         self, feature_views: Dict[str, FeatureView], label_views: Dict[str, LabelView]
-    ) -> Set[str]:
+    ) -> List[str]:
         """Get all entities which appeared in this service and without duplicate entity.
 
         Args:
@@ -123,10 +133,8 @@ class Service(BaseModel):
             label_views (Dict[str, LabelView])
 
         Returns:
-            Set[str]
+            List[str]
         """
-        return self.get_feature_entities(feature_views).union(self.get_label_entities(label_views))
-
-    # TODO: remove in future
-    def get_label_view(self, label_views: Dict[str, LabelView]) -> LabelView:
-        return self.get_label_views(label_views)[0]
+        return list(
+            dict.fromkeys(self.get_feature_entities(feature_views) + self.get_label_entities(label_views))
+        )

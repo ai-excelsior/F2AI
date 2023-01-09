@@ -1,6 +1,6 @@
 from argparse import ArgumentParser
 from f2ai.common.cmd_parser import get_f2ai_parser, get_materialize_parser
-from f2ai.definitions.backoff_time import cfg_to_date
+from f2ai.definitions import BackOffTime
 from f2ai.featurestore import FeatureStore
 
 TIME_COL = "event_timestamp"
@@ -50,7 +50,12 @@ if __name__ == "__main__":
         fs = init(kwargs.pop("url"))
         fs.get_online_features("credit_scoring_v1", entity_df_loan_features)
     elif command == "materialize":
-        materialize_time = cfg_to_date(
-            kwargs.pop("fromnow"), kwargs.pop("start"), kwargs.pop("end"), kwargs.pop("step")
-        )
-        materialize(kwargs.pop("url"), kwargs.pop("views").split(","), materialize_time, kwargs.pop("online"))
+        from_now = kwargs.pop('fromnow', None)
+        step = kwargs.pop("step", None)
+
+        if from_now is not None:
+            back_off_time = BackOffTime.from_now(from_now=from_now, step=step)
+        else:
+            back_off_time = BackOffTime(start=kwargs.pop("start"), end=kwargs.pop('end'), step=step)
+
+        materialize(kwargs.pop("url"), kwargs.pop("views").split(","), back_off_time, kwargs.pop("online"))

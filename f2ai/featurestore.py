@@ -1,8 +1,8 @@
 import os
+import pandas as pd
 from copy import deepcopy
 from datetime import datetime
 from typing import List, Optional, Union
-import pandas as pd
 
 from .definitions.offline_store import OfflineStore
 from .definitions.online_store import OnlineStore
@@ -71,7 +71,7 @@ class FeatureStore:
             ), "Check entity_df make sure it has at least 1 columns and event_timestamp in it"
 
     def _get_features_to_use(
-        self, views, features: list = [], is_numeric: bool = False, choose: str = "both"
+        self, views, features: List[str] = [], is_numeric: bool = False, choose: str = "both"
     ) -> List[Feature]:
         """_summary_
 
@@ -84,26 +84,25 @@ class FeatureStore:
         Returns:
             _type_: corresponding feature(label)
         """
+        view_features: List[Feature] = []
         if isinstance(views, FeatureView):
-            buildin_features = views.get_feature_objects(is_numeric)
-        elif isinstance(views, LabelView):
-            buildin_features = views.get_label_objects(is_numeric)
-        else:  # Service
-            if choose == "labels":
-                buildin_features = views.get_label_objects(self.label_views, is_numeric)
-            elif choose == "features":
-                buildin_features = views.get_feature_objects(self.feature_views, is_numeric)
-            else:
-                buildin_features = views.get_feature_objects(
-                    self.feature_views, is_numeric
-                ) | views.get_label_objects(self.label_views, is_numeric)
+            view_features += views.get_feature_objects(is_numeric)
+
+        if isinstance(views, LabelView):
+            view_features += views.get_label_objects(is_numeric)
+
+        if isinstance(views, Service):
+            if choose == 'features' or choose == 'both':
+                view_features += views.get_feature_objects(self.feature_views, is_numeric)
+
+            if choose == 'labels' or choose == 'both':
+                view_features += views.get_label_objects(self.label_views, is_numeric)
 
         if features:
-            features = set(features)
-            features = list([feature for feature in buildin_features if feature.name in features])
-        else:
-            features = list(set(buildin_features))
-        return features
+            include_features = set(features)
+            return list([feature for feature in view_features if feature.name in include_features])
+
+        return view_features
 
     def _get_keys_to_join(self, view, in_columns: List[str] = None) -> List[str]:
         """_summary_
@@ -117,11 +116,11 @@ class FeatureStore:
         """
 
         if isinstance(view, FeatureView):
-            available_entity_names = list(view.entities)
+            available_entity_names = view.entities
         elif isinstance(view, LabelView):
-            available_entity_names = list(view.entities)
+            available_entity_names = view.entities
         elif isinstance(view, Service):
-            available_entity_names = list(view.get_entities(self.feature_views, self.label_views))
+            available_entity_names = view.get_entities(self.feature_views, self.label_views)
         else:
             raise TypeError("must be FeatureViews, LabelViews or Service")
 
@@ -171,7 +170,7 @@ class FeatureStore:
         self,
         feature_view: Union[str, FeatureView, Service],
         entity_df: Union[pd.DataFrame, str],
-        features: list = None,
+        features: List[str] = None,
         include: bool = True,
         **kwargs,
     ) -> pd.DataFrame:

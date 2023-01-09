@@ -42,7 +42,7 @@ def read_file(
 ):
     path = Path(remove_prefix(path, "file://"))
     dtypes = {en: str for en in str_cols}
-    usecols = list(set(keep_cols + parse_dates + str_cols))
+    usecols = list(dict.fromkeys(keep_cols + parse_dates + str_cols))
 
     if file_format is None:
         file_format = path.parts[-1].split(".")[-1]
@@ -177,7 +177,8 @@ def write_df_to_dataset(data: pd.DataFrame, root_path: str, time_col: str, perio
 def read_df_from_dataset(root_path: str, usecols: List[str] = []) -> pd.DataFrame:
     from pyarrow.parquet import ParquetDataset
 
-    table = ParquetDataset(root_path).read(columns=usecols)
+    ds = ParquetDataset(root_path, use_legacy_dataset=True)
+    table = ds.read(columns=usecols)
     df: pd.DataFrame = table.to_pandas()
     drop_columns = [col_name for col_name in df.columns if col_name.startswith("_f2ai_")]
     return df.drop(columns=drop_columns)

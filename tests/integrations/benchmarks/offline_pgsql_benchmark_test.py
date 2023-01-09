@@ -3,7 +3,7 @@ import timeit
 from f2ai import FeatureStore
 from f2ai.definitions import StatsFunctions
 from f2ai.common.sampler import GroupFixednbrSampler
-from f2ai.definitions.backoff_time import cfg_to_date
+from f2ai.definitions import BackOffTime
 
 
 def get_guizhou_traffic_entities(store: FeatureStore):
@@ -102,8 +102,8 @@ def test_dataset_to_pytorch_pgsql(make_guizhou_traffic):
 def test_materialize(make_guizhou_traffic):
     project_folder = make_guizhou_traffic("pgsql")
     store = FeatureStore(project_folder)
-    backoff_time = cfg_to_date(
-        fromnow=None, start="2016-03-01 08:02:00+08", end="2016-03-01 08:06:00+08", step="4 minutes"
+    backoff_time = BackOffTime(
+        start="2016-03-01 08:02:00+08", end="2016-03-01 08:06:00+08", step="4 minutes"
     )
     measured_time = timeit.timeit(
         lambda: store.materialize(

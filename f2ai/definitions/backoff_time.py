@@ -20,7 +20,7 @@ class BackOffTime:
         self,
         start: Union[str, pd.Timestamp],
         end: Union[str, pd.Timestamp],
-        step: Union[str, Period],
+        step: Union[str, Period] = "1 day",
     ) -> None:
         if isinstance(start, str):
             start = pd.Timestamp(start)
@@ -41,8 +41,8 @@ class BackOffTime:
 
     def to_units(self) -> Iterator[Period]:
         pd_offset = self.step.to_pandas_dateoffset()
-        start = self.step.normalize(self.start, 'ceil')
-        end = self.step.normalize(self.end, 'floor')
+        start = self.step.normalize(self.start, "ceil")
+        end = self.step.normalize(self.end, "floor")
 
         bins = pd.date_range(
             start=start,
@@ -56,25 +56,8 @@ class BackOffTime:
                 step=self.step,
             )
 
-
-def cfg_to_date(fromnow, start, end, step):
-
-    if fromnow:
+    @classmethod
+    def from_now(cls, from_now: str, step: str = None):
         end = pd.to_datetime(datetime.now(), utc=True)
-        start = end - Period.from_str(fromnow).to_py_timedelta()
-    else:
-        start = pd.to_datetime(start, utc=True) if start else pd.to_datetime(0, utc=True)
-        end = pd.to_datetime(end, utc=True) if end else pd.to_datetime(datetime.now(), utc=True)
-
-    return BackOffTime(start=start, end=end, step=Period.from_str(step))
-
-
-def backoff_to_split(backoff: BackOffTime):
-    bins = pd.date_range(
-        start=backoff.start,
-        end=backoff.end + backoff.step.to_py_timedelta(),
-        freq=backoff.step.to_py_timedelta(),
-        inclusive="both",
-    )
-    res = [x for x in zip(bins[:-1], bins[1:])]
-    return res
+        start = end - Period.from_str(from_now).to_py_timedelta()
+        return BackOffTime(start=start, end=end, step=step)

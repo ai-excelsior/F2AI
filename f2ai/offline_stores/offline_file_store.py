@@ -217,9 +217,13 @@ class OfflineFileStore(OfflineStore):
             df = cls._point_in_time_filter(df, include=include, ttl=ttl)
             df = cls._point_in_time_latest(df, join_keys, created_timestamp_field)
 
-        return df.drop(
+        df = df.drop(
             columns=[SOURCE_EVENT_TIMESTAMP_FIELD, created_timestamp_field], errors="ignore"
         ).rename(columns={ENTITY_EVENT_TIMESTAMP_FIELD: DEFAULT_EVENT_TIMESTAMP_FIELD})
+
+        # move join_keys ahead
+        desired_column_order = sorted(df.columns, key=lambda x: x in join_keys, reverse=True)
+        return df[desired_column_order]
 
     @classmethod
     def _point_on_time_join(
