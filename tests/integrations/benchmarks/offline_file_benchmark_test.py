@@ -2,7 +2,7 @@ import pandas as pd
 import timeit
 from os import path
 from f2ai import FeatureStore
-from f2ai.dataset import GroupFixednbrSampler
+from f2ai.dataset import GroupFixedNumberSampler
 from f2ai.definitions import BackOffTime, Period
 
 LINE_LIMIT = 1000
@@ -108,7 +108,7 @@ def test_sampler_with_groups(make_credit_score):
     groups = store.stats("loan_features", group_keys=["zipcode", "dob_ssn"], fn="unique")
     groups = list(zip(groups["zipcode"], groups["dob_ssn"]))
     measured_time = timeit.timeit(
-        lambda: GroupFixednbrSampler(
+        lambda: GroupFixedNumberSampler(
             time_bucket="10 days",
             stride=1,
             group_ids=groups,
@@ -130,7 +130,7 @@ def test_dataset_to_pytorch(make_credit_score):
     store.materialize(service="credit_scoring_v1", backoff=backoff)
     ds = store.get_dataset(
         service="credit_scoring_v1",
-        sampler=GroupFixednbrSampler(
+        sampler=GroupFixedNumberSampler(
             time_bucket="10 days",
             stride=1,
             group_ids=None,

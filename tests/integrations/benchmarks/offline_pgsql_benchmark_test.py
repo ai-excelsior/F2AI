@@ -2,7 +2,7 @@ import pandas as pd
 import timeit
 from f2ai import FeatureStore
 from f2ai.definitions import StatsFunctions
-from f2ai.dataset import GroupFixednbrSampler
+from f2ai.dataset import GroupFixedNumberSampler
 from f2ai.definitions import BackOffTime
 
 
@@ -86,7 +86,7 @@ def test_dataset_to_pytorch_pgsql(make_guizhou_traffic):
     store = FeatureStore(project_folder)
     ds = store.get_dataset(
         service="traval_time_prediction_embedding_v1",
-        sampler=GroupFixednbrSampler(
+        sampler=GroupFixedNumberSampler(
             time_bucket="1 hours",
             stride=1,
             group_ids=None,

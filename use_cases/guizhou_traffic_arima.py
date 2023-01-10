@@ -7,7 +7,7 @@ import pmdarima as pm
 import matplotlib.pyplot as plt
 from sklearn.metrics import mean_squared_error
 from pmdarima.model_selection import train_test_split
-from f2ai.dataset import GroupFixednbrSampler
+from f2ai.dataset import GroupFixedNumberSampler
 from f2ai.common.utils import get_bucket_from_oss_url
 from f2ai.featurestore import FeatureStore
 
@@ -53,7 +53,7 @@ if __name__ == "__main__":
 
     sample = fs.get_dataset(
         service="traval_time_prediction_embedding_v1",
-        sampler=GroupFixednbrSampler(
+        sampler=GroupFixedNumberSampler(
             time_bucket="20 minutes",
             stride=4,
             group_ids=list(unique_entity["link_id"].map(lambda x: str(x))),

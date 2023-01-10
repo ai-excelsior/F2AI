@@ -1,10 +1,10 @@
 import numpy as np
-import math
 import pandas as pd
 import warnings
-from typing import Union, List, Any
-import datetime
 import abc
+from typing import Union, List, Any, Dict
+
+from ..definitions import Period
 
 TIME_COL = "event_timestamp"
 
@@ -12,59 +12,60 @@ TIME_COL = "event_timestamp"
 class AbstractSampler:
     @abc.abstractmethod
     def __call__(self, *args: Any, **kwds: Any) -> pd.DataFrame:
-        """_summary_
+        """
+        Get all sample results, which usually is an entity_df
+
+        Returns:
+            pd.DataFrame: An entity_dataframe used to query features or labels
+        """
+        pass
+
+    @abc.abstractmethod
+    def __iter__(self, *args: Any, **kwds: Any) -> Dict:
+        """
+        Iterable way to get sample result.
 
         Returns:
             pd.DataFrame: _description_
         """
         pass
 
-    @abc.abstractmethod
-    def __iter__(self, *args: Any, **kwds: Any) -> pd.DataFrame:
-        pass
 
+class EvenTimeSampler(AbstractSampler):
+    """
+    A sampler which using time to generate query entity dataframe. This sampler generally useful when you don't have entity keys.
+    """
 
-class TimeBucketSampler(AbstractSampler):
-    def __init__(self, time_bucket: str, stride: int, start: str = None, end: str = None):
+    def __init__(self, start: str, end: str, period: Union[str, Period]):
         """
-        args
-        time_bucket:size of time_bucket like "2 days" or "10 minutes".
-        stride: stride like 4 or 5, int type.
-        start: start of dataset for sample
-        end:end of dataset for sample
+        evenly sample from a range of time, with given period.
 
+        Args:
+            start (str): start datetime
+            end (str): end datetime
+            period (str): a period string, egg: '1 day'.
         """
-        self._time_bucket = time_bucket
-        self._start = pd.to_datetime(start, utc=True) if start else pd.to_datetime(0, utc=True)
-        self._end = pd.to_datetime(end, utc=True) if start else pd.to_datetime(datetime.now(), utc=True)
-        self._stride = stride
+        if isinstance(start, str):
+            start = pd.to_datetime(start)
+        if isinstance(end, str):
+            end = pd.to_datetime(end)
 
-        assert self._end > self._start, "end should be greater than start!"
-        assert self._stride <= int(
-            self._time_bucket.split(" ", 1)[0]
-        ), "time_bucket should be no less than stride!"
+        self._start = start
+        self._end = end
+        self._period = Period.from_str(period)
 
-    def time_bucket_num(self):
+    def __call__(self) -> pd.DataFrame:
+        return pd.DataFrame(
+            {"event_timestamp": pd.date_range(self._start, self._end, freq=self._period.to_pandas_freq_str())}
+        )
 
-        delta = self._end - self._start
-        delta_days = delta.components.days
-        delta_months = delta_days // 30
-        delta_weeks = delta_days // 7
-        delta_hours = delta.components.hours + delta_days * 24
-        delta_minutes = delta.components.minutes + delta_hours * 60
-        delta_seconds = delta.components.seconds + delta_minutes * 60
-        delta_milliseconds = delta.components.milliseconds + delta_seconds * 1000
-
-        time_freq = self._time_bucket.split(" ", 1)[1]
-
-        bucket_num = math.ceil(locals()[f"delta_{time_freq}"] / int(self._time_bucket.split(" ", 1)[0])) + 1
-        return bucket_num
-
-    def __call__(self):
-        raise ValueError("error!")
+    def __iter__(self) -> Dict:
+        datetime_indexes = pd.date_range(self._start, self._end, freq=self._period.to_pandas_freq_str())
+        for i in datetime_indexes:
+            yield dict(event_timestamp=i)
 
 
-class GroupFixednbrSampler(TimeBucketSampler):
+class GroupFixedNumberSampler(AbstractSampler):
     def __init__(
         self,
         time_bucket: str,
@@ -142,7 +143,7 @@ class GroupFixednbrSampler(TimeBucketSampler):
         return self.sample(bucket_mask)
 
 
-class GroupRandomSampler(GroupFixednbrSampler):
+class GroupRandomSampler(GroupFixedNumberSampler):
     def __init__(
         self,
         time_bucket: str,
@@ -169,7 +170,7 @@ class GroupRandomSampler(GroupFixednbrSampler):
         return self.sample(bucket_mask)
 
 
-class UniformNPerGroupSampler(GroupFixednbrSampler):
+class UniformNPerGroupSampler(GroupFixedNumberSampler):
     def __init__(
         self,
         time_bucket: str,
