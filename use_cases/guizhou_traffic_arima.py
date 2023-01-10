@@ -7,7 +7,7 @@ import pmdarima as pm
 import matplotlib.pyplot as plt
 from sklearn.metrics import mean_squared_error
 from pmdarima.model_selection import train_test_split
-from f2ai.common.sampler import GroupFixednbrSampler
+from f2ai.dataset import GroupFixednbrSampler
 from f2ai.common.utils import get_bucket_from_oss_url
 from f2ai.featurestore import FeatureStore
 

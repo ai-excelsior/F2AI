@@ -92,10 +92,10 @@ class FeatureStore:
             view_features += views.get_label_objects(is_numeric)
 
         if isinstance(views, Service):
-            if choose == 'features' or choose == 'both':
+            if choose == "features" or choose == "both":
                 view_features += views.get_feature_objects(self.feature_views, is_numeric)
 
-            if choose == 'labels' or choose == 'both':
+            if choose == "labels" or choose == "both":
                 view_features += views.get_label_objects(self.label_views, is_numeric)
 
         if features:
@@ -192,8 +192,11 @@ class FeatureStore:
         assert isinstance(
             feature_view, (FeatureView, LabelView, Service)
         ), "only allowed FeatureView, LabelView and Service"
-        feature_objects = self._get_features_to_use(feature_view, features, choose="features")
-        join_keys = self._get_keys_to_join(feature_view, list(entity_df.columns))
+
+        if isinstance(feature_view, Service):
+            feature_objects = self._get_features_to_use(feature_view, features, choose="both")
+        else:
+            feature_objects = self._get_features_to_use(feature_view, features, choose="features")
 
         if isinstance(feature_view, (FeatureView, LabelView)):
             source = self.sources[feature_view.batch_source]
@@ -205,6 +208,7 @@ class FeatureStore:
             [feature.name in entity_df.columns for feature in feature_objects]
         ), "Naming conflict: entity_df should not contain any columns same as features"
 
+        join_keys = self._get_keys_to_join(feature_view, list(entity_df.columns))
         return self.offline_store.get_features(
             entity_df=entity_df,
             features=feature_objects,
@@ -273,11 +277,13 @@ class FeatureStore:
         assert isinstance(feature_view, (FeatureView, Service)), "only allowed FeatureView and Service"
 
         period: Period = -Period.from_str(period)
-        feature_objects = self._get_features_to_use(feature_view, features, choose="features")
-        join_keys = self._get_keys_to_join(feature_view, list(entity_df.columns))
-
         if include is None:
             include = period.is_neg
+
+        if isinstance(feature_view, Service):
+            feature_objects = self._get_features_to_use(feature_view, features, choose="both")
+        else:
+            feature_objects = self._get_features_to_use(feature_view, features, choose="features")
 
         if isinstance(feature_view, (FeatureView, LabelView)):
             source = self.sources[feature_view.batch_source]
@@ -286,6 +292,7 @@ class FeatureStore:
 
         assert source.timestamp_field, "no period can be applied on non-relevant data"
 
+        join_keys = self._get_keys_to_join(feature_view, list(entity_df.columns))
         return self.offline_store.get_period_features(
             entity_df=entity_df,
             features=feature_objects,
@@ -315,14 +322,17 @@ class FeatureStore:
         label_view = self._get_views(label_view)
         assert isinstance(label_view, (LabelView, Service)), "only allowed LabelView and Service"
 
-        feature_objects = self._get_features_to_use(label_view, choose="labels")
-        join_keys = self._get_keys_to_join(label_view, list(entity_df.columns))
+        if isinstance(label_view, Service):
+            feature_objects = self._get_features_to_use(label_view, choose="both")
+        else:
+            feature_objects = self._get_features_to_use(label_view, choose="labels")
 
         if isinstance(label_view, (FeatureView, LabelView)):
             source = self.sources[label_view.batch_source]
         else:
             source = self.offline_store.get_offline_source(label_view)
 
+        join_keys = self._get_keys_to_join(label_view, list(entity_df.columns))
         return self.offline_store.get_features(
             entity_df=entity_df,
             features=feature_objects,
@@ -351,18 +361,22 @@ class FeatureStore:
         """
         self.__check_format(entity_df)
         label_view = self._get_views(label_view)
+
         period: Period = Period.from_str(period)
-        label_objects = self._get_features_to_use(label_view, choose="labels")
-        join_keys = self._get_keys_to_join(label_view, list(entity_df.columns))
+        if include is None:
+            include = period.is_neg
+
+        if isinstance(label_view, Service):
+            label_objects = self._get_features_to_use(label_view, choose="both")
+        else:
+            label_objects = self._get_features_to_use(label_view, choose="labels")
 
         if isinstance(label_view, (FeatureView, LabelView)):
             source = self.sources[label_view.batch_source]
         else:
             source = self.offline_store.get_offline_source(label_view)
 
-        if include is None:
-            include = period.is_neg
-
+        join_keys = self._get_keys_to_join(label_view, list(entity_df.columns))
         return self.offline_store.get_period_features(
             entity_df=entity_df,
             features=label_objects,
@@ -454,7 +468,7 @@ class FeatureStore:
         start: Union[str, datetime] = 0,
         end: Union[str, datetime] = datetime.now(),
     ) -> pd.DataFrame:
-        """_summary_
+        """Get latest entity event timestamp. Useful when you want to know how many combinations of entity do you have, and their event timestamp.
 
         Args:
             view (Union[str, LabelView, Service, FeatureView]): FeatureViews/LabelViews/Service to look up

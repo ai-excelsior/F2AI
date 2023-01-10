@@ -8,6 +8,13 @@ if TYPE_CHECKING:
 
 
 class Dataset:
+    """
+    A dataset is an abstraction, which hold a service and a sampler.
+    A service basic tells us, where is the data. A sampler tells us which parts of the data should be retrieved.
+
+    Note: We should not construct Dataset by ourself. using `store.get_dataset()` is recommended.
+    """
+
     def __init__(
         self,
         fs: "FeatureStore",

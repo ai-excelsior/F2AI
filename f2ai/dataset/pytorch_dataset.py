@@ -14,6 +14,8 @@ QUERY_COL = "query_timestamp"
 
 
 class TorchIterableDataset(IterableDataset):
+    """A pytorch portaled dataset."""
+
     def __init__(
         self,
         fs: "FeatureStore",

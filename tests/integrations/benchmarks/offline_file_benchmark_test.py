@@ -2,7 +2,7 @@ import pandas as pd
 import timeit
 from os import path
 from f2ai import FeatureStore
-from f2ai.common.sampler import GroupFixednbrSampler
+from f2ai.dataset import GroupFixednbrSampler
 from f2ai.definitions import BackOffTime, Period
 
 LINE_LIMIT = 1000

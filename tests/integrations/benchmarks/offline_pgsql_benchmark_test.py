@@ -2,7 +2,7 @@ import pandas as pd
 import timeit
 from f2ai import FeatureStore
 from f2ai.definitions import StatsFunctions
-from f2ai.common.sampler import GroupFixednbrSampler
+from f2ai.dataset import GroupFixednbrSampler
 from f2ai.definitions import BackOffTime
 
 
