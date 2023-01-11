@@ -5,6 +5,7 @@ from .sampler import (
     EvenEventTimestampSampler,
     GroupSampler,
     GroupNInstanceSampler,
+    RandomNTimestampSampler,
 )
 
 __all__ = [
@@ -14,4 +15,5 @@ __all__ = [
     "GroupSampler",
     "GroupNInstanceSampler",
     "GroupFixedNumberSampler",
+    "RandomNTimestampSampler",
 ]

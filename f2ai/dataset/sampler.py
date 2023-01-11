@@ -102,9 +102,51 @@ class EvenEventTimestampSampler(AbstractSampler):
         return pd.date_range(self._start, self._end, freq=self._period.to_pandas_freq_str())
 
 
-class RandomEventTimestampSampler(AbstractSampler):
-    # TODO
-    pass
+class RandomNTimestampSampler(AbstractSampler):
+    """
+    Randomly sample a fixed number of event timestamp in a given time range.
+    """
+
+    def __init__(
+        self,
+        start: str,
+        end: str,
+        period: Union[str, Period],
+        n: int = 1,
+        random_state: int = None,
+    ):
+        """
+        randomly sample fixed number of event timestamp.
+
+        Args:
+            start (str): start datetime
+            end (str): end datetime
+            period (str): a period string, egg: '1 day'.
+        """
+        if isinstance(start, str):
+            start = pd.to_datetime(start)
+        if isinstance(end, str):
+            end = pd.to_datetime(end)
+
+        self._start = start
+        self._end = end
+        self._period = Period.from_str(period)
+
+        self._n = n
+        self._rng = np.random.default_rng(random_state)
+
+    def __call__(self) -> pd.DatetimeIndex:
+        return self._get_date_range()
+
+    def __iter__(self) -> Dict:
+        datetime_indexes = self._get_date_range()
+        for i in datetime_indexes:
+            yield i
+
+    def _get_date_range(self) -> pd.DatetimeIndex:
+        datetimes = pd.date_range(self._start, self._end, freq=self._period.to_pandas_freq_str())
+        indices = sorted(self._rng.choice(range(len(datetimes)), size=self._n, replace=False))
+        return pd.DatetimeIndex([datetimes[i] for i in indices])
 
 
 # TODO: remove this later
@@ -216,12 +258,20 @@ class GroupSampler(AbstractSampler):
 
 class GroupNInstanceSampler(AbstractSampler):
     """
-    Sample N instance from each group.
+    Sample N instance from each group with given probability.
     """
 
     def __init__(
         self, event_timestamp_sampler: EventTimestampSampler, group_df: pd.DataFrame, n=1, random_state=None
     ) -> None:
+        """
+        Args:
+            event_timestamp_sampler (EventTimestampSampler): an EventTimestampSampler instance.
+            group_df (pd.DataFrame): a group_df is a dataframe with contains some entity columns. Optionally, it may contains a columns named `p`, which indicates the probability of this this group.
+            n (int, optional): _description_. Defaults to 1.
+            random_state (_type_, optional): _description_. Defaults to None.
+        """
+
         super().__init__()
 
         self._event_timestamp_sampler = event_timestamp_sampler
@@ -231,13 +281,33 @@ class GroupNInstanceSampler(AbstractSampler):
         self._group_df = group_df
         self._n = n
 
+        if "p" in self._group_df.columns:
+            assert self._group_df["p"].sum() == 1, "sum all weights should be 1"
+
+            take_n = (
+                (self._group_df["p"] * len(self._group_df) * self._n)
+                .round()
+                .astype(int)
+                .rename("_f2ai_take_n_")
+            )
+            self._group_df = pd.concat([self._group_df, take_n], axis=1)
+
     def _sample_n(self, row: pd.DataFrame):
-        event_timestamps = self._rng.choice(self._event_timestamps, size=self._n, replace=False)
-        return pd.merge(row, pd.DataFrame({"event_timestamp": event_timestamps}), how="cross")
+        n_of_examples = self._n
+        if "_f2ai_take_n_" in row.columns:
+            n_of_examples = row["_f2ai_take_n_"].iloc[0]
+
+        event_timestamps = self._rng.choice(self._event_timestamps, size=n_of_examples, replace=False)
+        return pd.merge(
+            row.drop(columns=["p", "_f2ai_take_n_"], errors="ignore"),
+            pd.DataFrame({"event_timestamp": event_timestamps}),
+            how="cross",
+        )
 
     def __call__(self) -> pd.DataFrame:
+        group_keys = [column for column in self._group_df.columns if column not in {"p", "_f2ai_take_n_"}]
         return (
-            self._group_df.groupby(list(self._group_df.columns), group_keys=False, sort=False)
+            self._group_df.groupby(group_keys, group_keys=False, sort=False)
             .apply(self._sample_n)
             .reset_index(drop=True)
         )
@@ -247,8 +317,3 @@ class GroupNInstanceSampler(AbstractSampler):
             sampled_df = self._sample_n(pd.DataFrame([row]))
             for j, row in sampled_df.iterrows():
                 yield row.to_dict()
-
-
-class GroupProbSampler(AbstractSampler):
-    # TODO
-    pass
