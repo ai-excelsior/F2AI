@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import warnings
 import abc
-from typing import Union, List, Any, Dict
+from typing import Union, Any, Dict
 
 from ..definitions import Period
 
@@ -10,6 +10,16 @@ TIME_COL = "event_timestamp"
 
 
 class AbstractSampler:
+    @property
+    def iterable(self):
+        # TODO
+        pass
+
+    @property
+    def iterable_only(self):
+        # TODO
+        pass
+
     @abc.abstractmethod
     def __call__(self, *args: Any, **kwds: Any) -> pd.DataFrame:
         """
@@ -31,7 +41,33 @@ class AbstractSampler:
         pass
 
 
-class EvenTimeSampler(AbstractSampler):
+class EventTimestampSampler(AbstractSampler):
+    """
+    This sampler is used to sample event_timestamp column. Customization could be done by inheriting this class.
+    """
+
+    @abc.abstractmethod
+    def __call__(self, *args: Any, **kwds: Any) -> pd.DatetimeIndex:
+        """
+        Get all sample results
+
+        Returns:
+            pd.DatetimeIndex: An datetime index
+        """
+        pass
+
+    @abc.abstractmethod
+    def __iter__(self, *args: Any, **kwds: Any) -> pd.Timestamp:
+        """
+        Iterable way to get sample result.
+
+        Returns:
+            pd.Timestamp
+        """
+        pass
+
+
+class EvenEventTimestampSampler(AbstractSampler):
     """
     A sampler which using time to generate query entity dataframe. This sampler generally useful when you don't have entity keys.
     """
@@ -54,17 +90,24 @@ class EvenTimeSampler(AbstractSampler):
         self._end = end
         self._period = Period.from_str(period)
 
-    def __call__(self) -> pd.DataFrame:
-        return pd.DataFrame(
-            {"event_timestamp": pd.date_range(self._start, self._end, freq=self._period.to_pandas_freq_str())}
-        )
+    def __call__(self) -> pd.DatetimeIndex:
+        return self._get_date_range()
 
     def __iter__(self) -> Dict:
-        datetime_indexes = pd.date_range(self._start, self._end, freq=self._period.to_pandas_freq_str())
+        datetime_indexes = self._get_date_range()
         for i in datetime_indexes:
-            yield dict(event_timestamp=i)
+            yield i
+
+    def _get_date_range(self) -> pd.DatetimeIndex:
+        return pd.date_range(self._start, self._end, freq=self._period.to_pandas_freq_str())
 
 
+class RandomEventTimestampSampler(AbstractSampler):
+    # TODO
+    pass
+
+
+# TODO: remove this later
 class GroupFixedNumberSampler(AbstractSampler):
     def __init__(
         self,
@@ -143,61 +186,69 @@ class GroupFixedNumberSampler(AbstractSampler):
         return self.sample(bucket_mask)
 
 
-class GroupRandomSampler(GroupFixedNumberSampler):
+class GroupSampler(AbstractSampler):
+    """
+    Sample every group with given event_timestamp_sampler.
+    """
+
     def __init__(
-        self,
-        time_bucket: str,
-        stride: int,
-        ratio: float,
-        start: str = None,
-        end: str = None,
-        group_ids: List[str] = None,
-        group_names: list = None,
-    ):
-        super().__init__(time_bucket, stride, start, end)
-        self._group_ids = group_ids
-        self._ratio = ratio
-        self._group_names = group_names
+        self, event_timestamp_sampler: EventTimestampSampler, group_df: pd.DataFrame, random_state: int = None
+    ) -> None:
+        super().__init__()
 
-    def random_bucket(self):
-        bucket_num = self.time_bucket_num()
-        bucket_mask = np.zeros(bucket_num)
-        bucket_mask[np.where(np.random.random_sample(bucket_num) < self._ratio)[0]] = 1
-        return list(bucket_mask)
+        self._event_timestamp_sampler = event_timestamp_sampler
+        self._rng = np.random.default_rng(random_state)
 
-    def __call__(self):
-        bucket_mask = self.random_bucket()
-        return self.sample(bucket_mask)
+        self._group_df = group_df
+
+    def __call__(self) -> pd.DataFrame:
+        return pd.merge(
+            pd.DataFrame({"event_timestamp": self._event_timestamp_sampler()}), self._group_df, how="cross"
+        )[list(self._group_df.columns) + ["event_timestamp"]]
+
+    def __iter__(self) -> Dict:
+        for event_timestamp in iter(self._event_timestamp_sampler):
+            for _, entity_row in self._group_df.iterrows():
+                d = entity_row.to_dict()
+                d["event_timestamp"] = event_timestamp
+                yield d
 
 
-class UniformNPerGroupSampler(GroupFixedNumberSampler):
+class GroupNInstanceSampler(AbstractSampler):
+    """
+    Sample N instance from each group.
+    """
+
     def __init__(
-        self,
-        time_bucket: str,
-        stride: int,
-        n_groups: int,
-        avg_nbr: int,
-        start: str = None,
-        end: str = None,
-        group_ids: List[str] = None,
-        group_names: list = None,
-    ):
-        super().__init__(time_bucket, stride, start, end)
-        self._group_ids = group_ids
-        self._n_groups = n_groups
-        self._avg_nbr = avg_nbr
-        self._group_names = group_names
+        self, event_timestamp_sampler: EventTimestampSampler, group_df: pd.DataFrame, n=1, random_state=None
+    ) -> None:
+        super().__init__()
 
-    def random_bucket(self):
-        bucket_num = self.time_bucket_num()
-        bucket_mask = np.zeros(bucket_num)
-        avg_length = bucket_num // self._n_groups
-        assert avg_length > 0, "time_bucket should be smaller to ensure every group have at least one bucket."
-        p = self._avg_nbr / avg_length
-        assert p < 1, "p is too large!"
-        bucket_mask[np.where(np.random.random_sample(self._n_groups) < p)[0]] = 1
-        return list(bucket_mask)
+        self._event_timestamp_sampler = event_timestamp_sampler
+        self._rng = np.random.default_rng(seed=random_state)
 
-    def __call__(self):
-        bucket_mask = self.random_bucket()
-        return self.sample(bucket_mask)
+        self._event_timestamps = self._event_timestamp_sampler()
+        self._group_df = group_df
+        self._n = n
+
+    def _sample_n(self, row: pd.DataFrame):
+        event_timestamps = self._rng.choice(self._event_timestamps, size=self._n, replace=False)
+        return pd.merge(row, pd.DataFrame({"event_timestamp": event_timestamps}), how="cross")
+
+    def __call__(self) -> pd.DataFrame:
+        return (
+            self._group_df.groupby(list(self._group_df.columns), group_keys=False, sort=False)
+            .apply(self._sample_n)
+            .reset_index(drop=True)
+        )
+
+    def __iter__(self) -> Dict:
+        for i, row in self._group_df.iterrows():
+            sampled_df = self._sample_n(pd.DataFrame([row]))
+            for j, row in sampled_df.iterrows():
+                yield row.to_dict()
+
+
+class GroupProbSampler(AbstractSampler):
+    # TODO
+    pass
