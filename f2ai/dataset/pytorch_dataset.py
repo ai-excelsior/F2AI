@@ -13,6 +13,7 @@ TIME_COL = "event_timestamp"
 QUERY_COL = "query_timestamp"
 
 
+# TODO: fix this later based on sampler changed
 class TorchIterableDataset(IterableDataset):
     """A pytorch portaled dataset."""
 

@@ -27,7 +27,7 @@ class EntitiesSampler:
         Get all sample results, which usually is an entity_df
 
         Returns:
-            pd.DataFrame: An entity_dataframe used to query features or labels
+            pd.DataFrame: An entity DataFrame used to query features or labels
         """
         pass
 
@@ -37,7 +37,7 @@ class EntitiesSampler:
         Iterable way to get sample result.
 
         Returns:
-            pd.DataFrame: _description_
+            Dict: get one entity item, which contains entity keys and event_timestamp.
         """
         pass
 

@@ -123,15 +123,16 @@ class OfflineFileStore(OfflineStore):
         entity_df: pd.DataFrame = None,
         start: datetime = None,
     ) -> pd.DataFrame:
-        """_summary_
+        """
+        Get latest entity keys and it's event timestamp.
 
         Args:
-            source (FileSource): data source of featureview
+            source (FileSource): Where to find data
             group_keys (list, optional): dimension of stats. Defaults to [].
             entity_df (pd.DataFrame, optional): query condition specified by users. Defaults to None.
 
         Returns:
-            pd.DataFrame: _description_
+            pd.DataFrame: A dataframe
         """
         source_df = self._read_file(source=source, features=[], join_keys=group_keys)
         source_df = source_df.rename(columns={source.timestamp_field: SOURCE_EVENT_TIMESTAMP_FIELD})
@@ -188,7 +189,7 @@ class OfflineFileStore(OfflineStore):
             how (str, optional): merge method. Defaults to "inner".
 
         Returns:
-            pd.DataFrame: _description_
+            pd.DataFrame: A point in time joined dataframe.
         """
         # renames to keep things simple
         if timestamp_field:
@@ -251,7 +252,7 @@ class OfflineFileStore(OfflineStore):
             how (str, optional): merge method. Defaults to "inner".
 
         Returns:
-            pd.Dataframe: _description_
+            pd.Dataframe: A point on time joined dataframe
         """
         # renames to keep things simple
         entity_df = entity_df.rename(columns={DEFAULT_EVENT_TIMESTAMP_FIELD: ENTITY_EVENT_TIMESTAMP_FIELD})
@@ -299,13 +300,13 @@ class OfflineFileStore(OfflineStore):
 
         Args:
             df (pd.DataFrame): DataFrame to filter
-            include (bool, optional): whether take < entity_timestamp_field or <= entity_timestamp_field. Defaults to True
-            ttl (Optional[Period], optional): requirement of timeliness of featureview . Defaults to None means no requirement
-            entity_timestamp_field (str, optional): timestamp speicified by users. Defaults to ENTITY_EVENT_TIMESTAMP_FIELD.
+            include (bool, optional): Whether include event timestamp. If true, the query result will located in (entity_timestamp - ttl, entity_timestamp]. Otherwise, it will located in [entity_timestamp - ttl, entity_timestamp) Defaults to True
+            ttl (Optional[Period], optional): requirement of timeliness of feature_view . Defaults to None means no requirement
+            entity_timestamp_field (str, optional): timestamp specified by users. Defaults to ENTITY_EVENT_TIMESTAMP_FIELD.
             source_timestamp_field (str, optional): timestamp recorded in data. Defaults to SOURCE_EVENT_TIMESTAMP_FIELD.
 
         Returns:
-            pd.DataFrame: _description_
+            pd.DataFrame: filtered DataFrame using different time meaning.
         """
 
         earliest_timestamp = None
@@ -332,7 +333,8 @@ class OfflineFileStore(OfflineStore):
         entity_timestamp_field: str = ENTITY_EVENT_TIMESTAMP_FIELD,
         source_timestamp_field: str = SOURCE_EVENT_TIMESTAMP_FIELD,
     ) -> pd.DataFrame:
-        """_summary_
+        """
+        filter dataframe with given time meaning.
 
         Args:
             df (pd.DataFrame): DataFrame to filter
@@ -343,7 +345,7 @@ class OfflineFileStore(OfflineStore):
             source_timestamp_field (str, optional): timestamp recorded in data. Defaults to SOURCE_EVENT_TIMESTAMP_FIELD.
 
         Returns:
-            pd.DataFrame: _description_
+            pd.DataFrame: filtered DataFrame.
         """
 
         earliest_timestamp = None
@@ -393,7 +395,8 @@ class OfflineFileStore(OfflineStore):
         entity_timestamp_field: str = ENTITY_EVENT_TIMESTAMP_FIELD,
         source_timestamp_field: str = SOURCE_EVENT_TIMESTAMP_FIELD,
     ) -> pd.DataFrame:
-        """_summary_
+        """
+        get latest entity row if there are duplicate exist.
 
         Args:
             df (pd.DataFrame,): DataFrame, to be filter
@@ -403,7 +406,7 @@ class OfflineFileStore(OfflineStore):
             source_timestamp_field (str, optional): event taken time col, Defaults to `SOURCE_EVENT_TIMESTAMP_FIELD`
 
         Returns:
-            pd.DataFrame,: _description_
+            pd.DataFrame: filtered DataFrame
         """
         sort_by = [source_timestamp_field]
         if created_timestamp_field:

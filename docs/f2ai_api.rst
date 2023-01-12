@@ -11,6 +11,15 @@ featurestore
    :show-inheritance:
 
 
+dataset
+------------------------------
+
+.. automodule:: f2ai.dataset
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+
 definitions
 -----------------------------
 

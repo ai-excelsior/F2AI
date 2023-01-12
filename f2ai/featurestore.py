@@ -478,7 +478,7 @@ class FeatureStore:
             end (Union[str, pd.Timestamp], optional): end time to look up. Defaults to None.
 
         Returns:
-            pd.DataFrame: _description_
+            pd.DataFrame: A DataFrame with entity keys and latest event timestamp.
 
         """
         view = self._get_views(view)

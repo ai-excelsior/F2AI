@@ -16,17 +16,6 @@ def materialize(url, views, backoff, online):
     for view in views:
         fs.materialize(view, backoff, online)
 
-        # fs.get_online_features(view, entity_df=fs.get_latest_entities(view="loan_features"))
-
-    # for view in views:
-    #     try:
-    #         fs.materialize(view, backoff, online)
-    #         print(f"{view} materialize done")
-    #     except:
-    #         print(
-    #             f"{view} materialize failed, please check whether view can be materialized in online={online} mode"
-    #         )
-
 
 if __name__ == "__main__":
     parser = ArgumentParser()
@@ -50,12 +39,12 @@ if __name__ == "__main__":
         fs = init(kwargs.pop("url"))
         fs.get_online_features("credit_scoring_v1", entity_df_loan_features)
     elif command == "materialize":
-        from_now = kwargs.pop('fromnow', None)
+        from_now = kwargs.pop("fromnow", None)
         step = kwargs.pop("step", None)
 
         if from_now is not None:
             back_off_time = BackOffTime.from_now(from_now=from_now, step=step)
         else:
-            back_off_time = BackOffTime(start=kwargs.pop("start"), end=kwargs.pop('end'), step=step)
+            back_off_time = BackOffTime(start=kwargs.pop("start"), end=kwargs.pop("end"), step=step)
 
         materialize(kwargs.pop("url"), kwargs.pop("views").split(","), back_off_time, kwargs.pop("online"))
