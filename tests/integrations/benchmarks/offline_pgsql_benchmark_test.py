@@ -2,7 +2,7 @@ import pandas as pd
 import timeit
 from f2ai import FeatureStore
 from f2ai.definitions import StatsFunctions
-from f2ai.dataset import GroupFixedNumberSampler
+from f2ai.dataset import EvenEventsSampler, NoEntitiesSampler
 from f2ai.definitions import BackOffTime
 
 
@@ -84,16 +84,11 @@ def test_get_period_features_from_feature_view(make_guizhou_traffic):
 def test_dataset_to_pytorch_pgsql(make_guizhou_traffic):
     project_folder = make_guizhou_traffic("pgsql")
     store = FeatureStore(project_folder)
+    events_sampler = EvenEventsSampler(start="2016-03-05 00:00:00", end="2016-03-06 00:00:00", period='1 hours')
+
     ds = store.get_dataset(
         service="traval_time_prediction_embedding_v1",
-        sampler=GroupFixedNumberSampler(
-            time_bucket="1 hours",
-            stride=1,
-            group_ids=None,
-            group_names=None,
-            start="2016-03-05 00:00:00",
-            end="2016-03-06 00:00:00",
-        ),
+        sampler=NoEntitiesSampler(events_sampler),
     )
     measured_time = timeit.timeit(lambda: list(ds.to_pytorch(64)), number=1)
     print(f"dataset.to_pytorch pgsql performance: {measured_time}s")

@@ -2,7 +2,7 @@ import pandas as pd
 import timeit
 from os import path
 from f2ai import FeatureStore
-from f2ai.dataset import GroupFixedNumberSampler
+from f2ai.dataset import EvenEventsSampler, FixedNEntitiesSampler, NoEntitiesSampler
 from f2ai.definitions import BackOffTime, Period
 
 LINE_LIMIT = 1000
@@ -105,17 +105,14 @@ def test_get_latest_entity_from_feature_view(make_credit_score):
 def test_sampler_with_groups(make_credit_score):
     project_folder = make_credit_score("file")
     store = FeatureStore(project_folder)
-    groups = store.stats("loan_features", group_keys=["zipcode", "dob_ssn"], fn="unique")
-    groups = list(zip(groups["zipcode"], groups["dob_ssn"]))
+    group_df = store.stats("loan_features", group_keys=["zipcode", "dob_ssn"], fn="unique")
+    events_sampler = EvenEventsSampler(start='2020-08-20', end='2021-08-30', period='10 days')
+    entities_sampler = FixedNEntitiesSampler(
+        events_sampler,
+        group_df=group_df,
+    )
     measured_time = timeit.timeit(
-        lambda: GroupFixedNumberSampler(
-            time_bucket="10 days",
-            stride=1,
-            group_ids=groups,
-            group_names=["zipcode", "dob_ssn"],
-            start="2020-08-20",
-            end="2021-08-30",
-        )(),
+        lambda: entities_sampler(),
         number=1,
     )
     print(f"sampler with groups performance: {measured_time}s")
@@ -128,16 +125,11 @@ def test_dataset_to_pytorch(make_credit_score):
     )
     store = FeatureStore(project_folder)
     store.materialize(service="credit_scoring_v1", backoff=backoff)
+
+    events_sampler = EvenEventsSampler(start='2020-08-20', end='2021-08-30', period='10 days')
     ds = store.get_dataset(
         service="credit_scoring_v1",
-        sampler=GroupFixedNumberSampler(
-            time_bucket="10 days",
-            stride=1,
-            group_ids=None,
-            group_names=None,
-            start="2020-08-20",
-            end="2021-09-01",
-        ),
+        sampler=NoEntitiesSampler(events_sampler),
     )
     measured_time = timeit.timeit(lambda: list(ds.to_pytorch()), number=1)
     print(f"dataset.to_pytorch performance: {measured_time}s")

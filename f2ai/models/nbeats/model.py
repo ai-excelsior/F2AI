@@ -5,7 +5,7 @@ from typing import List, Dict, Tuple
 from torch.utils.data import DataLoader
 
 from f2ai.featurestore import FeatureStore
-from f2ai.dataset import GroupFixedNumberSampler
+from f2ai.dataset import EvenEventsSampler, NoEntitiesSampler
 from f2ai.common.collect_fn import nbeats_collet_fn
 
 from submodules import NBEATSGenericBlock, NBEATSSeasonalBlock, NBEATSTrendBlock, MultiEmbedding
@@ -216,16 +216,14 @@ if __name__ == "__main__":
 
     fs = FeatureStore("file:///Users/zhao123456/Desktop/gitlab/guizhou_traffic")
 
+    events_sampler = EvenEventsSampler(
+        start=fs.get_latest_entities(fs.services["traval_time_prediction_embedding_v1"])[TIME_COL].min(),
+        end=fs.get_latest_entities(fs.services["traval_time_prediction_embedding_v1"])[TIME_COL].max(),
+        period="10 minutes",
+    )
     dataset = fs.get_dataset(
         service="traval_time_prediction_embedding_v1",
-        sampler=GroupFixedNumberSampler(
-            time_bucket="10 minutes",
-            stride=1,
-            group_ids=None,
-            group_names=None,
-            start=fs.get_latest_entities(fs.services["traval_time_prediction_embedding_v1"])[TIME_COL].min(),
-            end=fs.get_latest_entities(fs.services["traval_time_prediction_embedding_v1"])[TIME_COL].max(),
-        ),
+        sampler=NoEntitiesSampler(events_sampler),
     )
 
     features_cat = [

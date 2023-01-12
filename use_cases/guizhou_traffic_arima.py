@@ -7,7 +7,7 @@ import pmdarima as pm
 import matplotlib.pyplot as plt
 from sklearn.metrics import mean_squared_error
 from pmdarima.model_selection import train_test_split
-from f2ai.dataset import GroupFixedNumberSampler
+from f2ai.dataset import EvenEventsSampler, FixedNEntitiesSampler
 from f2ai.common.utils import get_bucket_from_oss_url
 from f2ai.featurestore import FeatureStore
 
@@ -35,14 +35,7 @@ if __name__ == "__main__":
         if entity_name in fs._get_features_to_use(fs.services["traval_time_prediction_embedding_v1"])
     ]
 
-    # print(
-    #     f'Earliest timestamp: {fs.get_latest_entities("traval_time_prediction_embedding_v1")[TIME_COL].min()}'
-    # )
-    # print(
-    #     f'Latest timestamp: {fs.get_latest_entities("traval_time_prediction_embedding_v1")[TIME_COL].max()}'
-    # )
-
-    unique_entity = fs.stats(
+    group_df = fs.stats(
         "traval_time_prediction_embedding_v1",
         fn="unique",
         group_key=[],
@@ -51,16 +44,11 @@ if __name__ == "__main__":
         features=["link_id"],
     )
 
+    events_sampler = EvenEventsSampler(start="2016-03-01", end="2016-03-10", period="20 minutes")
+    entity_sampler = FixedNEntitiesSampler(events_sampler, group_df, n=4)
     sample = fs.get_dataset(
         service="traval_time_prediction_embedding_v1",
-        sampler=GroupFixedNumberSampler(
-            time_bucket="20 minutes",
-            stride=4,
-            group_ids=list(unique_entity["link_id"].map(lambda x: str(x))),
-            group_names=["link_id"],
-            start="2016-03-01",
-            end="2016-03-10",
-        ),
+        sampler=entity_sampler,
     )
     ids = sample.to_pytorch()
     entity_df = ids.entity_index

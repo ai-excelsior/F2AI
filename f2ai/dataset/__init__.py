@@ -1,19 +1,25 @@
 from .dataset import Dataset
 from .pytorch_dataset import TorchIterableDataset
-from .sampler import (
-    GroupFixedNumberSampler,
-    EvenEventTimestampSampler,
-    GroupSampler,
-    GroupNInstanceSampler,
-    RandomNTimestampSampler,
+from .events_sampler import (
+    EventsSampler,
+    EvenEventsSampler,
+    RandomNEventsSampler,
+)
+from .entities_sampler import (
+    EntitiesSampler,
+    NoEntitiesSampler,
+    EvenEntitiesSampler,
+    FixedNEntitiesSampler,
 )
 
 __all__ = [
     "Dataset",
     "TorchIterableDataset",
-    "EvenEventTimestampSampler",
-    "GroupSampler",
-    "GroupNInstanceSampler",
-    "GroupFixedNumberSampler",
-    "RandomNTimestampSampler",
+    "EventsSampler",
+    "EvenEventsSampler",
+    "RandomNEventsSampler",
+    "EntitiesSampler",
+    "NoEntitiesSampler",
+    "EvenEntitiesSampler",
+    "FixedNEntitiesSampler",
 ]
