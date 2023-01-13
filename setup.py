@@ -12,7 +12,7 @@ setup(
     author="上海半见",
     license="MIT",
     zip_safe=False,
-    packages=find_namespace_packages(exclude=['docs', 'tests', 'tests.*', 'use_cases', '*.egg-info']),
+    packages=find_namespace_packages(exclude=["docs", "tests", "tests.*", "use_cases", "*.egg-info"]),
     install_requires=[str(x.requirement) for x in install_requirements],
-    scripts=['f2ai/cmd/main.py'],
+    entry_points={"console_scripts": ["f2ai = f2ai.cmd:main"]},
 )

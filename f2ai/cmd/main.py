@@ -1,11 +1,10 @@
-#! python
-
 import pathlib
 from argparse import ArgumentParser
 from typing import List
-from f2ai.common.cmd_parser import add_materialize_parser
-from f2ai.definitions import BackOffTime
-from f2ai.featurestore import FeatureStore
+
+from ..common.cmd_parser import add_materialize_parser
+from ..definitions import BackOffTime
+from ..featurestore import FeatureStore
 
 
 def materialize(url: str, services: List[str], back_off_time: BackOffTime, online: bool):
@@ -15,7 +14,7 @@ def materialize(url: str, services: List[str], back_off_time: BackOffTime, onlin
         fs.materialize(service, back_off_time, online)
 
 
-if __name__ == "__main__":
+def main():
     parser = ArgumentParser(prog="F2AI")
     subparsers = parser.add_subparsers(title="subcommands", dest="commands")
     add_materialize_parser(subparsers)
@@ -38,4 +37,4 @@ if __name__ == "__main__":
         else:
             back_off_time = BackOffTime(start=kwargs.pop("start"), end=kwargs.pop("end"), step=step)
 
-        materialize("file://./feature_store.yml", kwargs.pop("services"), back_off_time, kwargs.pop("online"))
+        materialize("file://.", kwargs.pop("services"), back_off_time, kwargs.pop("online"))
