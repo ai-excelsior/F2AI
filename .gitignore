@@ -23,3 +23,5 @@ docs/_*
 3f/
 scripts/
 egg*
+*.egg-info
+/build

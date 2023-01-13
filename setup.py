@@ -1,20 +1,18 @@
-from setuptools import setup, find_packages
+from setuptools import setup, find_namespace_packages
 from pip._internal.req import parse_requirements
 from pip._internal.network.session import PipSession
 
-install_reqs = parse_requirements("requirements.txt", session=PipSession())
+install_requirements = parse_requirements("requirements.txt", session=PipSession())
 
 setup(
     name="f2ai",
     version="0.0.4",
-    description="",
-    long_description="...",
+    description="A Feature Store tool focus on making retrieve features easily in machine learning.",
     url="https://github.com/ai-excelsior/F2AI",
-    long_description_content_type="text/x-rst",
-    author="",
+    author="上海半见",
     license="MIT",
     zip_safe=False,
-    packages=find_packages(),
-    install_requires=[str(ir.requirement) for ir in install_reqs],
-    # packages=['f2ai'],
+    packages=find_namespace_packages(exclude=['docs', 'tests', 'tests.*', 'use_cases', '*.egg-info']),
+    install_requires=[str(x.requirement) for x in install_requirements],
+    scripts=['f2ai/cmd/main.py'],
 )

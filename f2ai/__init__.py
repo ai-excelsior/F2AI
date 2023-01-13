@@ -1,7 +1,3 @@
-from . import definitions
 from .featurestore import FeatureStore
 
-__all__ = [
-    "FeatureStore",
-    "definitions"
-]
+__all__ = ["FeatureStore"]
