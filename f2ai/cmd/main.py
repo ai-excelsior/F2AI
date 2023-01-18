@@ -10,8 +10,7 @@ from ..featurestore import FeatureStore
 def materialize(url: str, services: List[str], back_off_time: BackOffTime, online: bool):
     fs = FeatureStore(url)
 
-    for service in services:
-        fs.materialize(service, back_off_time, online)
+    fs.materialize(services, back_off_time, online)
 
 
 def main():

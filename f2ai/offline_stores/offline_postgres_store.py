@@ -52,7 +52,7 @@ class OfflinePostgresStore(OfflineStore):
     def psy_conn(self):
         from psycopg2 import connect
 
-        if self._conn is None:
+        if self._conn is None or self._conn.closed:
             self._conn = connect(
                 user=self.user,
                 password=self.password,

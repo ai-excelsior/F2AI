@@ -36,7 +36,7 @@ class OfflineFileStore(OfflineStore):
     def get_features(
         self,
         entity_df: pd.DataFrame,
-        features: Set[Feature],
+        features: List[Feature],
         source: FileSource,
         join_keys: List[str] = [],
         ttl: Optional[Period] = None,
@@ -237,6 +237,7 @@ class OfflineFileStore(OfflineStore):
         ttl: Optional[Period] = None,
         join_keys: List[str] = [],
         include: bool = True,
+        # TODO: this should be removed in future.
         how: str = "inner",
     ) -> pd.DataFrame:
         """_summary_

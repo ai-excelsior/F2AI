@@ -3,7 +3,7 @@ import pandas as pd
 from pydantic import BaseModel
 from enum import Enum
 from typing import Any, List
-from datetime import timedelta, datetime
+from datetime import timedelta
 from functools import reduce
 
 
@@ -111,7 +111,7 @@ class Period(BaseModel):
             AvailablePeriods.WEEKS,
             AvailablePeriods.DAYS,
         }:
-            if norm_type == "floor":
+            if norm_type == "ceil":
                 return dt.normalize() + self.to_pandas_dateoffset()
             else:
                 return dt.normalize()

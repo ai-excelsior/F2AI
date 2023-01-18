@@ -155,7 +155,7 @@ def convert_dtype_to_sqlalchemy_type(col):
 
 
 def write_df_to_dataset(data: pd.DataFrame, root_path: str, time_col: str, period: Period):
-    import pyarrow
+    from pyarrow import parquet, Table
 
     # create partitioning cols
     times = pd.to_datetime(data[time_col])
@@ -170,8 +170,8 @@ def write_df_to_dataset(data: pd.DataFrame, root_path: str, time_col: str, perio
         ],
         axis=1,
     )
-    table = pyarrow.Table.from_pandas(data_with_components)
-    pyarrow.parquet.write_to_dataset(table, root_path=root_path, partition_cols=components)
+    table = Table.from_pandas(data_with_components)
+    parquet.write_to_dataset(table, root_path=root_path, partition_cols=components)
 
 
 def read_df_from_dataset(root_path: str, usecols: List[str] = []) -> pd.DataFrame:

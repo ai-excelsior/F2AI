@@ -403,16 +403,28 @@ class FeatureStore:
         else:
             views_to_search = self.services
 
-        if isinstance(service, str):
-            service_name = service
-            service = views_to_search.get(service, None)
-            assert (
-                service is not None
-            ), f"Service: {service_name} is not found in feature store in current materialize type."
+        if online:
+            if isinstance(service, str):
+                service_name = service
+                service = views_to_search.get(service, None)
+                assert (
+                    service is not None
+                ), f"Service: {service_name} is not found in feature store in current materialize type."
+            self.persist_engine.materialize(
+                service, self.label_views, self.feature_views, self.entities, self.sources, backoff
+            )
+        else:
+            if isinstance(service, str):
+                services = [views_to_search.get(service, None)]
+            elif isinstance(service, list):
+                services = [views_to_search.get(x, None) if isinstance(x, str) else x for x in service]
+            elif isinstance(service, Service):
+                services = [service]
 
-        self.persist_engine.materialize(
-            service, self.label_views, self.feature_views, self.entities, self.sources, backoff, online
-        )
+            services = [x for x in services if x is not None]
+            self.persist_engine.materialize_offline(
+                services, self.label_views, self.feature_views, self.entities, self.sources, backoff
+            )
 
     def stats(
         self,

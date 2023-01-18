@@ -33,7 +33,9 @@ class FileSource(Source):
     path: str
 
     def read_file(self, str_cols: List[str] = [], keep_cols: List[str] = []):
-        time_columns = [self.timestamp_field]
+        time_columns = []
+        if self.timestamp_field:
+            time_columns.append(self.timestamp_field)
         if self.created_timestamp_field:
             time_columns.append(self.created_timestamp_field)
 

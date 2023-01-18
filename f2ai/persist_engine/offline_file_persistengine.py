@@ -1,10 +1,17 @@
 from __future__ import annotations
-from typing import Dict
+from typing import List
 import pandas as pd
 import datetime
 
 from ..offline_stores.offline_file_store import OfflineFileStore
-from ..definitions import FileSource, OfflinePersistEngine, OfflinePersistEngineType, BackOffTime
+from ..definitions import (
+    FileSource,
+    OfflinePersistEngine,
+    OfflinePersistEngineType,
+    BackOffTime,
+    PersistFeatureView,
+    PersistLabelView,
+)
 from ..common.utils import write_df_to_dataset
 
 TIME_COL = "event_timestamp"
@@ -17,45 +24,36 @@ class OfflineFilePersistEngine(OfflinePersistEngine):
 
     def materialize(
         self,
-        dest: FileSource,
-        all_views: Dict,
+        feature_views: List[PersistFeatureView],
+        label_view: PersistLabelView,
+        destination: FileSource,
         back_off_time: BackOffTime,
-        **kwargs,
     ):
-        feature_views = all_views["features"]
-        label_view = all_views["label"]
-
-        source = label_view["source"]
+        # retrieve entity_df
         # TODO:
         # 1. 这里是否需要进行更合理的抽象，而不是使用一个私有函数
         # 2. 在读取数据之前，框定时间可以可以提高效率
-        joined_frame = self.store._read_file(
-            source=source, features=label_view["labels"], join_keys=label_view["join_keys"]
+        entity_df = self.store._read_file(
+            source=label_view.source, features=label_view.labels, join_keys=label_view.join_keys
         )
-        # TODO: 这里是否应该丢弃created_timestamp？
-        joined_frame.drop(columns=["created_timestamp"], errors="ignore")
-        joined_frame = joined_frame[(joined_frame[TIME_COL] >= back_off_time.start) & (joined_frame[TIME_COL] < back_off_time.end)]
+        entity_df.drop(columns=["created_timestamp"], errors="ignore")
+        entity_df = entity_df[
+            (entity_df[TIME_COL] >= back_off_time.start) & (entity_df[TIME_COL] < back_off_time.end)
+        ]
 
-        # join features dataframe
+        # join features recursively
+        # TODO: this should be reimplemented to directly consume multi feature_views and do a performance test.
+        joined_frame = entity_df
         for feature_view in feature_views:
-            features = feature_view["features"]
-            feature_name = [
-                f.name for f in features if f.name not in [label.name for label in label_view["labels"]]
-            ]
-            if feature_name:  # this view has new features other than those in joined_frame
-                features = [n for n in features if n.name in feature_name]
-                join_keys = feature_view["join_keys"]
-                source = feature_view["source"]
-                joined_frame = self.store.get_features(
-                    entity_df=joined_frame,
-                    features=features,
-                    source=source,
-                    join_keys=join_keys,
-                    ttl=feature_view["ttl"],
-                    include=True,
-                    how="right",
-                )
+            joined_frame = self.store.get_features(
+                entity_df=joined_frame,
+                features=feature_view.features,
+                source=feature_view.source,
+                join_keys=feature_view.join_keys,
+                ttl=feature_view.ttl,
+                include=True,
+                how="right",
+            )
 
         joined_frame[MATERIALIZE_TIME] = pd.to_datetime(datetime.datetime.now(), utc=True)
-        write_df_to_dataset(joined_frame, dest.path, time_col=dest.timestamp_field, period=back_off_time.step)
-        kwargs["signal"].send(1)
+        write_df_to_dataset(joined_frame, destination.path, time_col=destination.timestamp_field, period=back_off_time.step)

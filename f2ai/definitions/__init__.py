@@ -11,6 +11,8 @@ from .online_store import OnlineStore, OnlineStoreType, init_online_store_from_c
 from .constants import LOCAL_TIMEZONE, StatsFunctions
 from .backoff_time import BackOffTime
 from .persist_engine import (
+    PersistFeatureView,
+    PersistLabelView,
     PersistEngine,
     OfflinePersistEngine,
     OnlinePersistEngine,
@@ -44,6 +46,8 @@ __all__ = [
     "OnlineStore",
     "init_online_store_from_cfg",
     "BackOffTime",
+    "PersistFeatureView",
+    "PersistLabelView",
     "PersistEngine",
     "OnlinePersistEngine",
     "OfflinePersistEngine",

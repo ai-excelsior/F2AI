@@ -41,8 +41,8 @@ class BackOffTime:
 
     def to_units(self) -> Iterator[Period]:
         pd_offset = self.step.to_pandas_dateoffset()
-        start = self.step.normalize(self.start, "ceil")
-        end = self.step.normalize(self.end, "floor")
+        start = self.step.normalize(self.start, "floor")
+        end = self.step.normalize(self.end, "ceil")
 
         bins = pd.date_range(
             start=start,
