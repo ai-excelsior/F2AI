@@ -62,10 +62,6 @@ class OnlineStore(BaseModel):
         """
         pass
 
-    @abc.abstractmethod
-    def get_online_source(self, **kwargs):
-        pass
-
 
 def init_online_store_from_cfg(cfg: Dict[Any], name: str) -> OnlineStore:
     """Initialize an implementation of OnlineStore from yaml config.

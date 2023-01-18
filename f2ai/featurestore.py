@@ -1,6 +1,5 @@
 import os
 import pandas as pd
-from copy import deepcopy
 from datetime import datetime
 from typing import List, Optional, Union
 
@@ -38,6 +37,7 @@ class FeatureStore:
     def __init__(self, project_folder=None, url=None, token=None, projectID=None):
         if project_folder:
             cfg = read_yml(os.path.join(project_folder, "feature_store.yml"))
+            self.name = cfg["project"]
             self.offline_store: OfflineStore = init_offline_store_from_cfg(
                 cfg["offline_store"], cfg["project"]
             )
@@ -389,41 +389,59 @@ class FeatureStore:
         )
 
     def materialize(
-        self, service: Union[str, Service, FeatureView], backoff: BackOffTime, online: bool = False
+        self,
+        service_or_views: Union[str, Service, FeatureView],
+        back_off_time: BackOffTime,
+        online: bool = False,
     ):
-        """Offline materialize, join features which specify by service name.
+        """
+        Materialize data into another place. An offline materialize means to join features and save it in a predefined path. An online materialize means sync features to online store.
 
         Args:
-            service (Union[str, Service]): name of service to materialize or an instance.
-            backoff: start, end and step to materialize
+            service_or_views (Union[str, Service]): name of services or views to materialize.
+            back_off_time: A time range and given step to materialize.
         """
-        if online:
-            views_to_search = deepcopy(self.services)
-            views_to_search.update(self.feature_views)
-        else:
-            views_to_search = self.services
+        if not isinstance(service_or_views, list):
+            service_or_views = [service_or_views]
 
         if online:
-            if isinstance(service, str):
-                service_name = service
-                service = views_to_search.get(service, None)
-                assert (
-                    service is not None
-                ), f"Service: {service_name} is not found in feature store in current materialize type."
-            self.persist_engine.materialize(
-                service, self.label_views, self.feature_views, self.entities, self.sources, backoff
+            # filter with views to materialize.
+            feature_view_names = []
+            for x in service_or_views:
+                if isinstance(x, str):
+                    if x in self.feature_views:
+                        feature_view_names.append(x)
+                    elif x in self.services:
+                        feature_view_names += self.services[x].get_feature_view_names(self.feature_views)
+                elif isinstance(x, Service):
+                    feature_view_names += x.get_feature_view_names(self.feature_views)
+                elif isinstance(x, FeatureView):
+                    feature_view_names.append(x.name)
+
+            # unique feature views
+            feature_view_names = list(dict.fromkeys(feature_view_names))
+            feature_views = [self.feature_views[x] for x in feature_view_names if x in self.feature_views]
+            self.persist_engine.materialize_online(
+                self.name,
+                feature_views,
+                self.entities,
+                self.sources,
+                back_off_time,
             )
         else:
-            if isinstance(service, str):
-                services = [views_to_search.get(service, None)]
-            elif isinstance(service, list):
-                services = [views_to_search.get(x, None) if isinstance(x, str) else x for x in service]
-            elif isinstance(service, Service):
-                services = [service]
+            service_names = []
+            for x in service_or_views:
+                if isinstance(x, Service):
+                    service_names.append(x.name)
+                elif isinstance(x, str):
+                    service_names.append(x)
 
-            services = [x for x in services if x is not None]
+            service_names = list(dict.fromkeys(service_names))
+            services = [self.services[x] for x in service_names if x in self.services]
+            assert len(services) > 0, f'The service {service_or_views} is not found in store, please double check it.'
+
             self.persist_engine.materialize_offline(
-                services, self.label_views, self.feature_views, self.entities, self.sources, backoff
+                services, self.label_views, self.feature_views, self.entities, self.sources, back_off_time
             )
 
     def stats(

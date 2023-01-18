@@ -67,6 +67,19 @@ class Service(BaseModel):
             )
         )
 
+    def get_feature_view_names(self, feature_views: Dict[str, FeatureView]) -> List[str]:
+        """
+        Get the name of feature view names related to this service.
+
+        Args:
+            feature_views (Dict[str, FeatureView]): list of FeatureViews to filter.
+
+        Returns:
+            List[str]: names of FeatureView
+        """
+        feature_view_names = list(dict.fromkeys([anchor.view_name for anchor in self.features]))
+        return [x for x in feature_view_names if x in feature_views]
+
     def get_feature_views(self, feature_views: Dict[str, FeatureView]) -> List[FeatureView]:
         """Get FeatureViews of this service. This will automatically filter out the feature view not given by parameters.
 
@@ -76,7 +89,7 @@ class Service(BaseModel):
         Returns:
             List[FeatureView]
         """
-        feature_view_names = {anchor.view_name for anchor in self.features}
+        feature_view_names = self.get_feature_view_names(feature_views)
         return [feature_views[feature_view_name] for feature_view_name in feature_view_names]
 
     def get_label_views(self, label_views: Dict[str, LabelView]) -> List[LabelView]:
@@ -88,7 +101,7 @@ class Service(BaseModel):
         Returns:
             List[LabelView]
         """
-        label_view_names = {anchor.view_name for anchor in self.labels}
+        label_view_names = list(dict.fromkeys([anchor.view_name for anchor in self.labels]))
         return [label_views[label_view_name] for label_view_name in label_view_names]
 
     def get_feature_entities(self, feature_views: Dict[str, FeatureView]) -> List[Entity]:

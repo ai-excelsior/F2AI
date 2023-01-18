@@ -42,7 +42,6 @@ class OnlineRedisStore(OnlineStore):
         dt: pd.DataFrame,
         ttl: Optional[Period] = None,
         join_keys: List[str] = None,
-        **kwargs,
     ):
         pipe = self.client.pipeline()
         if not dt.empty:
@@ -80,7 +79,6 @@ class OnlineRedisStore(OnlineStore):
                     expir_time = group_data[1][DEFAULT_EVENT_TIMESTAMP_FIELD].max() + ttl.to_py_timedelta()
                     pipe.expireat(zset_key, expir_time)
             pipe.execute()
-        kwargs["signal"].send(1)
 
     def read_batch(
         self,
@@ -176,6 +174,3 @@ class OnlineRedisStore(OnlineStore):
         else:
             data = pd.DataFrame()
         return data
-
-    def get_online_source(self):
-        return self.name

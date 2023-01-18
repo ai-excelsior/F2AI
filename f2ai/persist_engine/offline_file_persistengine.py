@@ -20,7 +20,7 @@ MATERIALIZE_TIME = "materialize_time"
 
 class OfflineFilePersistEngine(OfflinePersistEngine):
     type: OfflinePersistEngineType = OfflinePersistEngineType.FILE
-    store: OfflineFileStore
+    offline_store: OfflineFileStore
 
     def materialize(
         self,
@@ -33,7 +33,7 @@ class OfflineFilePersistEngine(OfflinePersistEngine):
         # TODO:
         # 1. 这里是否需要进行更合理的抽象，而不是使用一个私有函数
         # 2. 在读取数据之前，框定时间可以可以提高效率
-        entity_df = self.store._read_file(
+        entity_df = self.offline_store._read_file(
             source=label_view.source, features=label_view.labels, join_keys=label_view.join_keys
         )
         entity_df.drop(columns=["created_timestamp"], errors="ignore")
@@ -45,7 +45,7 @@ class OfflineFilePersistEngine(OfflinePersistEngine):
         # TODO: this should be reimplemented to directly consume multi feature_views and do a performance test.
         joined_frame = entity_df
         for feature_view in feature_views:
-            joined_frame = self.store.get_features(
+            joined_frame = self.offline_store.get_features(
                 entity_df=joined_frame,
                 features=feature_view.features,
                 source=feature_view.source,

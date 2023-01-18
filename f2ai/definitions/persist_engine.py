@@ -1,10 +1,10 @@
 from __future__ import annotations
 import abc
 import os
-from typing import Dict, Union, List, Optional
+from typing import Dict, List, Optional
 from pydantic import BaseModel
 from enum import Enum
-from multiprocessing import Pipe, Pool
+from multiprocessing import Pool
 from tqdm import tqdm
 
 from f2ai.definitions import (
@@ -33,6 +33,7 @@ class PersistFeatureView(BaseModel):
     Another feature view that usually used when finalizing the results.
     """
 
+    name: str
     source: Source
     features: List[Feature] = []
     join_keys: List[str] = []
@@ -80,7 +81,7 @@ class PersistEngine(BaseModel):
 
 class OfflinePersistEngine(PersistEngine):
     type: OfflinePersistEngineType
-    store: OfflineStore
+    offline_store: OfflineStore
 
     class Config:
         extra = "allow"
@@ -98,13 +99,14 @@ class OfflinePersistEngine(PersistEngine):
 
 class OnlinePersistEngine(PersistEngine):
     type: OnlinePersistEngineType
-    store: OnlineStore
+    online_store: OnlineStore
+    offline_store: OfflineStore
 
     class Config:
         extra = "allow"
 
     @abc.abstractmethod
-    def materialize(self, **kwargs):
+    def materialize(self, prefix: str, feature_view: PersistFeatureView, back_off_time: BackOffTime):
         pass
 
 
@@ -126,7 +128,7 @@ class RealPersistEngine(BaseModel):
         # with Pool(processes=cpu_ava) as pool:
         service_to_list_of_args = dict()
         for service in services:
-            destination = self.offline_engine.store.get_offline_source(service)
+            destination = self.offline_engine.offline_store.get_offline_source(service)
 
             label_view = service.get_label_views(label_views)[0]
             label_view = PersistLabelView(
@@ -142,6 +144,7 @@ class RealPersistEngine(BaseModel):
 
             feature_views = [
                 PersistFeatureView(
+                    name=feature_view.name,
                     join_keys=[
                         join_key
                         for entity_name in feature_view.entities
@@ -179,53 +182,50 @@ class RealPersistEngine(BaseModel):
             pool.close()
             pool.join()
 
-    def materialize(
+    def materialize_online(
         self,
-        service: Union[Service, FeatureView],
-        label_views: Dict[str, LabelView],
-        feature_views: Dict[str, FeatureView],
+        prefix: str,
+        feature_views: List[FeatureView],
         entities: Dict[str, Entity],
         sources: Dict[str, Source],
         back_off_time: BackOffTime,
     ):
         cpu_ava = max(os.cpu_count() // 2, 1)
-        service: Dict[str, FeatureView] = (
-            feature_views if isinstance(service, Service) else {service.name: service}
-        )
-        destination = self.online_engine.store.get_online_source()
-        for name, feature_view in service.items():
-            join_keys = list(
-                {
-                    join_key
-                    for entity_name in feature_view.entities
-                    for join_key in entities[entity_name].join_keys
-                }
-            )
-            all_views = {
-                "join_keys": join_keys,
-                "features": feature_view.get_feature_objects(),
-                "source": sources[feature_view.batch_source],
-                "ttl": feature_view.ttl,
-                "name": name,
-            }
-            batch_of_args = [
-                [
-                    destination,
-                    all_views,
-                    segment,
-                    self.offline_engine.store,
-                ]
-                for segment in back_off_time.to_units()
-            ]
-            with tqdm(total=len(batch_of_args), desc=f"materializing {name}") as pbar:
-                with Pool(processes=cpu_ava) as pool:
-                    r, w = Pipe(duplex=False)
-                    for args in batch_of_args:
-                        pool.apply_async(func=self.online_engine.materialize, args=args, kwds={"signal": w})
-                        pbar.update(r.recv())
+
+        with Pool(processes=cpu_ava) as pool:
+            bars = dict()
+            for feature_view in feature_views:
+                join_keys = list(
+                    {
+                        join_key
+                        for entity_name in feature_view.entities
+                        for join_key in entities[entity_name].join_keys
+                    }
+                )
+                feature_view = PersistFeatureView(
+                    name=feature_view.name,
+                    join_keys=join_keys,
+                    features=feature_view.get_feature_objects(),
+                    source=sources[feature_view.batch_source],
+                    ttl=feature_view.ttl,
+                )
+                back_off_segments = list(back_off_time.to_units())
+
+                # TODO: when materialize multi views, the tqdm progress bar not update simultaneously
+                bars[feature_view.name] = tqdm(
+                    total=len(back_off_segments), desc=f"materializing {feature_view.name}"
+                )
+                for back_off_segment in back_off_segments:
+                    pool.apply_async(
+                        func=self.online_engine.materialize,
+                        args=(prefix, feature_view, back_off_segment),
+                        callback=lambda x: bars[feature_view.name].update(),
+                    )
+            pool.close()
+            pool.join()
 
 
-def init_persist_engine_from_cfg(cfg1, cfg2):
+def init_persist_engine_from_cfg(offline_store: OfflineStore, online_store: OnlineStore):
     """Initialize an implementation of PersistEngine from yaml config.
 
     Args:
@@ -235,25 +235,27 @@ def init_persist_engine_from_cfg(cfg1, cfg2):
         RealPersistEngine: Contains Offline and Online PersistEngine
     """
 
-    if cfg1.type == OfflineStoreType.FILE:
+    if offline_store.type == OfflineStoreType.FILE:
         from ..persist_engine.offline_file_persistengine import OfflineFilePersistEngine
         from ..persist_engine.online_local_persistengine import OnlineLocalPersistEngine
 
-        off_persist = OfflineFilePersistEngine(**{"type": "file", "store": cfg1})
-        on_persis = OnlineLocalPersistEngine(**{"type": "local", "store": cfg2})
+        offline_persist_engine_cls = OfflineFilePersistEngine
+        online_persist_engine_cls = OnlineLocalPersistEngine
 
-    if cfg1.type == OfflineStoreType.PGSQL:
+    elif offline_store.type == OfflineStoreType.PGSQL:
         from ..persist_engine.offline_pgsql_persistengine import OfflinePgsqlPersistEngine
         from ..persist_engine.online_local_persistengine import OnlineLocalPersistEngine
 
-        off_persist = OfflinePgsqlPersistEngine(**{"type": "pgsql", "store": cfg1})
-        on_persis = OnlineLocalPersistEngine(**{"type": "local", "store": cfg2})
+        offline_persist_engine_cls = OfflinePgsqlPersistEngine
+        online_persist_engine_cls = OnlineLocalPersistEngine
 
-    if cfg1.type == OfflineStoreType.SPARK:
+    elif offline_store.type == OfflineStoreType.SPARK:
         from ..persist_engine.offline_spark_persistengine import OfflineSparkPersistEngine
         from ..persist_engine.online_spark_persistengine import OnlineSparkPersistEngine
 
-        off_persist = OfflineSparkPersistEngine(**{"type": "spark", "store": cfg1})
-        on_persis = OnlineSparkPersistEngine(**{"type": "distribute", "store": cfg2})
+        offline_persist_engine_cls = OfflineSparkPersistEngine
+        online_persist_engine_cls = OnlineSparkPersistEngine
 
-    return RealPersistEngine(offline_engine=off_persist, online_engine=on_persis)
+    offline_engine = offline_persist_engine_cls(offline_store=offline_store)
+    online_engine = online_persist_engine_cls(offline_store=offline_store, online_store=online_store)
+    return RealPersistEngine(offline_engine=offline_engine, online_engine=online_engine)
