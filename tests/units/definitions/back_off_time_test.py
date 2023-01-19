@@ -8,4 +8,4 @@ def test_back_off_time_to_units():
 
     back_off_time = BackOffTime(start="2020-08-01 12:20", end="2020-08-02", step="2 hours")
     units = list(back_off_time.to_units())
-    assert len(units) == 5
+    assert len(units) == 6

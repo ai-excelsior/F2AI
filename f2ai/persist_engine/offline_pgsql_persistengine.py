@@ -18,7 +18,7 @@ class OfflinePgsqlPersistEngine(OfflinePersistEngine):
 
     type: OfflinePersistEngineType = OfflinePersistEngineType.PGSQL
 
-    store: OfflinePostgresStore
+    offline_store: OfflinePostgresStore
 
     def materialize(
         self,
