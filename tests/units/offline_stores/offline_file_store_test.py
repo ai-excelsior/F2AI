@@ -4,7 +4,7 @@ from f2ai.definitions import Period, FileSource, Feature, FeatureDTypes, StatsFu
 
 import pytest
 from unittest.mock import MagicMock
-from f2ai.common.time_field import *
+from f2ai.common.time_field import ENTITY_EVENT_TIMESTAMP_FIELD, SOURCE_EVENT_TIMESTAMP_FIELD
 
 mock_point_in_time_filter_df = pd.DataFrame(
     {

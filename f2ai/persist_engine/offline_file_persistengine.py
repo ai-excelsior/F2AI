@@ -14,7 +14,7 @@ from ..definitions import (
     PersistLabelView,
 )
 from ..common.utils import write_df_to_dataset
-from ..common.time_field import *
+from ..common.time_field import TIME_COL, MATERIALIZE_TIME
 
 
 class OfflineFilePersistEngine(OfflinePersistEngine):

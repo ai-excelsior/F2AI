@@ -11,7 +11,11 @@ from ..definitions import (
     PersistLabelView,
 )
 from ..offline_stores.offline_postgres_store import OfflinePostgresStore
-from ..common.time_field import *
+from ..common.time_field import (
+    DEFAULT_EVENT_TIMESTAMP_FIELD,
+    ENTITY_EVENT_TIMESTAMP_FIELD,
+    MATERIALIZE_TIME,
+)
 
 
 class OfflinePgsqlPersistEngine(OfflinePersistEngine):

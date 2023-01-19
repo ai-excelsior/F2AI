@@ -29,7 +29,7 @@ from .definitions import (
     init_persist_engine_from_cfg,
 )
 
-from .common.time_field import *
+from .common.time_field import TIME_COL
 
 
 class FeatureStore:

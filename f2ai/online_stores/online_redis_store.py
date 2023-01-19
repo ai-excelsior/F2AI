@@ -9,7 +9,7 @@ from redis import Redis, ConnectionPool
 
 from ..common.utils import DateEncoder
 from ..definitions import OnlineStore, OnlineStoreType, Period, FeatureView, Service, Entity
-from ..common.time_field import *
+from ..common.time_field import DEFAULT_EVENT_TIMESTAMP_FIELD, QUERY_COL
 
 
 class OnlineRedisStore(OnlineStore):

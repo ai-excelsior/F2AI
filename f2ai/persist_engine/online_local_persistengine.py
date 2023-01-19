@@ -8,7 +8,7 @@ from ..definitions import (
     PersistFeatureView,
 )
 
-from ..common.time_field import *
+from ..common.time_field import DEFAULT_EVENT_TIMESTAMP_FIELD
 
 
 class OnlineLocalPersistEngine(OnlinePersistEngine):

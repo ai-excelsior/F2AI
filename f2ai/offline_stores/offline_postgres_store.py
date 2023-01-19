@@ -18,7 +18,13 @@ from ..definitions import (
     StatsFunctions,
 )
 from ..common.utils import convert_dtype_to_sqlalchemy_type
-from ..common.time_field import *
+from ..common.time_field import (
+    DEFAULT_EVENT_TIMESTAMP_FIELD,
+    ENTITY_EVENT_TIMESTAMP_FIELD,
+    SOURCE_EVENT_TIMESTAMP_FIELD,
+    QUERY_COL,
+    MATERIALIZE_TIME,
+)
 
 
 if TYPE_CHECKING:
