@@ -9,7 +9,7 @@ from redis import Redis, ConnectionPool
 
 from ..common.utils import DateEncoder
 from ..definitions import OnlineStore, OnlineStoreType, Period, FeatureView, Service, Entity
-from ..common.time_field import TimeField
+from ..common.time_field import *
 
 
 class OnlineRedisStore(OnlineStore):
@@ -65,17 +65,15 @@ class OnlineRedisStore(OnlineStore):
                     )
                 zset_dict = {
                     json.dumps(row, cls=DateEncoder): pd.to_datetime(
-                        row.get(TimeField.DEFAULT_EVENT_TIMESTAMP_FIELD, datetime.now()), utc=True
+                        row.get(DEFAULT_EVENT_TIMESTAMP_FIELD, datetime.now()), utc=True
                     ).timestamp()
                     for row in group_data[1]
-                    .drop(columns=[TimeField.QUERY_COL], errors="ignore")
+                    .drop(columns=[QUERY_COL], errors="ignore")
                     .to_dict(orient="records")
                 }
                 pipe.zadd(name=zset_key, mapping=zset_dict)
                 if ttl is not None:  # add a general expire constrains on hash-key
-                    expir_time = (
-                        group_data[1][TimeField.DEFAULT_EVENT_TIMESTAMP_FIELD].max() + ttl.to_py_timedelta()
-                    )
+                    expir_time = group_data[1][DEFAULT_EVENT_TIMESTAMP_FIELD].max() + ttl.to_py_timedelta()
                     pipe.expireat(zset_key, expir_time)
             pipe.execute()
 

@@ -13,7 +13,7 @@ from ..definitions import (
     StatsFunctions,
 )
 
-from ..common.time_field import TimeField
+from ..common.time_field import *
 
 
 class OfflineFileStore(OfflineStore):
@@ -23,8 +23,8 @@ class OfflineFileStore(OfflineStore):
         return FileSource(
             name=f"{service.name}_source",
             path=os.path.join(self.materialize_path, service.name),
-            timestamp_field=TimeField.DEFAULT_EVENT_TIMESTAMP_FIELD,
-            created_timestamp_field=TimeField.MATERIALIZE_TIME,
+            timestamp_field=DEFAULT_EVENT_TIMESTAMP_FIELD,
+            created_timestamp_field=MATERIALIZE_TIME,
         )
 
     def get_features(
@@ -129,24 +129,20 @@ class OfflineFileStore(OfflineStore):
             pd.DataFrame: A dataframe
         """
         source_df = self._read_file(source=source, features=[], join_keys=group_keys)
-        source_df = source_df.rename(columns={source.timestamp_field: TimeField.SOURCE_EVENT_TIMESTAMP_FIELD})
-        source_df = source_df[source_df[TimeField.SOURCE_EVENT_TIMESTAMP_FIELD] >= start]
-        entity_df = entity_df.rename(
-            columns={TimeField.DEFAULT_EVENT_TIMESTAMP_FIELD: TimeField.ENTITY_EVENT_TIMESTAMP_FIELD}
-        )
+        source_df = source_df.rename(columns={source.timestamp_field: SOURCE_EVENT_TIMESTAMP_FIELD})
+        source_df = source_df[source_df[SOURCE_EVENT_TIMESTAMP_FIELD] >= start]
+        entity_df = entity_df.rename(columns={DEFAULT_EVENT_TIMESTAMP_FIELD: ENTITY_EVENT_TIMESTAMP_FIELD})
 
         if join_keys:
             source_df = source_df.merge(entity_df, on=group_keys, how="inner")
         else:
             source_df = source_df.merge(entity_df, how="cross")
 
-        source_df = source_df[
-            group_keys + [TimeField.ENTITY_EVENT_TIMESTAMP_FIELD, TimeField.SOURCE_EVENT_TIMESTAMP_FIELD]
-        ]
+        source_df = source_df[group_keys + [ENTITY_EVENT_TIMESTAMP_FIELD, SOURCE_EVENT_TIMESTAMP_FIELD]]
         source_df = (
             self._point_in_time_filter(source_df)
-            .drop(columns=[TimeField.ENTITY_EVENT_TIMESTAMP_FIELD])
-            .rename(columns={TimeField.SOURCE_EVENT_TIMESTAMP_FIELD: source.timestamp_field})
+            .drop(columns=[ENTITY_EVENT_TIMESTAMP_FIELD])
+            .rename(columns={SOURCE_EVENT_TIMESTAMP_FIELD: source.timestamp_field})
         )
 
         df = source_df.sort_values(by=source.timestamp_field, ascending=False, ignore_index=True)
@@ -192,26 +188,20 @@ class OfflineFileStore(OfflineStore):
         # renames to keep things simple
         if timestamp_field:
             entity_df = entity_df.rename(
-                columns={TimeField.DEFAULT_EVENT_TIMESTAMP_FIELD: TimeField.ENTITY_EVENT_TIMESTAMP_FIELD}
+                columns={DEFAULT_EVENT_TIMESTAMP_FIELD: ENTITY_EVENT_TIMESTAMP_FIELD}
             )
-            source_df = source_df.rename(columns={timestamp_field: TimeField.SOURCE_EVENT_TIMESTAMP_FIELD})
+            source_df = source_df.rename(columns={timestamp_field: SOURCE_EVENT_TIMESTAMP_FIELD})
 
         if created_timestamp_field:
             entity_df = entity_df.drop(columns=[created_timestamp_field], errors="ignore")
 
         # pre filter source_df by ttl
         if ttl:
-            min_entity_timestamp = (
-                entity_df[TimeField.ENTITY_EVENT_TIMESTAMP_FIELD].min() - ttl.to_pandas_dateoffset()
-            )
+            min_entity_timestamp = entity_df[ENTITY_EVENT_TIMESTAMP_FIELD].min() - ttl.to_pandas_dateoffset()
             if include:
-                source_df = source_df[
-                    source_df[TimeField.SOURCE_EVENT_TIMESTAMP_FIELD] > min_entity_timestamp
-                ]
+                source_df = source_df[source_df[SOURCE_EVENT_TIMESTAMP_FIELD] > min_entity_timestamp]
             else:
-                source_df = source_df[
-                    source_df[TimeField.SOURCE_EVENT_TIMESTAMP_FIELD] >= min_entity_timestamp
-                ]
+                source_df = source_df[source_df[SOURCE_EVENT_TIMESTAMP_FIELD] >= min_entity_timestamp]
 
         if len(join_keys) > 0:
             df = source_df.merge(entity_df, on=join_keys, how=how)
@@ -222,9 +212,9 @@ class OfflineFileStore(OfflineStore):
             df = cls._point_in_time_filter(df, include=include, ttl=ttl)
             df = cls._point_in_time_latest(df, join_keys, created_timestamp_field)
 
-        df = df.drop(
-            columns=[TimeField.SOURCE_EVENT_TIMESTAMP_FIELD, created_timestamp_field], errors="ignore"
-        ).rename(columns={TimeField.ENTITY_EVENT_TIMESTAMP_FIELD: TimeField.DEFAULT_EVENT_TIMESTAMP_FIELD})
+        df = df.drop(columns=[SOURCE_EVENT_TIMESTAMP_FIELD, created_timestamp_field], errors="ignore").rename(
+            columns={ENTITY_EVENT_TIMESTAMP_FIELD: DEFAULT_EVENT_TIMESTAMP_FIELD}
+        )
 
         # move join_keys ahead
         desired_column_order = sorted(df.columns, key=lambda x: x in join_keys, reverse=True)
@@ -260,27 +250,19 @@ class OfflineFileStore(OfflineStore):
             pd.Dataframe: A point on time joined dataframe
         """
         # renames to keep things simple
-        entity_df = entity_df.rename(
-            columns={TimeField.DEFAULT_EVENT_TIMESTAMP_FIELD: TimeField.ENTITY_EVENT_TIMESTAMP_FIELD}
-        )
-        source_df = source_df.rename(columns={timestamp_field: TimeField.SOURCE_EVENT_TIMESTAMP_FIELD})
+        entity_df = entity_df.rename(columns={DEFAULT_EVENT_TIMESTAMP_FIELD: ENTITY_EVENT_TIMESTAMP_FIELD})
+        source_df = source_df.rename(columns={timestamp_field: SOURCE_EVENT_TIMESTAMP_FIELD})
 
         if created_timestamp_field:
             entity_df = entity_df.drop(columns=[created_timestamp_field], errors="ignore")
 
         # pre filter source_df by ttl
         if ttl:
-            min_entity_timestamp = (
-                entity_df[TimeField.ENTITY_EVENT_TIMESTAMP_FIELD].min() - ttl.to_pandas_dateoffset()
-            )
+            min_entity_timestamp = entity_df[ENTITY_EVENT_TIMESTAMP_FIELD].min() - ttl.to_pandas_dateoffset()
             if include:
-                source_df = source_df[
-                    source_df[TimeField.SOURCE_EVENT_TIMESTAMP_FIELD] > min_entity_timestamp
-                ]
+                source_df = source_df[source_df[SOURCE_EVENT_TIMESTAMP_FIELD] > min_entity_timestamp]
             else:
-                source_df = source_df[
-                    source_df[TimeField.SOURCE_EVENT_TIMESTAMP_FIELD] >= min_entity_timestamp
-                ]
+                source_df = source_df[source_df[SOURCE_EVENT_TIMESTAMP_FIELD] >= min_entity_timestamp]
 
         if len(join_keys) > 0:
             df = source_df.merge(entity_df, on=join_keys, how=how)
@@ -292,12 +274,12 @@ class OfflineFileStore(OfflineStore):
 
         df = df.drop(columns=[created_timestamp_field], errors="ignore").rename(
             columns={
-                TimeField.ENTITY_EVENT_TIMESTAMP_FIELD: TimeField.QUERY_COL,
-                TimeField.SOURCE_EVENT_TIMESTAMP_FIELD: TimeField.DEFAULT_EVENT_TIMESTAMP_FIELD,
+                ENTITY_EVENT_TIMESTAMP_FIELD: QUERY_COL,
+                SOURCE_EVENT_TIMESTAMP_FIELD: DEFAULT_EVENT_TIMESTAMP_FIELD,
             }
         )
         return df.sort_values(
-            by=[TimeField.QUERY_COL, TimeField.DEFAULT_EVENT_TIMESTAMP_FIELD],
+            by=[QUERY_COL, DEFAULT_EVENT_TIMESTAMP_FIELD],
             ascending=True,
             ignore_index=True,
         )
@@ -308,8 +290,8 @@ class OfflineFileStore(OfflineStore):
         df: pd.DataFrame,
         include: bool = True,
         ttl: Optional[Period] = None,
-        entity_timestamp_field: str = TimeField.ENTITY_EVENT_TIMESTAMP_FIELD,
-        source_timestamp_field: str = TimeField.SOURCE_EVENT_TIMESTAMP_FIELD,
+        entity_timestamp_field: str = ENTITY_EVENT_TIMESTAMP_FIELD,
+        source_timestamp_field: str = SOURCE_EVENT_TIMESTAMP_FIELD,
     ) -> pd.DataFrame:
         """_summary_
 
@@ -345,8 +327,8 @@ class OfflineFileStore(OfflineStore):
         period: Period,
         include: bool = True,
         ttl: Optional[Period] = None,
-        entity_timestamp_field: str = TimeField.ENTITY_EVENT_TIMESTAMP_FIELD,
-        source_timestamp_field: str = TimeField.SOURCE_EVENT_TIMESTAMP_FIELD,
+        entity_timestamp_field: str = ENTITY_EVENT_TIMESTAMP_FIELD,
+        source_timestamp_field: str = SOURCE_EVENT_TIMESTAMP_FIELD,
     ) -> pd.DataFrame:
         """
         filter dataframe with given time meaning.
@@ -407,8 +389,8 @@ class OfflineFileStore(OfflineStore):
         df: pd.DataFrame,
         group_keys: List[str] = [],
         created_timestamp_field: Optional[str] = None,
-        entity_timestamp_field: str = TimeField.ENTITY_EVENT_TIMESTAMP_FIELD,
-        source_timestamp_field: str = TimeField.SOURCE_EVENT_TIMESTAMP_FIELD,
+        entity_timestamp_field: str = ENTITY_EVENT_TIMESTAMP_FIELD,
+        source_timestamp_field: str = SOURCE_EVENT_TIMESTAMP_FIELD,
     ) -> pd.DataFrame:
         """
         get latest entity row if there are duplicate exist.
@@ -441,8 +423,8 @@ class OfflineFileStore(OfflineStore):
         df: pd.DataFrame,
         group_keys: List[str] = [],
         created_timestamp_field: Optional[str] = None,
-        entity_timestamp_field: str = TimeField.ENTITY_EVENT_TIMESTAMP_FIELD,
-        source_timestamp_field: str = TimeField.SOURCE_EVENT_TIMESTAMP_FIELD,
+        entity_timestamp_field: str = ENTITY_EVENT_TIMESTAMP_FIELD,
+        source_timestamp_field: str = SOURCE_EVENT_TIMESTAMP_FIELD,
     ) -> pd.DataFrame:
         """_summary_
 

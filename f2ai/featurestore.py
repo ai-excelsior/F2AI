@@ -29,7 +29,7 @@ from .definitions import (
     init_persist_engine_from_cfg,
 )
 
-from .common.time_field import TimeField
+from .common.time_field import *
 
 
 class FeatureStore:
@@ -66,7 +66,7 @@ class FeatureStore:
         if isinstance(entity_df, pd.DataFrame):
             # TODO: Remove this constraint in future
             assert (
-                TimeField.TIME_COL in entity_df.columns
+                TIME_COL in entity_df.columns
             ), "Check entity_df make sure it has at least 1 columns and event_timestamp in it"
 
     def _get_features_to_use(
@@ -518,12 +518,12 @@ class FeatureStore:
 
         if isinstance(entity, pd.DataFrame):
             join_keys = list(entity.columns)
-            entity[TimeField.TIME_COL] = end
+            entity[TIME_COL] = end
             group_keys = self._get_keys_to_join(view, join_keys)
         else:
             join_keys = []
             group_keys = self._get_keys_to_join(view, entity)
-            entity = pd.DataFrame({TimeField.TIME_COL: [end]})
+            entity = pd.DataFrame({TIME_COL: [end]})
 
         if isinstance(view, (FeatureView, LabelView)):
             source = self.sources[view.batch_source]

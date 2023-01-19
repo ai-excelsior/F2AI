@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from ..definitions.services import Service
     from ..featurestore import FeatureStore
 
-from ..common.time_field import TimeField
+from ..common.time_field import *
 
 # TODO: fix this later based on sampler changed
 class TorchIterableDataset(IterableDataset):
@@ -75,9 +75,9 @@ class TorchIterableDataset(IterableDataset):
                     how="right",
                     entity_cols=entity_cols,
                 )
-                feature_views_pd.drop(columns=[TimeField.TIME_COL], inplace=True)
+                feature_views_pd.drop(columns=[TIME_COL], inplace=True)
                 # always merge on TIME_COL
-                feature_views_pd.rename(columns={TimeField.QUERY_COL: TimeField.TIME_COL}, inplace=True)
+                feature_views_pd.rename(columns={QUERY_COL: TIME_COL}, inplace=True)
             else:
                 feature_views_pd = self.fs.get_features(
                     feature_view=self.service,
@@ -87,9 +87,7 @@ class TorchIterableDataset(IterableDataset):
                     how="right",
                     entity_cols=entity_cols,
                 )
-            feature_views_pd[TimeField.TIME_COL] = pd.to_datetime(
-                feature_views_pd[TimeField.TIME_COL], utc=True
-            )
+            feature_views_pd[TIME_COL] = pd.to_datetime(feature_views_pd[TIME_COL], utc=True)
 
         for period, features in self.all_labels.items():
             if period:
@@ -101,10 +99,8 @@ class TorchIterableDataset(IterableDataset):
                     how="right",
                     entity_cols=entity_cols,
                 )
-                label_views_pd.drop(columns=[TimeField.TIME_COL], inplace=True)
-                label_views_pd.rename(
-                    columns={TimeField.QUERY_COL: TimeField.TIME_COL}, inplace=True
-                )  # always merge on TIME_COL
+                label_views_pd.drop(columns=[TIME_COL], inplace=True)
+                label_views_pd.rename(columns={QUERY_COL: TIME_COL}, inplace=True)  # always merge on TIME_COL
             else:
                 label_views_pd = self.fs.get_labels(
                     label_view=self.service,
@@ -113,16 +109,14 @@ class TorchIterableDataset(IterableDataset):
                     how="right",
                     entity_cols=entity_cols,
                 )
-            label_views_pd[TimeField.TIME_COL] = pd.to_datetime(label_views_pd[TimeField.TIME_COL], utc=True)
+            label_views_pd[TIME_COL] = pd.to_datetime(label_views_pd[TIME_COL], utc=True)
 
         self.data_sample = (
             feature_views_pd[
-                entity_cols
-                + [TimeField.TIME_COL]
-                + list(self.service.get_feature_names(self.fs.feature_views))
+                entity_cols + [TIME_COL] + list(self.service.get_feature_names(self.fs.feature_views))
             ],
             label_views_pd[
-                entity_cols + [TimeField.TIME_COL] + list(self.service.get_label_names(self.fs.label_views))
+                entity_cols + [TIME_COL] + list(self.service.get_label_names(self.fs.label_views))
             ],
         )
 

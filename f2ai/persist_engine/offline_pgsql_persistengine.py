@@ -11,7 +11,7 @@ from ..definitions import (
     PersistLabelView,
 )
 from ..offline_stores.offline_postgres_store import OfflinePostgresStore
-from ..common.time_field import TimeField
+from ..common.time_field import *
 
 
 class OfflinePgsqlPersistEngine(OfflinePersistEngine):
@@ -31,10 +31,10 @@ class OfflinePgsqlPersistEngine(OfflinePersistEngine):
             source=label_view.source,
             features=label_view.labels,
             join_keys=label_view.join_keys,
-            alias=TimeField.ENTITY_EVENT_TIMESTAMP_FIELD,
+            alias=ENTITY_EVENT_TIMESTAMP_FIELD,
         ).where(
-            (Parameter(TimeField.DEFAULT_EVENT_TIMESTAMP_FIELD) <= back_off_time.end)
-            & (Parameter(TimeField.DEFAULT_EVENT_TIMESTAMP_FIELD) >= back_off_time.start)
+            (Parameter(DEFAULT_EVENT_TIMESTAMP_FIELD) <= back_off_time.end)
+            & (Parameter(DEFAULT_EVENT_TIMESTAMP_FIELD) >= back_off_time.start)
         )
 
         feature_names = []
@@ -47,9 +47,7 @@ class OfflinePgsqlPersistEngine(OfflinePersistEngine):
             )
             feature_names += [feature.name for feature in feature_view.features]
 
-            keep_columns = (
-                label_view.join_keys + feature_names + label_names + [TimeField.ENTITY_EVENT_TIMESTAMP_FIELD]
-            )
+            keep_columns = label_view.join_keys + feature_names + label_names + [ENTITY_EVENT_TIMESTAMP_FIELD]
             join_sql = self.store._point_in_time_join(
                 entity_df=join_sql,
                 source_df=source_sql,
@@ -62,13 +60,11 @@ class OfflinePgsqlPersistEngine(OfflinePersistEngine):
             ).select(Parameter(f"{', '.join(keep_columns)}"))
 
         data_columns = label_view.join_keys + feature_names + label_names
-        unique_columns = label_view.join_keys + [TimeField.DEFAULT_EVENT_TIMESTAMP_FIELD]
+        unique_columns = label_view.join_keys + [DEFAULT_EVENT_TIMESTAMP_FIELD]
         join_sql = Query.from_(join_sql).select(
             Parameter(f"{', '.join(data_columns)}"),
-            Parameter(
-                f"{TimeField.ENTITY_EVENT_TIMESTAMP_FIELD} as {TimeField.DEFAULT_EVENT_TIMESTAMP_FIELD}"
-            ),
-            Parameter(f"current_timestamp as {TimeField.MATERIALIZE_TIME}"),
+            Parameter(f"{ENTITY_EVENT_TIMESTAMP_FIELD} as {DEFAULT_EVENT_TIMESTAMP_FIELD}"),
+            Parameter(f"current_timestamp as {MATERIALIZE_TIME}"),
         )
 
         with self.store.psy_conn as con:
@@ -90,11 +86,7 @@ class OfflinePgsqlPersistEngine(OfflinePersistEngine):
                     )
                 else:
                     table = Table(destination.query)
-                    all_columns = (
-                        data_columns
-                        + [TimeField.DEFAULT_EVENT_TIMESTAMP_FIELD]
-                        + [TimeField.MATERIALIZE_TIME]
-                    )
+                    all_columns = data_columns + [DEFAULT_EVENT_TIMESTAMP_FIELD] + [MATERIALIZE_TIME]
 
                     insert_sql = (
                         PostgreSQLQuery.into(table)
