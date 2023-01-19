@@ -1,24 +1,21 @@
 import pandas as pd
-from f2ai.offline_stores.offline_file_store import (
-    OfflineFileStore,
-    ENTITY_EVENT_TIMESTAMP_FIELD,
-    SOURCE_EVENT_TIMESTAMP_FIELD,
-)
+from f2ai.offline_stores.offline_file_store import OfflineFileStore
 from f2ai.definitions import Period, FileSource, Feature, FeatureDTypes, StatsFunctions
 
 import pytest
 from unittest.mock import MagicMock
+from f2ai.common.time_field import TimeField
 
 mock_point_in_time_filter_df = pd.DataFrame(
     {
         "join_key": ["A", "A", "A", "A"],
-        ENTITY_EVENT_TIMESTAMP_FIELD: [
+        TimeField.ENTITY_EVENT_TIMESTAMP_FIELD: [
             pd.Timestamp("2021-08-25 20:16:20"),
             pd.Timestamp("2021-08-25 20:16:20"),
             pd.Timestamp("2021-08-25 20:16:20"),
             pd.Timestamp("2021-08-25 20:16:20"),
         ],
-        SOURCE_EVENT_TIMESTAMP_FIELD: [
+        TimeField.SOURCE_EVENT_TIMESTAMP_FIELD: [
             pd.Timestamp("2021-08-25 20:16:18"),
             pd.Timestamp("2021-08-25 20:16:19"),
             pd.Timestamp("2021-08-25 20:16:20"),
@@ -99,13 +96,13 @@ def test_point_on_time_filter_with_ttl():
 mock_point_in_time_latest_df = pd.DataFrame(
     {
         "join_key": ["A", "A", "B", "B"],
-        ENTITY_EVENT_TIMESTAMP_FIELD: [
+        TimeField.ENTITY_EVENT_TIMESTAMP_FIELD: [
             pd.Timestamp("2021-08-25 20:16:20"),
             pd.Timestamp("2021-08-25 20:16:20"),
             pd.Timestamp("2021-08-25 20:16:20"),
             pd.Timestamp("2021-08-25 20:16:20"),
         ],
-        SOURCE_EVENT_TIMESTAMP_FIELD: [
+        TimeField.SOURCE_EVENT_TIMESTAMP_FIELD: [
             pd.Timestamp("2021-08-25 20:16:18"),
             pd.Timestamp("2021-08-25 20:16:19"),
             pd.Timestamp("2021-08-25 20:16:11"),

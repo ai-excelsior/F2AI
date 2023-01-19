@@ -5,8 +5,6 @@ from typing import Any, Dict
 
 from .events_sampler import EventsSampler
 
-TIME_COL = "event_timestamp"
-
 
 class EntitiesSampler:
     @property

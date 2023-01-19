@@ -1,4 +1,5 @@
 from __future__ import annotations
+from operator import imod
 from typing import List
 import pandas as pd
 import datetime
@@ -13,9 +14,7 @@ from ..definitions import (
     PersistLabelView,
 )
 from ..common.utils import write_df_to_dataset
-
-TIME_COL = "event_timestamp"
-MATERIALIZE_TIME = "materialize_time"
+from ..common.time_field import TimeField
 
 
 class OfflineFilePersistEngine(OfflinePersistEngine):
@@ -38,7 +37,8 @@ class OfflineFilePersistEngine(OfflinePersistEngine):
         )
         entity_df.drop(columns=["created_timestamp"], errors="ignore")
         entity_df = entity_df[
-            (entity_df[TIME_COL] >= back_off_time.start) & (entity_df[TIME_COL] < back_off_time.end)
+            (entity_df[TimeField.TIME_COL] >= back_off_time.start)
+            & (entity_df[TimeField.TIME_COL] < back_off_time.end)
         ]
 
         # join features recursively
@@ -55,5 +55,7 @@ class OfflineFilePersistEngine(OfflinePersistEngine):
                 how="right",
             )
 
-        joined_frame[MATERIALIZE_TIME] = pd.to_datetime(datetime.datetime.now(), utc=True)
-        write_df_to_dataset(joined_frame, destination.path, time_col=destination.timestamp_field, period=back_off_time.step)
+        joined_frame[TimeField.MATERIALIZE_TIME] = pd.to_datetime(datetime.datetime.now(), utc=True)
+        write_df_to_dataset(
+            joined_frame, destination.path, time_col=destination.timestamp_field, period=back_off_time.step
+        )

@@ -18,13 +18,7 @@ from ..definitions import (
     StatsFunctions,
 )
 from ..common.utils import convert_dtype_to_sqlalchemy_type
-
-
-DEFAULT_EVENT_TIMESTAMP_FIELD = "event_timestamp"
-ENTITY_EVENT_TIMESTAMP_FIELD = "_entity_event_timestamp_"
-SOURCE_EVENT_TIMESTAMP_FIELD = "_source_event_timestamp_"
-QUERY_COL = "query_timestamp"
-MATERIALIZE_TIME = "materialize_time"
+from ..common.time_field import TimeField
 
 
 if TYPE_CHECKING:
@@ -66,9 +60,9 @@ class OfflinePostgresStore(OfflineStore):
     def get_offline_source(self, service: Service) -> SqlSource:
         return SqlSource(
             name=service.name,
-            query=f'{self.materialize_path}.{service.name}',
-            timestamp_field=DEFAULT_EVENT_TIMESTAMP_FIELD,
-            created_timestamp_field="materialize_time",
+            query=f"{self.materialize_path}.{service.name}",
+            timestamp_field=TimeField.DEFAULT_EVENT_TIMESTAMP_FIELD,
+            created_timestamp_field=TimeField.MATERIALIZE_TIME,
         )
 
     def get_sqlalchemy_engine(self):
@@ -81,8 +75,8 @@ class OfflinePostgresStore(OfflineStore):
         entity_df: pd.DataFrame,
         source: SqlSource,
         join_keys: list,
-        timestamp_field: str = DEFAULT_EVENT_TIMESTAMP_FIELD,
-        alias: str = ENTITY_EVENT_TIMESTAMP_FIELD,
+        timestamp_field: str = TimeField.DEFAULT_EVENT_TIMESTAMP_FIELD,
+        alias: str = TimeField.ENTITY_EVENT_TIMESTAMP_FIELD,
         **kwargs,
     ) -> Tuple(Query, str):
 
@@ -144,7 +138,7 @@ class OfflinePostgresStore(OfflineStore):
         source: SqlSource,
         features: Set[Feature] = {},
         join_keys: List[str] = [],
-        alias: str = SOURCE_EVENT_TIMESTAMP_FIELD,
+        alias: str = TimeField.SOURCE_EVENT_TIMESTAMP_FIELD,
     ) -> QueryBuilder:
         """_summary_
 
@@ -160,7 +154,7 @@ class OfflinePostgresStore(OfflineStore):
         time_columns = []
         if source.timestamp_field:
             time_columns.append(f"{source.timestamp_field} as {alias}")
-        if source.created_timestamp_field and alias != ENTITY_EVENT_TIMESTAMP_FIELD:
+        if source.created_timestamp_field and alias != TimeField.ENTITY_EVENT_TIMESTAMP_FIELD:
             time_columns.append(source.created_timestamp_field)
 
         feature_columns = [feature if isinstance(feature, str) else feature.name for feature in features]
@@ -219,9 +213,9 @@ class OfflinePostgresStore(OfflineStore):
 
         sql_query = self._point_in_time_filter(sql_join)
         sql_result = sql_query.groupby(*group_keys).select(
-            *group_keys, fn.Max(Parameter(SOURCE_EVENT_TIMESTAMP_FIELD))
+            *group_keys, fn.Max(Parameter(TimeField.SOURCE_EVENT_TIMESTAMP_FIELD))
         )
-        df = self._get_dataframe(sql_result, group_keys + [DEFAULT_EVENT_TIMESTAMP_FIELD])
+        df = self._get_dataframe(sql_result, group_keys + [TimeField.DEFAULT_EVENT_TIMESTAMP_FIELD])
         if entity_df is not None:
             self._drop_table(table_name)
         return df
@@ -252,7 +246,9 @@ class OfflinePostgresStore(OfflineStore):
         entity_cols = kwargs.pop("entity_cols", [])
         source_df = self.read(source=source, features=features, join_keys=join_keys + entity_cols)
         if isinstance(entity_df, pd.DataFrame):
-            residue = [c for c in entity_df.columns if c not in join_keys + [DEFAULT_EVENT_TIMESTAMP_FIELD]]
+            residue = [
+                c for c in entity_df.columns if c not in join_keys + [TimeField.DEFAULT_EVENT_TIMESTAMP_FIELD]
+            ]
         else:
             residue = kwargs.get("residue", [])
 
@@ -272,18 +268,18 @@ class OfflinePostgresStore(OfflineStore):
         feature_names = [feature.name for feature in features]
         sql_result = sql_query.select(
             Parameter(
-                f"{','.join(list(set(join_keys + entity_cols))+ [ENTITY_EVENT_TIMESTAMP_FIELD ] + list(set(residue + feature_names)))}"
+                f"{','.join(list(set(join_keys + entity_cols))+ [TimeField.ENTITY_EVENT_TIMESTAMP_FIELD ] + list(set(residue + feature_names)))}"
             )
         )
         df = self._get_dataframe(
             sql_result,
             list(set(join_keys + entity_cols))
-            + [DEFAULT_EVENT_TIMESTAMP_FIELD]
+            + [TimeField.DEFAULT_EVENT_TIMESTAMP_FIELD]
             + list(set(residue + feature_names)),
         )
         self._drop_table(table_name)
         return df.sort_values(
-            by=list(set(join_keys + entity_cols)) + [DEFAULT_EVENT_TIMESTAMP_FIELD],
+            by=list(set(join_keys + entity_cols)) + [TimeField.DEFAULT_EVENT_TIMESTAMP_FIELD],
             ascending=True,
             ignore_index=True,
         )
@@ -342,7 +338,9 @@ class OfflinePostgresStore(OfflineStore):
         source_df = self.read(source=source, features=features, join_keys=join_keys + entity_cols)
 
         if isinstance(entity_df, pd.DataFrame):
-            residue = [c for c in entity_df.columns if c not in join_keys + [DEFAULT_EVENT_TIMESTAMP_FIELD]]
+            residue = [
+                c for c in entity_df.columns if c not in join_keys + [TimeField.DEFAULT_EVENT_TIMESTAMP_FIELD]
+            ]
         else:
             residue = kwargs.get("residue", [])
 
@@ -362,18 +360,20 @@ class OfflinePostgresStore(OfflineStore):
         feature_names = [feature.name for feature in features]
         sql_result = sql_query.select(
             Parameter(
-                f"{','.join(list(set(join_keys + entity_cols))+ [ENTITY_EVENT_TIMESTAMP_FIELD,SOURCE_EVENT_TIMESTAMP_FIELD] + list(set(feature_names+residue)))}"
+                f"{','.join(list(set(join_keys + entity_cols))+ [TimeField.ENTITY_EVENT_TIMESTAMP_FIELD,TimeField.SOURCE_EVENT_TIMESTAMP_FIELD] + list(set(feature_names+residue)))}"
             )
         )
         df = self._get_dataframe(
             sql_result,
             list(set(join_keys + entity_cols))
-            + [QUERY_COL, DEFAULT_EVENT_TIMESTAMP_FIELD]
+            + [TimeField.QUERY_COL, TimeField.DEFAULT_EVENT_TIMESTAMP_FIELD]
             + list(set(feature_names + residue)),
         )
         self._drop_table(table_name)
         return df.sort_values(
-            by=[QUERY_COL, DEFAULT_EVENT_TIMESTAMP_FIELD], ascending=True, ignore_index=True
+            by=[TimeField.QUERY_COL, TimeField.DEFAULT_EVENT_TIMESTAMP_FIELD],
+            ascending=True,
+            ignore_index=True,
         )
 
     def query(self, query: str, return_df: bool = True, *args, **kwargs) -> pd.DataFrame:
@@ -475,8 +475,8 @@ class OfflinePostgresStore(OfflineStore):
         df: Query,
         include: bool = True,
         ttl: Optional[Period] = None,
-        entity_timestamp_field: str = ENTITY_EVENT_TIMESTAMP_FIELD,
-        source_timestamp_field: str = SOURCE_EVENT_TIMESTAMP_FIELD,
+        entity_timestamp_field: str = TimeField.ENTITY_EVENT_TIMESTAMP_FIELD,
+        source_timestamp_field: str = TimeField.SOURCE_EVENT_TIMESTAMP_FIELD,
     ) -> Query:
         """_summary_
 
@@ -514,8 +514,8 @@ class OfflinePostgresStore(OfflineStore):
         period: Period,
         include: bool = True,
         ttl: Optional[Period] = None,
-        entity_timestamp_field: str = ENTITY_EVENT_TIMESTAMP_FIELD,
-        source_timestamp_field: str = SOURCE_EVENT_TIMESTAMP_FIELD,
+        entity_timestamp_field: str = TimeField.ENTITY_EVENT_TIMESTAMP_FIELD,
+        source_timestamp_field: str = TimeField.SOURCE_EVENT_TIMESTAMP_FIELD,
     ) -> Query:
         """_summary_
 
@@ -585,8 +585,8 @@ class OfflinePostgresStore(OfflineStore):
         df: Query,
         group_keys: List[str] = [],
         created_timestamp_field: Optional[str] = None,
-        entity_timestamp_field: str = ENTITY_EVENT_TIMESTAMP_FIELD,
-        source_timestamp_field: str = SOURCE_EVENT_TIMESTAMP_FIELD,
+        entity_timestamp_field: str = TimeField.ENTITY_EVENT_TIMESTAMP_FIELD,
+        source_timestamp_field: str = TimeField.SOURCE_EVENT_TIMESTAMP_FIELD,
     ) -> Query:
         """_summary_
 
@@ -617,8 +617,8 @@ class OfflinePostgresStore(OfflineStore):
         df: Query,
         group_keys: List[str] = [],
         created_timestamp_field: Optional[str] = None,
-        entity_timestamp_field: str = ENTITY_EVENT_TIMESTAMP_FIELD,
-        source_timestamp_field: str = SOURCE_EVENT_TIMESTAMP_FIELD,
+        entity_timestamp_field: str = TimeField.ENTITY_EVENT_TIMESTAMP_FIELD,
+        source_timestamp_field: str = TimeField.SOURCE_EVENT_TIMESTAMP_FIELD,
     ) -> Query:
         """_summary_
 

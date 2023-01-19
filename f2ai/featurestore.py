@@ -29,8 +29,7 @@ from .definitions import (
     init_persist_engine_from_cfg,
 )
 
-TIME_COL = "event_timestamp"  # timestamp of action taken in original tables or period-query result, or query time in single-query result table
-MATERIALIZE_TIME = "materialize_time"  # timestamp to done materialize, only used in materialized result
+from .common.time_field import TimeField
 
 
 class FeatureStore:
@@ -67,7 +66,7 @@ class FeatureStore:
         if isinstance(entity_df, pd.DataFrame):
             # TODO: Remove this constraint in future
             assert (
-                TIME_COL in entity_df.columns
+                TimeField.TIME_COL in entity_df.columns
             ), "Check entity_df make sure it has at least 1 columns and event_timestamp in it"
 
     def _get_features_to_use(
@@ -438,7 +437,9 @@ class FeatureStore:
 
             service_names = list(dict.fromkeys(service_names))
             services = [self.services[x] for x in service_names if x in self.services]
-            assert len(services) > 0, f'The service {service_or_views} is not found in store, please double check it.'
+            assert (
+                len(services) > 0
+            ), f"The service {service_or_views} is not found in store, please double check it."
 
             self.persist_engine.materialize_offline(
                 services, self.label_views, self.feature_views, self.entities, self.sources, back_off_time
@@ -517,12 +518,12 @@ class FeatureStore:
 
         if isinstance(entity, pd.DataFrame):
             join_keys = list(entity.columns)
-            entity[TIME_COL] = end
+            entity[TimeField.TIME_COL] = end
             group_keys = self._get_keys_to_join(view, join_keys)
         else:
             join_keys = []
             group_keys = self._get_keys_to_join(view, entity)
-            entity = pd.DataFrame({TIME_COL: [end]})
+            entity = pd.DataFrame({TimeField.TIME_COL: [end]})
 
         if isinstance(view, (FeatureView, LabelView)):
             source = self.sources[view.batch_source]

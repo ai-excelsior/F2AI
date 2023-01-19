@@ -9,10 +9,6 @@ from pathlib import Path
 from ..definitions import Period
 
 
-ENTITY_EVENT_TIMESTAMP_FIELD = "_entity_event_timestamp_"
-SOURCE_EVENT_TIMESTAMP_FIELD = "_source_event_timestamp_"
-
-
 class DateEncoder(json.JSONEncoder):
     def default(self, o):
         if isinstance(o, datetime.datetime):

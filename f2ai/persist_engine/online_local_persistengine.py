@@ -8,22 +8,21 @@ from ..definitions import (
     PersistFeatureView,
 )
 
-
-DEFAULT_EVENT_TIMESTAMP_FIELD = "event_timestamp"
+from ..common.time_field import TimeField
 
 
 class OnlineLocalPersistEngine(OnlinePersistEngine):
     type: OnlinePersistEngineType = OnlinePersistEngineType.LOCAL
 
     def materialize(self, prefix: str, feature_view: PersistFeatureView, back_off_time: BackOffTime):
-        date_df = pd.DataFrame(data=[back_off_time.end], columns=[DEFAULT_EVENT_TIMESTAMP_FIELD])
+        date_df = pd.DataFrame(data=[back_off_time.end], columns=[TimeField.DEFAULT_EVENT_TIMESTAMP_FIELD])
         period = -Period.from_str(str(back_off_time.end - back_off_time.start))
         entities_in_range = self.offline_store.get_latest_entities(
             source=feature_view.source,
             group_keys=feature_view.join_keys,
             entity_df=date_df,
             start=back_off_time.start,
-        ).drop(columns=DEFAULT_EVENT_TIMESTAMP_FIELD)
+        ).drop(columns=TimeField.DEFAULT_EVENT_TIMESTAMP_FIELD)
 
         data_to_write = self.offline_store.get_period_features(
             entity_df=pd.merge(entities_in_range, date_df, how="cross"),
