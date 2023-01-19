@@ -156,14 +156,14 @@ class FeatureStore:
         if isinstance(view_name, (FeatureView, LabelView, Service)):
             return view_name
 
-        if view_name in self.feature_views.keys():
+        if view_name in self.feature_views:
             return self.feature_views[view_name]
-        elif view_name in self.label_views.keys():
+        elif view_name in self.label_views:
             return self.label_views[view_name]
-        elif view_name in self.services.keys():
+        elif view_name in self.services:
             return self.services[view_name]
         else:
-            raise ValueError("Can't find any views/services")
+            raise ValueError(f"Can't find any views/services in feature store with name: {view_name}")
 
     def get_features(
         self,

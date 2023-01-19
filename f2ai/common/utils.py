@@ -3,7 +3,7 @@ import json
 import os
 import oss2
 import pandas as pd
-from typing import List, Tuple
+from typing import List, Tuple, Iterable
 from pathlib import Path
 
 from ..definitions import Period
@@ -178,3 +178,16 @@ def read_df_from_dataset(root_path: str, usecols: List[str] = []) -> pd.DataFram
     df: pd.DataFrame = table.to_pandas()
     drop_columns = [col_name for col_name in df.columns if col_name.startswith("_f2ai_")]
     return df.drop(columns=drop_columns)
+
+
+def batched(xs: Iterable, batch_size: int, drop_last=False):
+    batches = []
+    for x in xs:
+        batches.append(x)
+
+        if len(batches) == batch_size:
+            yield batches
+            batches = []
+
+    if len(batches) > 0 and not drop_last:
+        yield batches
