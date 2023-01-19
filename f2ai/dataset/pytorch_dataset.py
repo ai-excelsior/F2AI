@@ -13,8 +13,6 @@ if TYPE_CHECKING:
     from ..definitions.services import Service
     from ..featurestore import FeatureStore
 
-from ..common.time_field import QUERY_COL
-
 
 class TorchIterableDataset(IterableDataset):
     """A pytorch portaled dataset."""
