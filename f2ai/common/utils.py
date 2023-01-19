@@ -54,9 +54,6 @@ def read_file(
     else:
         df = pd.read_csv(path, parse_dates=parse_dates, dtype=dtypes, usecols=usecols)
 
-    for col in parse_dates:
-        df[col] = pd.to_datetime(df[col], utc=True)
-
     return df
 
 

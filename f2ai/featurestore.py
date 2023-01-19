@@ -257,7 +257,7 @@ class FeatureStore:
         self,
         feature_view: Union[str, FeatureView, Service],
         entity_df: pd.DataFrame,
-        period: str,
+        period: Union[str, Period],
         features: List[str] = None,
         include: Optional[bool] = None,
         **kwargs,
@@ -275,7 +275,9 @@ class FeatureStore:
         feature_view = self._get_views(feature_view)
         assert isinstance(feature_view, (FeatureView, Service)), "only allowed FeatureView and Service"
 
-        period: Period = -Period.from_str(period)
+        if isinstance(period, str):
+            period: Period = -Period.from_str(period)
+
         if include is None:
             include = period.is_neg
 
@@ -346,7 +348,7 @@ class FeatureStore:
         self,
         label_view: Union[str, LabelView, Service],
         entity_df: pd.DataFrame,
-        period: str,
+        period: Union[str, Period],
         include: Optional[bool] = None,
         **kwargs,
     ) -> pd.DataFrame:
@@ -361,20 +363,18 @@ class FeatureStore:
         self.__check_format(entity_df)
         label_view = self._get_views(label_view)
 
-        period: Period = Period.from_str(period)
+        if isinstance(period, str):
+            period: Period = Period.from_str(period)
+
         if include is None:
             include = period.is_neg
-
-        if isinstance(label_view, Service):
-            label_objects = self._get_features_to_use(label_view, choose="both")
-        else:
-            label_objects = self._get_features_to_use(label_view, choose="labels")
 
         if isinstance(label_view, (FeatureView, LabelView)):
             source = self.sources[label_view.batch_source]
         else:
             source = self.offline_store.get_offline_source(label_view)
 
+        label_objects = self._get_features_to_use(label_view, choose="labels")
         join_keys = self._get_keys_to_join(label_view, list(entity_df.columns))
         return self.offline_store.get_period_features(
             entity_df=entity_df,

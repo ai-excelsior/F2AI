@@ -37,7 +37,7 @@ class EvenEventsSampler(EventsSampler):
     A sampler which using time to generate query entity dataframe. This sampler generally useful when you don't have entity keys.
     """
 
-    def __init__(self, start: str, end: str, period: Union[str, Period]):
+    def __init__(self, start: str, end: str, period: Union[str, Period], **kwargs):
         """
         evenly sample from a range of time, with given period.
 
@@ -45,6 +45,7 @@ class EvenEventsSampler(EventsSampler):
             start (str): start datetime
             end (str): end datetime
             period (str): a period string, egg: '1 day'.
+            **kwargs (Any): additional arguments passed to pd.date_range.
         """
         if isinstance(start, str):
             start = pd.to_datetime(start)
@@ -54,6 +55,7 @@ class EvenEventsSampler(EventsSampler):
         self._start = start
         self._end = end
         self._period = Period.from_str(period)
+        self._kwargs = kwargs
 
     def __call__(self) -> pd.DatetimeIndex:
         return self._get_date_range()
@@ -64,7 +66,7 @@ class EvenEventsSampler(EventsSampler):
             yield i
 
     def _get_date_range(self) -> pd.DatetimeIndex:
-        return pd.date_range(self._start, self._end, freq=self._period.to_pandas_freq_str())
+        return pd.date_range(self._start, self._end, freq=self._period.to_pandas_freq_str(), **self._kwargs)
 
 
 class RandomNEventsSampler(EventsSampler):

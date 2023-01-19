@@ -151,3 +151,19 @@ class Service(BaseModel):
         return list(
             dict.fromkeys(self.get_feature_entities(feature_views) + self.get_label_entities(label_views))
         )
+
+    def get_join_keys(
+        self,
+        feature_views: Dict[str, FeatureView],
+        label_views: Dict[str, FeatureView],
+        entities: Dict[str, Entity],
+    ) -> List[str]:
+        return list(
+            dict.fromkeys(
+                [
+                    join_key
+                    for x in self.get_entities(feature_views, label_views)
+                    for join_key in entities[x].join_keys
+                ]
+            )
+        )

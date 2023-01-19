@@ -1,4 +1,4 @@
-from typing import Set, List
+from typing import List
 
 
 from .base_view import BaseView
@@ -9,7 +9,7 @@ class FeatureView(BaseView):
     def get_feature_names(self) -> List[str]:
         return [feature.name for feature in self.schemas]
 
-    def get_feature_objects(self, is_numeric=False) -> Set[Feature]:
+    def get_feature_objects(self, is_numeric=False) -> List[Feature]:
         return list(
             dict.fromkeys(
                 [

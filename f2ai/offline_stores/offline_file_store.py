@@ -55,7 +55,7 @@ class OfflineFileStore(OfflineStore):
     def get_period_features(
         self,
         entity_df: pd.DataFrame,
-        features: Set[Feature],
+        features: List[Feature],
         source: FileSource,
         period: Period,
         join_keys: List[str] = [],

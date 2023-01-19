@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from enum import Enum
 from typing import Any, List
 from datetime import timedelta
-from functools import reduce
+from functools import reduce, total_ordering
 
 
 class AvailablePeriods(Enum):
@@ -49,6 +49,7 @@ PANDAS_FREQ_STR_MAP = {
 }
 
 
+@total_ordering
 class Period(BaseModel):
     """A wrapper of different representations of a time range. Useful to convert to underline utils like pandas DateOffset, Postgres interval strings."""
 
@@ -65,6 +66,13 @@ class Period(BaseModel):
 
     def __neg__(self) -> "Period":
         return Period(n=-self.n, unit=self.unit.value)
+
+    def __eq__(self, other: "Period") -> bool:
+        return self.n == other.n and self.unit == other.unit
+
+    def __lt__(self, other: "Period") -> bool:
+        assert self.unit == other.unit, f"Different unit of Period are not comparable, left: {self.unit.value}, right: {other.unit.value}"
+        return abs(self.n) < abs(other.n)
 
     @property
     def is_neg(self):

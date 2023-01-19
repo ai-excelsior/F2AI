@@ -25,10 +25,8 @@ class Dataset:
         self.service = service
         self.sampler = sampler
 
-    def to_pytorch(self, batch: int = None) -> "TorchIterableDataset":
-        """convert to iterablt pytorch dataset really hold data"""
+    def to_pytorch(self, batch_size: int = 64) -> "TorchIterableDataset":
+        """convert to iterable pytorch dataset really hold data"""
         from .pytorch_dataset import TorchIterableDataset
 
-        entity_index = self.sampler()
-
-        return TorchIterableDataset(fs=self.fs, service=self.service, entity_index=entity_index, batch=batch)
+        return TorchIterableDataset(feature_store=self.fs, service=self.service, sampler=self.sampler, chunk_size=batch_size)

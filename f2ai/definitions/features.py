@@ -90,14 +90,14 @@ class SchemaAnchor(BaseModel):
 
         if self.schema_name == "*":
             return [
-                Feature.create_from_schema(feature_schema, view.name, schema_type)
+                Feature.create_from_schema(feature_schema, view.name, schema_type, self.period)
                 for feature_schema in view.schemas
                 if (feature_schema.is_numeric() if is_numeric else True)
             ]
 
         feature_schema = next((schema for schema in view.schemas if schema.name == self.schema_name), None)
         if feature_schema and (feature_schema.is_numeric() if is_numeric else True):
-            return [Feature.create_from_schema(feature_schema, view.name, schema_type)]
+            return [Feature.create_from_schema(feature_schema, view.name, schema_type, self.period)]
 
         return []
 
@@ -112,20 +112,21 @@ class Feature(BaseModel):
     view_name: str
 
     @classmethod
-    def create_feature_from_schema(cls, schema: FeatureSchema, view_name: str) -> "Feature":
-        return cls.create_from_schema(schema, view_name, SchemaType.FEATURE)
+    def create_feature_from_schema(
+        cls, schema: FeatureSchema, view_name: str, period: str = None
+    ) -> "Feature":
+        return cls.create_from_schema(schema, view_name, SchemaType.FEATURE, period)
 
     @classmethod
-    def create_label_from_schema(cls, schema: FeatureSchema, view_name: str) -> "Feature":
-        return cls.create_from_schema(schema, view_name, SchemaType.LABEL)
+    def create_label_from_schema(cls, schema: FeatureSchema, view_name: str, period: str = None) -> "Feature":
+        return cls.create_from_schema(schema, view_name, SchemaType.LABEL, period)
 
     @classmethod
-    def create_from_schema(cls, schema: FeatureSchema, view_name: str, schema_type: SchemaType) -> "Feature":
+    def create_from_schema(
+        cls, schema: FeatureSchema, view_name: str, schema_type: SchemaType, period: str
+    ) -> "Feature":
         return Feature(
-            name=schema.name,
-            dtype=schema.dtype,
-            schema_type=schema_type,
-            view_name=view_name,
+            name=schema.name, dtype=schema.dtype, schema_type=schema_type, view_name=view_name, period=period
         )
 
     def __hash__(self) -> int:
