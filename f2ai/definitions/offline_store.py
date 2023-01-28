@@ -74,7 +74,7 @@ class OfflineStore(BaseModel):
     def get_period_features(
         self,
         entity_df: pd.DataFrame,
-        features: Set[Feature],
+        features: List[Feature],
         source: Source,
         period: Period,
         join_keys: List[str] = [],
@@ -86,7 +86,7 @@ class OfflineStore(BaseModel):
 
         Args:
             entity_df (pd.DataFrame): A query DataFrame which include entities and event_timestamp column.
-            features (Set[Feature]): A set of Features you want to retrieve.
+            features (List[Feature]): A list of Features you want to retrieve.
             source (Source): A specific implementation of Source. For example, OfflinePostgresStore will receive a SqlSource which point to table with time semantic.
             period (Period): A Period instance, which wrapped by F2AI.
             join_keys (List[str], optional): Which columns to join the entity_df with source. Defaults to [].. Defaults to [].

@@ -61,6 +61,8 @@ class TorchIterableDataset(IterableDataset):
                 labels_df = features_df[label_columns]
                 features_df = features_df.drop(columns=labels)
             else:
+                if not feature_period.is_neg:
+                    feature_period = -feature_period
                 features_df = self._feature_store.get_period_features(
                     self._service, entity_df, feature_period
                 )
@@ -78,5 +80,4 @@ class TorchIterableDataset(IterableDataset):
             for name, x_features in features_df.groupby(group_columns):
                 y_labels = labels_group.get_group(name)
                 # TODO: test this with tabular dataset.
-                # TODO: y_labels seems not correct.
                 yield (x_features, y_labels)
