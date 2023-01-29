@@ -14,7 +14,13 @@ from ..common.time_field import DEFAULT_EVENT_TIMESTAMP_FIELD
 class OnlineLocalPersistEngine(OnlinePersistEngine):
     type: OnlinePersistEngineType = OnlinePersistEngineType.LOCAL
 
-    def materialize(self, prefix: str, feature_view: PersistFeatureView, back_off_time: BackOffTime):
+    def materialize(
+        self,
+        prefix: str,
+        feature_view: PersistFeatureView,
+        back_off_time: BackOffTime,
+        view_name: str,
+    ):
         date_df = pd.DataFrame(data=[back_off_time.end], columns=[DEFAULT_EVENT_TIMESTAMP_FIELD])
         period = -Period.from_str(str(back_off_time.end - back_off_time.start))
         entities_in_range = self.offline_store.get_latest_entities(
@@ -39,3 +45,4 @@ class OnlineLocalPersistEngine(OnlinePersistEngine):
             feature_view.ttl,
             join_keys=feature_view.join_keys,
         )
+        return view_name

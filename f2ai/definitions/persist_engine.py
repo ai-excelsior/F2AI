@@ -4,9 +4,8 @@ import os
 from typing import Dict, List, Optional
 from pydantic import BaseModel
 from enum import Enum
-from multiprocessing import Pool
 from tqdm import tqdm
-
+from multiprocessing import Pool
 from f2ai.definitions import (
     OfflineStoreType,
     OfflineStore,
@@ -164,17 +163,19 @@ class RealPersistEngine(BaseModel):
             x.name: tqdm(total=len(service_to_list_of_args[x.name]), desc=f"materializing {x.name}")
             for x in services
         }
-        with Pool(processes=cpu_ava) as pool:
-            for service_name, list_of_args in service_to_list_of_args.items():
-                for args in list_of_args:
-                    pool.apply_async(
-                        self.offline_engine.materialize,
-                        args=args,
-                        callback=lambda x: bars[service_name].update(),
-                    )
 
-            pool.close()
-            pool.join()
+        pool = Pool(processes=cpu_ava)
+
+        def mycallback(x):
+            bars[x].update()
+
+        for _, list_of_args in service_to_list_of_args.items():
+            for param in list_of_args:
+                pool.apply_async(self.offline_engine.materialize, param, callback=mycallback)
+
+        pool.close()
+        pool.join()
+        [bars[bar].close() for bar in bars]
 
     def materialize_online(
         self,
@@ -185,38 +186,51 @@ class RealPersistEngine(BaseModel):
         back_off_time: BackOffTime,
     ):
         cpu_ava = max(os.cpu_count() // 2, 1)
+        bars = dict()
+        feature_backoffs = []
+        for pos, feature_view in enumerate(feature_views):
+            join_keys = list(
+                {
+                    join_key
+                    for entity_name in feature_view.entities
+                    for join_key in entities[entity_name].join_keys
+                }
+            )
+            feature_view = PersistFeatureView(
+                name=feature_view.name,
+                join_keys=join_keys,
+                features=feature_view.get_feature_objects(),
+                source=sources[feature_view.batch_source],
+                ttl=feature_view.ttl,
+            )
+            back_off_segments = list(back_off_time.to_units())
+            bars[feature_view.name] = tqdm(
+                total=len(back_off_segments), desc=f"materializing {feature_view.name}", position=pos
+            )
+            feature_backoffs += list(
+                zip(
+                    [prefix] * len(back_off_segments),
+                    [feature_view] * len(back_off_segments),
+                    back_off_segments,
+                    [feature_view.name] * len(back_off_segments),
+                )
+            )
 
-        with Pool(processes=cpu_ava) as pool:
-            bars = dict()
-            for feature_view in feature_views:
-                join_keys = list(
-                    {
-                        join_key
-                        for entity_name in feature_view.entities
-                        for join_key in entities[entity_name].join_keys
-                    }
-                )
-                feature_view = PersistFeatureView(
-                    name=feature_view.name,
-                    join_keys=join_keys,
-                    features=feature_view.get_feature_objects(),
-                    source=sources[feature_view.batch_source],
-                    ttl=feature_view.ttl,
-                )
-                back_off_segments = list(back_off_time.to_units())
+        pool = Pool(processes=cpu_ava)
 
-                # TODO: when materialize multi views, the tqdm progress bar not update simultaneously
-                bars[feature_view.name] = tqdm(
-                    total=len(back_off_segments), desc=f"materializing {feature_view.name}"
-                )
-                for back_off_segment in back_off_segments:
-                    pool.apply_async(
-                        func=self.online_engine.materialize,
-                        args=(prefix, feature_view, back_off_segment),
-                        callback=lambda x: bars[feature_view.name].update(),
-                    )
-            pool.close()
-            pool.join()
+        def mycallback(x):
+            bars[x].update()
+
+        for param in feature_backoffs:
+            pool.apply_async(
+                self.online_engine.materialize,
+                param,
+                callback=mycallback,
+            )
+
+        pool.close()
+        pool.join()
+        [bars[bar].close() for bar in bars]
 
 
 def init_persist_engine_from_cfg(offline_store: OfflineStore, online_store: OnlineStore):
