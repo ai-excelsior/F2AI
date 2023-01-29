@@ -39,6 +39,7 @@ class OnlineRedisStore(OnlineStore):
         dt: pd.DataFrame,
         ttl: Optional[Period] = None,
         join_keys: List[str] = None,
+        tz: str = None,
     ):
         pipe = self.client.pipeline()
         if not dt.empty:
@@ -61,11 +62,13 @@ class OnlineRedisStore(OnlineStore):
                     # remove data that has expired in `zset`` according to `score`
                 if ttl is not None:
                     pipe.zremrangebyscore(
-                        name=zset_key, min=0, max=(datetime.now() - ttl.to_py_timedelta()).timestamp()
+                        name=zset_key,
+                        min=0,
+                        max=(pd.Timestamp(datetime.now(), tz=tz) - ttl.to_py_timedelta()).timestamp(),
                     )
                 zset_dict = {
                     json.dumps(row, cls=DateEncoder): pd.to_datetime(
-                        row.get(DEFAULT_EVENT_TIMESTAMP_FIELD, datetime.now())
+                        row.get(DEFAULT_EVENT_TIMESTAMP_FIELD, datetime.now()), tz=tz
                     ).timestamp()
                     for row in group_data[1]
                     .drop(columns=[QUERY_COL], errors="ignore")
@@ -126,16 +129,8 @@ class OnlineRedisStore(OnlineStore):
     ) -> pd.DataFrame:
 
         min_timestamp = max(
-            (
-                pd.to_datetime(datetime.now(), utc=True) - period.to_pandas_dateoffset()
-                if period
-                else pd.to_datetime(0, utc=True)
-            ),
-            (
-                pd.to_datetime(datetime.now(), utc=True) - ttl.to_pandas_dateoffset()
-                if ttl
-                else pd.to_datetime(0, utc=True)
-            ),
+            (pd.Timestamp(datetime.now()) - period.to_pandas_dateoffset() if period else pd.Timestamp(0)),
+            (pd.Timestamp(datetime.now()) - ttl.to_pandas_dateoffset() if ttl else pd.Timestamp(0)),
         )
         dt_group = entity_df.groupby(list(entity_df.columns))
         all_entities = [
