@@ -513,8 +513,8 @@ class FeatureStore:
 
         """
         view = self._get_views(view)
-        start = pd.to_datetime(start, utc=True)
-        end = pd.to_datetime(end, utc=True)
+        start = pd.to_datetime(start)
+        end = pd.to_datetime(end)
 
         if isinstance(entity, pd.DataFrame):
             join_keys = list(entity.columns)
