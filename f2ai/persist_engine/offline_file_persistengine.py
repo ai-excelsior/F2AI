@@ -27,6 +27,7 @@ class OfflineFilePersistEngine(OfflinePersistEngine):
         label_view: PersistLabelView,
         destination: FileSource,
         back_off_time: BackOffTime,
+        service_name: str,
     ):
         # retrieve entity_df
         # TODO:
@@ -58,3 +59,4 @@ class OfflineFilePersistEngine(OfflinePersistEngine):
         write_df_to_dataset(
             joined_frame, destination.path, time_col=destination.timestamp_field, period=back_off_time.step
         )
+        return service_name

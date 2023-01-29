@@ -24,16 +24,19 @@ def main():
         if kwargs["fromnow"] is None and kwargs["start"] is None and kwargs["end"] is None:
             parser.error("One of fromnow or start&end is required.")
 
-    if not pathlib.Path('feature_store.yml').exists():
-        parser.error("No feature_store.yml found in current folder, please switch to folder which feature_store.yml exists.")
+    if not pathlib.Path("feature_store.yml").exists():
+        parser.error(
+            "No feature_store.yml found in current folder, please switch to folder which feature_store.yml exists."
+        )
 
     if commands == "materialize":
         from_now = kwargs.pop("fromnow", None)
         step = kwargs.pop("step", None)
+        tz = kwargs.pop("tz", None)
 
         if from_now is not None:
             back_off_time = BackOffTime.from_now(from_now=from_now, step=step)
         else:
-            back_off_time = BackOffTime(start=kwargs.pop("start"), end=kwargs.pop("end"), step=step)
+            back_off_time = BackOffTime(start=kwargs.pop("start"), end=kwargs.pop("end"), step=step, tz=tz)
 
         materialize("file://.", kwargs.pop("services"), back_off_time, kwargs.pop("online"))

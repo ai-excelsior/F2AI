@@ -119,10 +119,10 @@ class RealPersistEngine(BaseModel):
         cpu_ava = max(os.cpu_count() // 2, 1)
 
         # with Pool(processes=cpu_ava) as pool:
-        service_to_list_of_args = dict()
+        service_to_list_of_args = []
+        back_off_segments = list(back_off_time.to_units())
         for service in services:
             destination = self.offline_engine.offline_store.get_offline_source(service)
-
             label_view = service.get_label_views(label_views)[0]
             label_view = PersistLabelView(
                 source=sources[label_view.batch_source],
@@ -154,14 +154,16 @@ class RealPersistEngine(BaseModel):
                 for feature_view in service.get_feature_views(feature_views)
             ]
             feature_views = [feature_view for feature_view in feature_views if len(feature_view.features) > 0]
-            service_to_list_of_args[service.name] = [
-                (feature_views, label_view, destination, cur_back_off_time)
-                for cur_back_off_time in back_off_time.to_units()
+            service_to_list_of_args += [
+                (feature_views, label_view, destination, per_backoff, service.name)
+                for per_backoff in back_off_segments
             ]
 
         bars = {
-            x.name: tqdm(total=len(service_to_list_of_args[x.name]), desc=f"materializing {x.name}")
-            for x in services
+            service.name: tqdm(
+                total=len(back_off_segments), desc=f"materializing {service.name}", position=pos
+            )
+            for pos, service in enumerate(services)
         }
 
         pool = Pool(processes=cpu_ava)
@@ -169,9 +171,8 @@ class RealPersistEngine(BaseModel):
         def mycallback(x):
             bars[x].update()
 
-        for _, list_of_args in service_to_list_of_args.items():
-            for param in list_of_args:
-                pool.apply_async(self.offline_engine.materialize, param, callback=mycallback)
+        for param in service_to_list_of_args:
+            pool.apply_async(self.offline_engine.materialize, param, callback=mycallback)
 
         pool.close()
         pool.join()
@@ -186,9 +187,10 @@ class RealPersistEngine(BaseModel):
         back_off_time: BackOffTime,
     ):
         cpu_ava = max(os.cpu_count() // 2, 1)
-        bars = dict()
+
         feature_backoffs = []
-        for pos, feature_view in enumerate(feature_views):
+        back_off_segments = list(back_off_time.to_units())
+        for feature_view in feature_views:
             join_keys = list(
                 {
                     join_key
@@ -203,18 +205,16 @@ class RealPersistEngine(BaseModel):
                 source=sources[feature_view.batch_source],
                 ttl=feature_view.ttl,
             )
-            back_off_segments = list(back_off_time.to_units())
-            bars[feature_view.name] = tqdm(
+            feature_backoffs += [
+                (prefix, feature_view, per_backoff, feature_view.name) for per_backoff in back_off_segments
+            ]
+
+        bars = {
+            feature_view.name: tqdm(
                 total=len(back_off_segments), desc=f"materializing {feature_view.name}", position=pos
             )
-            feature_backoffs += list(
-                zip(
-                    [prefix] * len(back_off_segments),
-                    [feature_view] * len(back_off_segments),
-                    back_off_segments,
-                    [feature_view.name] * len(back_off_segments),
-                )
-            )
+            for pos, feature_view in enumerate(feature_views)
+        }
 
         pool = Pool(processes=cpu_ava)
 
@@ -222,11 +222,7 @@ class RealPersistEngine(BaseModel):
             bars[x].update()
 
         for param in feature_backoffs:
-            pool.apply_async(
-                self.online_engine.materialize,
-                param,
-                callback=mycallback,
-            )
+            pool.apply_async(self.online_engine.materialize, param, callback=mycallback)
 
         pool.close()
         pool.join()
