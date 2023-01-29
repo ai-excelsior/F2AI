@@ -171,8 +171,13 @@ class RealPersistEngine(BaseModel):
         def mycallback(x):
             bars[x].update()
 
+        def myerror_callback(error):
+            print(error.__cause__)
+
         for param in service_to_list_of_args:
-            pool.apply_async(self.offline_engine.materialize, param, callback=mycallback)
+            pool.apply_async(
+                self.offline_engine.materialize, param, callback=mycallback, error_callback=myerror_callback
+            )
 
         pool.close()
         pool.join()
@@ -221,8 +226,13 @@ class RealPersistEngine(BaseModel):
         def mycallback(x):
             bars[x].update()
 
+        def myerror_callback(error):
+            print(error.__cause__)
+
         for param in feature_backoffs:
-            pool.apply_async(self.online_engine.materialize, param, callback=mycallback)
+            pool.apply_async(
+                self.online_engine.materialize, param, callback=mycallback, error_callback=myerror_callback
+            )
 
         pool.close()
         pool.join()
