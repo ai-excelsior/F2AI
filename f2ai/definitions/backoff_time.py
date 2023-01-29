@@ -22,15 +22,11 @@ class BackOffTime:
         end: Union[str, pd.Timestamp],
         step: Union[str, Period] = "1 day",
     ) -> None:
+        # if tz is needed, then pass as '2016-01-01 00+8' to indicate 8hours offset
         if isinstance(start, str):
             start = pd.Timestamp(start)
         if isinstance(end, str):
             end = pd.Timestamp(end)
-
-        if start.tz != "UTC":
-            start = pd.to_datetime(start, utc=True)
-        if end.tz != "UTC":
-            end = pd.to_datetime(end, utc=True)
 
         if isinstance(step, str):
             step = Period.from_str(step)
