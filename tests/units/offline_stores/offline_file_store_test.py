@@ -1,10 +1,10 @@
 import pandas as pd
 from f2ai.offline_stores.offline_file_store import OfflineFileStore
 from f2ai.definitions import Period, FileSource, Feature, FeatureDTypes, StatsFunctions
+from f2ai.common.time_field import ENTITY_EVENT_TIMESTAMP_FIELD, SOURCE_EVENT_TIMESTAMP_FIELD
 
 import pytest
 from unittest.mock import MagicMock
-from f2ai.common.time_field import ENTITY_EVENT_TIMESTAMP_FIELD, SOURCE_EVENT_TIMESTAMP_FIELD
 
 mock_point_in_time_filter_df = pd.DataFrame(
     {
