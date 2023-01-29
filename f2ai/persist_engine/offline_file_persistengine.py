@@ -36,6 +36,7 @@ class OfflineFilePersistEngine(OfflinePersistEngine):
         entity_df = self.offline_store._read_file(
             source=label_view.source, features=label_view.labels, join_keys=label_view.join_keys
         )
+
         entity_df.drop(columns=["created_timestamp"], errors="ignore")
         entity_df = entity_df[
             (entity_df[TIME_COL] >= back_off_time.start) & (entity_df[TIME_COL] < back_off_time.end)
@@ -54,10 +55,8 @@ class OfflineFilePersistEngine(OfflinePersistEngine):
                 include=True,
                 how="right",
             )
-
-        joined_frame[MATERIALIZE_TIME] = pd.Timestamp(
-            datetime.datetime.now(), tz=joined_frame[TIME_COL][0].tz
-        )
+        tz = joined_frame[TIME_COL][0].tz if not joined_frame.empty else None
+        joined_frame[MATERIALIZE_TIME] = pd.Timestamp(datetime.datetime.now(), tz=tz)
         write_df_to_dataset(
             joined_frame, destination.path, time_col=destination.timestamp_field, period=back_off_time.step
         )
