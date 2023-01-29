@@ -15,18 +15,20 @@ class BackOffTime:
     start: pd.Timestamp
     end: pd.Timestamp
     step: Period
+    tz: str
 
     def __init__(
         self,
         start: Union[str, pd.Timestamp],
         end: Union[str, pd.Timestamp],
         step: Union[str, Period] = "1 day",
+        tz: str = None,
     ) -> None:
         # if tz is needed, then pass as '2016-01-01 00+8' to indicate 8hours offset
         if isinstance(start, str):
-            start = pd.Timestamp(start)
+            start = pd.Timestamp(start, tz=tz)
         if isinstance(end, str):
-            end = pd.Timestamp(end)
+            end = pd.Timestamp(end, tz=tz)
 
         if isinstance(step, str):
             step = Period.from_str(step)
