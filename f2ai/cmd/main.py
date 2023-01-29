@@ -35,7 +35,7 @@ def main():
         tz = kwargs.pop("tz", None)
 
         if from_now is not None:
-            back_off_time = BackOffTime.from_now(from_now=from_now, step=step)
+            back_off_time = BackOffTime.from_now(from_now=from_now, step=step, tz=tz)
         else:
             back_off_time = BackOffTime(start=kwargs.pop("start"), end=kwargs.pop("end"), step=step, tz=tz)
 

@@ -55,7 +55,7 @@ class BackOffTime:
             )
 
     @classmethod
-    def from_now(cls, from_now: str, step: str = None):
-        end = pd.to_datetime(datetime.now())
+    def from_now(cls, from_now: str, step: str = None, tz: str = None):
+        end = pd.Timestamp(datetime.now(), tz=tz)
         start = end - Period.from_str(from_now).to_py_timedelta()
         return BackOffTime(start=start, end=end, step=step)
