@@ -3,14 +3,14 @@ import pandas as pd
 import abc
 from typing import Any, Dict
 
+from ..common.utils import is_iterable
 from .events_sampler import EventsSampler
 
 
 class EntitiesSampler:
     @property
     def iterable(self):
-        is_abstract = getattr(self.__iter__, "__isabstractmethod__", False)
-        return not is_abstract
+        return is_iterable(self)
 
     @property
     def iterable_only(self):

@@ -3,7 +3,7 @@ import json
 import os
 import oss2
 import pandas as pd
-from typing import List, Tuple, Iterable
+from typing import List, Tuple, Iterable, Any
 from pathlib import Path
 
 from ..definitions import Period
@@ -188,3 +188,11 @@ def batched(xs: Iterable, batch_size: int, drop_last=False):
 
     if len(batches) > 0 and not drop_last:
         yield batches
+
+
+def is_iterable(o: Any):
+    try:
+        iter(o)
+        return True
+    except TypeError:
+        return False

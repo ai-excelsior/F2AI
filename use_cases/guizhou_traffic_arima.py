@@ -1,74 +1,70 @@
-import os
-import zipfile
-import tempfile
 import pandas as pd
-import numpy as np
 import pmdarima as pm
 import matplotlib.pyplot as plt
-from sklearn.metrics import mean_squared_error
-from pmdarima.model_selection import train_test_split
-from f2ai.dataset import EvenEventsSampler, FixedNEntitiesSampler
-from f2ai.common.utils import get_bucket_from_oss_url
+import seaborn as sns
+from pmdarima import pipeline
+from pmdarima.preprocessing import DateFeaturizer, FourierFeaturizer
+
+from f2ai.dataset import TorchIterableDataset
 from f2ai.featurestore import FeatureStore
 
 
+def fill_missing(data: pd.DataFrame, time_col="event_timestamp", query_col="query_timestamp"):
+    min_of_time = data[time_col].min()
+    max_of_time = data[time_col].max()
+    query_time = data.iloc[0][query_col]
+
+    data = data.set_index(time_col, drop=True)
+    if query_time < min_of_time:
+        date_index = pd.date_range(query_time, max_of_time, freq="2T", name=time_col)[1:]
+    else:
+        date_index = pd.date_range(min_of_time, query_time, freq="2T", name=time_col)
+
+    df = data.reindex(date_index, method="nearest").resample("12T").sum()
+
+    return df.reset_index()
+
+
+#! f2ai materialize travel_time_prediction_arima_v1 --start=2016-03-01 --end=2016-04-01 --step='1 day'
 if __name__ == "__main__":
-    download_from = "oss://aiexcelsior-shanghai-test/xyz_test_data/guizhou_traffic.zip"
-    save_path = "/tmp/"
-    save_dir = tempfile.mkdtemp(prefix=save_path)
-    bucket, key = get_bucket_from_oss_url(download_from)
-    print(bucket)
-    print(key)
-    dest_zip_filepath = os.path.join(save_dir, key)
-    os.makedirs(os.path.dirname(dest_zip_filepath), exist_ok=True)
-    bucket.get_object_to_file(key, dest_zip_filepath)
-    zipfile.ZipFile(dest_zip_filepath).extractall(dest_zip_filepath.rsplit("/", 1)[0])
-    os.remove(dest_zip_filepath)
-    print(f"Project downloaded and saved in {dest_zip_filepath.rsplit('/',1)[0]}")
+    ex_vars = ["event_timestamp"]
+    fs = FeatureStore("/Users/liyu/.f2ai/f2ai-guizhou_traffic_file")
 
-    TIME_COL = "event_timestamp"
-    fs = FeatureStore(f"file://{save_dir}/{key.rstrip('.zip')}")
-
-    entities = [
-        fs.entities[entity_name]
-        for entity_name in fs.entities.keys()
-        if entity_name in fs._get_features_to_use(fs.services["traval_time_prediction_embedding_v1"])
-    ]
-
-    group_df = fs.stats(
-        "traval_time_prediction_embedding_v1",
-        fn="unique",
-        group_key=[],
-        start="2016-03-01",
-        end="2016-03-31",
-        features=["link_id"],
+    # 选择4条路的4个时间段分别进行预测
+    entity_df = pd.DataFrame(
+        {
+            "link_id": [
+                "4377906286525800514",
+                "4377906285681600514",
+                "3377906281774510514",
+                "4377906280784800514",
+            ],
+            "event_timestamp": [
+                pd.Timestamp("2016-03-31 07:00:00"),
+                pd.Timestamp("2016-03-31 09:00:00"),
+                pd.Timestamp("2016-03-31 12:00:00"),
+                pd.Timestamp("2016-03-31 18:00:00"),
+            ],
+        }
     )
+    dataset = TorchIterableDataset(fs, "travel_time_prediction_arima_v1", entity_df)
 
-    events_sampler = EvenEventsSampler(start="2016-03-01", end="2016-03-10", period="20 minutes")
-    entity_sampler = FixedNEntitiesSampler(events_sampler, group_df, n=4)
-    sample = fs.get_dataset(
-        service="traval_time_prediction_embedding_v1",
-        sampler=entity_sampler,
-    )
-    ids = sample.to_pytorch()
-    entity_df = ids.entity_index
-    data = fs.get_labels("traval_time_prediction_embedding_v1", entity_df)
+    fig = plt.figure(figsize=(16, 16))
+    axes = fig.subplots(2, 2)
+    for i, (look_back, look_forward) in enumerate(dataset):
+        look_back = fill_missing(look_back)
+        look_forward = fill_missing(look_forward)
 
-    data["month"] = data["event_timestamp"].map(lambda x: pd.to_datetime(x).month)
-    data["day"] = data["event_timestamp"].map(lambda x: pd.to_datetime(x).day)
-    data["hour"] = data["event_timestamp"].map(lambda x: pd.to_datetime(x).hour)
-    label_mean = (
-        data.groupby(["month", "day", "hour"])["travel_time"].mean().droplevel(level=["month", "day"])
-    )
-    data = np.array(label_mean)
+        pipe = pipeline.Pipeline(
+            [
+                ("date", DateFeaturizer(column_name="event_timestamp", with_day_of_month=False)),
+                ("fourier", FourierFeaturizer(m=24 * 5, k=4)),
+                ("arima", pm.arima.ARIMA(order=(6, 0, 1))),
+            ]
+        )
+        pipe.fit(look_back["travel_time"], X=look_back[ex_vars])
+        look_forward["y_pred"] = pipe.predict(len(look_forward), X=look_forward[ex_vars])
+        melted_df = pd.melt(look_forward, id_vars=["event_timestamp"], value_vars=["travel_time", "y_pred"])
+        sns.lineplot(melted_df, x="event_timestamp", y="value", hue="variable", ax=axes[i // 2, i % 2])
 
-    train, test = train_test_split(data, train_size=200)
-    model = pm.auto_arima(train, max_p=10, max_q=10, max_d=4)
-    forecasts = model.predict(test.shape[0])
-
-    x = np.arange(data.shape[0])
-    plt.figure()
-    plt.plot(x, data, c="blue")
-    plt.plot(x[200:], forecasts, c="red")
-
-    MSE = mean_squared_error(test, forecasts)
+    fig.savefig("f2ai_guizhou_traffic_arima", bbox_inches="tight")
