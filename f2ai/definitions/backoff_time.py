@@ -36,6 +36,7 @@ class BackOffTime:
         self.start = start
         self.end = end
         self.step = step
+        self.tz = tz
 
     def to_units(self) -> Iterator[Period]:
         pd_offset = self.step.to_pandas_dateoffset()
@@ -48,14 +49,10 @@ class BackOffTime:
             freq=pd_offset,
         )
         for (start, end) in zip(bins[:-1], bins[1:]):
-            yield BackOffTime(
-                start=start,
-                end=end,
-                step=self.step,
-            )
+            yield BackOffTime(start=start, end=end, step=self.step, tz=self.tz)
 
     @classmethod
     def from_now(cls, from_now: str, step: str = None, tz: str = None):
         end = pd.Timestamp(datetime.now(), tz=tz)
         start = end - Period.from_str(from_now).to_py_timedelta()
-        return BackOffTime(start=start, end=end, step=step)
+        return BackOffTime(start=start, end=end, step=step, tz=tz)

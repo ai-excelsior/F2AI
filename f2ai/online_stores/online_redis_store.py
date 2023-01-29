@@ -65,7 +65,7 @@ class OnlineRedisStore(OnlineStore):
                     )
                 zset_dict = {
                     json.dumps(row, cls=DateEncoder): pd.to_datetime(
-                        row.get(DEFAULT_EVENT_TIMESTAMP_FIELD, datetime.now()), utc=True
+                        row.get(DEFAULT_EVENT_TIMESTAMP_FIELD, datetime.now())
                     ).timestamp()
                     for row in group_data[1]
                     .drop(columns=[QUERY_COL], errors="ignore")

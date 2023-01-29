@@ -44,5 +44,6 @@ class OnlineLocalPersistEngine(OnlinePersistEngine):
             data_to_write,
             feature_view.ttl,
             join_keys=feature_view.join_keys,
+            tz=back_off_time.tz,
         )
         return view_name
