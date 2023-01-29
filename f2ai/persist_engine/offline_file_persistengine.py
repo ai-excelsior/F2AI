@@ -55,7 +55,7 @@ class OfflineFilePersistEngine(OfflinePersistEngine):
                 how="right",
             )
 
-        joined_frame[MATERIALIZE_TIME] = pd.to_datetime(datetime.datetime.now(), utc=True)
+        joined_frame[MATERIALIZE_TIME] = pd.to_datetime(datetime.datetime.now())
         write_df_to_dataset(
             joined_frame, destination.path, time_col=destination.timestamp_field, period=back_off_time.step
         )
